@@ -11,12 +11,12 @@ from app.services.rzd_live import train_option_from_aiorzd
 
 
 # RZD Data Adapter отделяет остальную систему от конкретного источника данных.
-# Демо-режим читает demo_trains.json; при RZD_LIVE_ENABLED вызывается vendored aiorzd
-# к pass.rzd.ru с откатом на демо при ошибке (RZD_LIVE_FALLBACK).
+# Живой режим (по умолчанию): vendored aiorzd → pass.rzd.ru; выключить: RZD_LIVE_ENABLED=0.
+# При ошибке upstream — откат на demo при RZD_LIVE_FALLBACK=1 (по умолчанию).
 class RzdDataAdapter:
     def __init__(self) -> None:
         self._data_file = Path(__file__).resolve().parents[1] / "data" / "demo_trains.json"
-        self.live_enabled = os.getenv("RZD_LIVE_ENABLED", "").strip().lower() in ("1", "true", "yes")
+        self.live_enabled = _env_truthy_default_on("RZD_LIVE_ENABLED")
         self.live_fallback = os.getenv("RZD_LIVE_FALLBACK", "1").strip().lower() not in ("0", "false", "no")
 
     async def search(self, request: TicketSearchRequest) -> TicketSearchResponse:
@@ -87,6 +87,18 @@ class RzdDataAdapter:
         with self._data_file.open("r", encoding="utf-8") as file:
             payload = json.load(file)
         return [TrainOption(**item) for item in payload["trains"]]
+
+
+def _env_truthy_default_on(name: str) -> bool:
+    """Переменная не задана или пустая → True; явное отключение: 0 / false / no."""
+
+    raw = os.getenv(name)
+    if raw is None:
+        return True
+    s = raw.strip().lower()
+    if not s:
+        return True
+    return s not in ("0", "false", "no")
 
 
 def _parse_travel_date(raw: str | None) -> date:

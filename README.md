@@ -192,7 +192,7 @@ http://<текущий-хост>:8000
 
 ### `POST /api/tickets/search`
 
-Поиск поездов через RZD Data Adapter: по умолчанию demo-база; при `RZD_LIVE_ENABLED=1` — запрос к pass.rzd.ru через aiorzd с возможным откатом на demo.
+Поиск поездов через RZD Data Adapter: по умолчанию живой запрос к pass.rzd.ru через aiorzd (`RZD_LIVE_ENABLED` не задан или `1`); для чистого demo без обращения к РЖД задайте `RZD_LIVE_ENABLED=0`. При сбое upstream при `RZD_LIVE_FALLBACK=1` — откат на demo-базу.
 
 ### `POST /api/recommend`
 
@@ -208,13 +208,13 @@ http://<текущий-хост>:8000
 
 ## Demo Mode и Live Mode
 
-Стабильный **Demo Mode** (по умолчанию):
+**Demo Mode** для списка поездов используется, если задано `RZD_LIVE_ENABLED=0` / `false` / `no`, либо живой запрос к РЖД завершился ошибкой при `RZD_LIVE_FALLBACK=1`:
 
 - данные поездов берутся из `backend/app/data/demo_trains.json`;
 - DeepSeek можно отключить, и сценарий все равно будет работать;
 - оформление билета всегда демонстрационное.
 
-**Live Mode** (опционально): при `RZD_LIVE_ENABLED=1` backend запрашивает расписание через vendored [aiorzd](https://github.com/devbis/aiorzd) (`app/vendor/aiorzd.py`) к публичному контуру `pass.rzd.ru`. Ответ маппится в `TrainOption`, поле `TicketSearchResponse.source` становится `live-cache`. При сбое и `RZD_LIVE_FALLBACK=1` выполняется откат на demo-базу. Это не официальный API РЖД и не предназначено для продажи билетов без отдельной интеграции.
+**Live Mode** (по умолчанию включён): backend запрашивает расписание через vendored [aiorzd](https://github.com/devbis/aiorzd) (`app/vendor/aiorzd.py`) к публичному контуру `pass.rzd.ru`, пока переменная `RZD_LIVE_ENABLED` не установлена в `0`/`false`/`no`. Ответ маппится в `TrainOption`, поле `TicketSearchResponse.source` становится `live-cache`. При сбое и `RZD_LIVE_FALLBACK=1` выполняется откат на demo-базу. Это не официальный API РЖД и не предназначено для продажи билетов без отдельной интеграции.
 
 Live Mode не использует авторизацию на сайте РЖД; возможны капча, лимиты и изменения протокола со стороны РЖД.
 
