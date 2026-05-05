@@ -40,6 +40,6 @@ class RzdDataAdapter:
     def _load_demo_trains(self) -> list[TrainOption]:
         with self._data_file.open("r", encoding="utf-8") as file:
             payload = json.load(file)
-        # Демо-база хранится простым JSON-массивом, чтобы ее было удобно
-        # редактировать школьнику без знания сложных форматов данных.
-        return [TrainOption(**item) for item in payload]
+        # Демо-база обернута в ключ "trains", чтобы позже рядом можно было
+        # добавить метаданные: дату обновления, источник или режим live-cache.
+        return [TrainOption(**item) for item in payload["trains"]]

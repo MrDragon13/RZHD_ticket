@@ -89,6 +89,8 @@ document.querySelector("#chips").addEventListener("click", (event) => {
   }
 });
 
+// Выбор языка является нулевым шагом сценария. После него все тексты,
+// распознавание речи и голосовой ответ работают только на выбранном языке.
 function setLanguage(nextLanguage) {
   language = nextLanguage;
   const copy = i18n[language];
@@ -112,6 +114,7 @@ function setLanguage(nextLanguage) {
   speak(copy.assistantReady);
 }
 
+// Быстрые чипы имитируют сенсорные уточнения пассажира без экранной клавиатуры.
 function renderChips() {
   const chips = document.querySelector("#chips");
   chips.innerHTML = "";
@@ -123,6 +126,7 @@ function renderChips() {
   });
 }
 
+// Единая точка входа для текста: сюда попадает и ручной ввод, и распознанная речь.
 async function handleUserText(text) {
   const cleanText = text.trim();
   if (!cleanText) return;
@@ -131,6 +135,8 @@ async function handleUserText(text) {
   await runDialog(cleanText);
 }
 
+// Отправляем реплику в backend-диалог. Backend возвращает новое состояние,
+// которое frontend сразу превращает в визуальные панели терминала.
 async function runDialog(text) {
   try {
     const response = await postJson("/api/dialog", { language, text, state });
@@ -147,6 +153,8 @@ async function runDialog(text) {
   }
 }
 
+// Backend хранит состояние гибко, поэтому frontend нормализует его до формы,
+// удобной для поиска билетов и отображения карточек "как я понял запрос".
 function normalizeIntent(rawState, assistant_text) {
   return {
     intent: rawState.intent || "search_ticket",
@@ -163,6 +171,8 @@ function normalizeIntent(rawState, assistant_text) {
   };
 }
 
+// Поиск билетов и факт запускаются параллельно, чтобы экран быстрее оживал:
+// карта получает AI Fact, а затем рекомендации добавляют смысловой выбор.
 async function searchAndRecommend() {
   const searchRequest = {
     language,
@@ -189,6 +199,7 @@ async function searchAndRecommend() {
   renderTrains();
 }
 
+// Карточки понимания запроса показывают пассажиру, что именно извлекла система.
 function renderIntent(data) {
   intentPanel.classList.remove("hidden");
   const windowText = data.arrival_time_window
@@ -202,8 +213,9 @@ function renderIntent(data) {
   `;
 }
 
+// Живая карта — главный вау-элемент: маршрут рисуется неоновой линией, а факт
+// превращает ожидание ответа в часть презентационного сценария.
 function renderRoute(factText) {
-  routePanel.classList.remove("hidden");
   routeLine.classList.add("route-line-active");
   routePulse.classList.add("route-pulse-active");
   document.querySelector("#route-meta").textContent = `${intent.origin} → ${intent.destination}`;
@@ -211,11 +223,14 @@ function renderRoute(factText) {
   document.querySelector("#route-fact").textContent = factText;
 }
 
+// Подписи на демо-карте меняются под выбранный маршрут, даже если геометрия
+// линии остается условной и презентационной.
 function updateRouteLabels() {
   document.querySelector("#origin-label").textContent = intent.origin || (language === "ru" ? "Москва" : "Moscow");
   document.querySelector("#destination-label").textContent = intent.destination || (language === "ru" ? "Казань" : "Kazan");
 }
 
+// Карточки поездов намеренно крупные: вся карточка является touch-зоной выбора.
 function renderTrains() {
   trainsPanel.classList.remove("hidden");
   const list = document.querySelector("#trains-list");
@@ -251,6 +266,7 @@ function renderTrains() {
     });
 }
 
+// Выбор поезда пока не бронирует место, а только подготавливает demo checkout.
 function selectTrain(train) {
   selectedTrain = train;
   checkoutPanel.classList.remove("hidden");
@@ -260,6 +276,7 @@ function selectTrain(train) {
   checkoutPanel.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
+// Demo Checkout Module показывает полный путь до билета без оплаты и персональных данных.
 async function createTicket() {
   const steps = document.querySelector("#checkout-steps");
   steps.innerHTML = "";
@@ -275,6 +292,7 @@ async function createTicket() {
   renderTicket();
 }
 
+// Финальный экран выводит демонстрационный билет и предупреждение о недействительности.
 function renderTicket() {
   ticketPanel.classList.remove("hidden");
   document.querySelector("#ticket-title").textContent = i18n[language].demoTicket;
@@ -292,6 +310,7 @@ function renderTicket() {
   speak(language === "ru" ? "Демонстрационный билет готов." : "Your demo ticket is ready.");
 }
 
+// Web Speech API используется как быстрый браузерный STT для прототипа терминала.
 function startVoiceRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
@@ -309,11 +328,13 @@ function startVoiceRecognition() {
   recognition.start();
 }
 
+// Любая реплика ассистента одновременно отображается на экране и озвучивается.
 function assistantSay(text) {
   assistantText.textContent = text;
   speak(text);
 }
 
+// SpeechSynthesis дает двусторонний голосовой диалог без отдельного TTS-сервиса.
 function speak(text) {
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
@@ -323,6 +344,7 @@ function speak(text) {
   window.speechSynthesis.speak(utterance);
 }
 
+// Небольшая обертка над fetch держит обмен с backend в одном формате JSON.
 async function postJson(path, payload) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
@@ -335,15 +357,19 @@ async function postJson(path, payload) {
   return response.json();
 }
 
+// Цены форматируются локально, чтобы карточки выглядели естественно на RU/EN экране.
 function formatPrice(price) {
   if (!price) return "—";
   return `${price.toLocaleString(language === "ru" ? "ru-RU" : "en-US")} ₽`;
 }
 
+// Мини-пауза нужна только для презентационной анимации demo checkout.
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Если backend недоступен, интерфейс все равно показывает базовую карту и смысл
+// концепта. Полный checkout требует backend, потому что билет формируется сервером.
 function runLocalDemoFallback() {
   assistantSay(i18n[language].fallbackError);
   intent = normalizeIntent({}, i18n[language].fallbackError);
@@ -355,6 +381,8 @@ function runLocalDemoFallback() {
   );
 }
 
+// Сброс очищает пользовательский путь, но оставляет карту на экране: терминал
+// должен выглядеть эффектно еще до первого запроса.
 function resetScenario(announce = true) {
   state = {};
   intent = null;
@@ -364,7 +392,13 @@ function resetScenario(announce = true) {
   demoTicket = null;
   transcript.textContent = "";
   assistantText.textContent = i18n[language].assistantReady;
-  [intentPanel, routePanel, trainsPanel, checkoutPanel, ticketPanel].forEach((panel) => panel.classList.add("hidden"));
+  [intentPanel, trainsPanel, checkoutPanel, ticketPanel].forEach((panel) => panel.classList.add("hidden"));
+  document.querySelector("#route-meta").textContent =
+    language === "ru" ? "Москва → Казань" : "Moscow → Kazan";
+  document.querySelector("#route-fact").textContent =
+    language === "ru"
+      ? "Факт о маршруте появится после поиска билетов."
+      : "A route fact will appear after ticket search.";
   routeLine.classList.remove("route-line-active");
   routePulse.classList.remove("route-pulse-active");
   if (announce) {
