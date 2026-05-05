@@ -212,6 +212,9 @@ const routeVisuals = {
   },
 };
 
+/** Максимум промежуточных точек на SVG-карте маршрута (пары circle + text в index.html). */
+const ROUTE_MAP_MAX_INTERMEDIATE_STOPS = 7;
+
 /** Нормализация названия станции для сравнения с полями intent / поезда. */
 function normalizeStationName(name) {
   return String(name || "")
@@ -303,7 +306,7 @@ function intermediateStopDisplayNames(train) {
   const rs = train?.route_segment;
   if (rs && Array.isArray(rs.intermediate_stops) && rs.intermediate_stops.length > 0) {
     const full = rs.intermediate_stops.map((s) => String(s).trim()).filter(Boolean);
-    const max = 3;
+    const max = ROUTE_MAP_MAX_INTERMEDIATE_STOPS;
     if (full.length <= max) return full;
     const out = [];
     for (let i = 0; i < max; i += 1) {
@@ -354,7 +357,7 @@ function intermediateStopDisplayNames(train) {
     }
   }
 
-  const max = 3;
+  const max = ROUTE_MAP_MAX_INTERMEDIATE_STOPS;
   if (segment.length <= max) return segment;
   const out = [];
   for (let i = 0; i < max; i += 1) {
@@ -436,7 +439,7 @@ function mergeRouteVisualForTrain(destinationKey, train) {
   if (!placed) {
     return { ...base, destination: dest, stops: [], routeClip };
   }
-  const stops = [placed[0], placed[1], placed[2]];
+  const stops = placed.slice(0, ROUTE_MAP_MAX_INTERMEDIATE_STOPS);
   return { ...base, destination: dest, stops, routeClip };
 }
 
@@ -1069,6 +1072,17 @@ function findRouteVisual(destination) {
   return routeVisuals.default;
 }
 
+function routeMapStopElements() {
+  const dots = [];
+  const labels = [];
+  for (let i = 0; i < ROUTE_MAP_MAX_INTERMEDIATE_STOPS; i += 1) {
+    const letter = String.fromCharCode(97 + i);
+    dots.push(document.querySelector(`#stop-dot-${letter}`));
+    labels.push(document.querySelector(`#stop-label-${letter}`));
+  }
+  return { dots, labels };
+}
+
 function updateMapGeometry(visual, labelOverride) {
   const originText =
     labelOverride?.origin ??
@@ -1081,16 +1095,7 @@ function updateMapGeometry(visual, labelOverride) {
   const destinationDot = document.querySelector("#destination-dot");
   const originLabel = document.querySelector("#origin-label");
   const destinationLabel = document.querySelector("#destination-label");
-  const stopDots = [
-    document.querySelector("#stop-dot-a"),
-    document.querySelector("#stop-dot-b"),
-    document.querySelector("#stop-dot-c"),
-  ];
-  const stopLabels = [
-    document.querySelector("#stop-label-a"),
-    document.querySelector("#stop-label-b"),
-    document.querySelector("#stop-label-c"),
-  ];
+  const { dots: stopDots, labels: stopLabels } = routeMapStopElements();
   [destinationDot, routePulse].forEach((dot) => {
     if (!dot) return;
     dot.setAttribute("cx", visual.destination.x);

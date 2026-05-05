@@ -480,7 +480,9 @@ button {
 }
 
 .stop-dot.hidden-stop,
-.stop-label.hidden-stop {
+.stop-label.hidden-stop,
+.stop-dot.hidden-map-point,
+.stop-label.hidden-map-point {
   opacity: 0;
 }
 
