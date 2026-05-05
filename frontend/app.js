@@ -221,54 +221,106 @@ function normalizeStationName(name) {
     .trim();
 }
 
+/** Грубое сопоставление названий станций в разных форматах РЖД («Липецк» / «Липецк пасс»). */
+function stationMatches(stationName, userHint) {
+  const stripSuffix = (s) =>
+    normalizeStationName(s)
+      .replace(/\s+(пасс|пассажирский|главн|главный|центр)\s*$/i, "")
+      .trim();
+  const a = stripSuffix(stationName);
+  const b = stripSuffix(userHint);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.includes(b) || b.includes(a)) return true;
+  const wa = a.split(/\s+/).filter(Boolean);
+  const wb = b.split(/\s+/).filter(Boolean);
+  const la = wa.length ? wa[wa.length - 1] : "";
+  const lb = wb.length ? wb[wb.length - 1] : "";
+  if (la.length >= 4 && lb.length >= 4 && (la.includes(lb) || lb.includes(la))) return true;
+  return false;
+}
+
 /**
- * До трёх промежуточных остановок для карты из списка РЖД (разный состав для каждого поезда).
+ * Доля длины пути SVG до конечной точки сегмента пользователя на полном маршруте поезда.
+ * Индексы по списку остановок РЖД; если не удалось сопоставить — null (рисуем шаблон до конца).
+ */
+function segmentEndpointFraction(train) {
+  const raw = Array.isArray(train?.stops)
+    ? train.stops.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+  const userFrom = intent?.origin;
+  const userTo = intent?.destination;
+  if (!userFrom || !userTo) return null;
+
+  if (raw.length >= 2) {
+    const iFrom = raw.findIndex((name) => stationMatches(name, userFrom));
+    const iTo = raw.findIndex((name) => stationMatches(name, userTo));
+    if (iFrom >= 0 && iTo >= 0 && iFrom !== iTo) {
+      const idxEnd = iFrom < iTo ? iTo : iFrom;
+      return (idxEnd + 1) / (raw.length + 1);
+    }
+  }
+
+  const depOk = stationMatches(train?.departure_station, userFrom);
+  const arrOk = stationMatches(train?.arrival_station, userTo);
+  if (depOk && arrOk) return 1;
+
+  return null;
+}
+
+/**
+ * Промежуточные остановки только между станцией отправления и пунктом назначения из запроса
+ * (не по всему следованию поезда до терминуса).
  */
 function intermediateStopDisplayNames(train) {
   const raw = Array.isArray(train?.stops)
     ? train.stops.map((s) => String(s).trim()).filter(Boolean)
     : [];
-  if (!raw.length) return [];
+  const userFrom = intent?.origin;
+  const userTo = intent?.destination;
+  if (!raw.length || !userFrom || !userTo) return [];
 
-  const skip = new Set(
-    [
-      normalizeStationName(intent?.origin),
-      normalizeStationName(intent?.destination),
-      normalizeStationName(train?.departure_station),
-      normalizeStationName(train?.arrival_station),
-    ].filter(Boolean),
-  );
+  const iFrom = raw.findIndex((name) => stationMatches(name, userFrom));
+  const iTo = raw.findIndex((name) => stationMatches(name, userTo));
 
-  let mid = raw.filter((name) => !skip.has(normalizeStationName(name)));
-  if (!mid.length && raw.length >= 3) {
-    mid = raw.slice(1, -1);
-  } else if (!mid.length && raw.length === 2) {
-    mid = [raw[0]];
+  let segment = [];
+  if (iFrom >= 0 && iTo >= 0) {
+    if (iFrom < iTo) segment = raw.slice(iFrom + 1, iTo);
+    else if (iTo < iFrom) segment = raw.slice(iTo + 1, iFrom);
+  }
+
+  if (!segment.length && stationMatches(train?.departure_station, userFrom) && stationMatches(train?.arrival_station, userTo)) {
+    segment = raw.slice(1, -1);
   }
 
   const max = 3;
-  if (mid.length <= max) return mid;
+  if (segment.length <= max) return segment;
   const out = [];
   for (let i = 0; i < max; i += 1) {
-    const idx = Math.round(((i + 0.5) / max) * (mid.length - 1));
-    out.push(mid[idx]);
+    const idx = Math.round(((i + 0.5) / max) * (segment.length - 1));
+    out.push(segment[idx]);
   }
   return out;
 }
 
 /**
- * Точки остановок на линии маршрута: координаты из path по относительной позиции вдоль пути.
+ * Точки остановок на линии маршрута: координаты по доле длины пути (интервал пользователя).
  */
-function stopMarkersAlongPath(pathD, names) {
+function stopMarkersAlongPath(pathD, names, segmentFraction) {
   const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
   path.setAttribute("d", pathD);
   const totalLen = path.getTotalLength();
   if (!Number.isFinite(totalLen) || totalLen <= 0) return null;
+  let segLen = totalLen;
+  if (segmentFraction != null && Number.isFinite(segmentFraction)) {
+    const f = Math.min(1, Math.max(0.08, segmentFraction));
+    segLen = f * totalLen;
+  }
   const n = names.length;
   const markers = [];
   for (let i = 0; i < n; i += 1) {
-    const t = (i + 1) / (n + 1);
-    const pt = path.getPointAtLength(t * totalLen);
+    const t = ((i + 1) / (n + 1)) * segLen;
+    const pt = path.getPointAtLength(t);
     markers.push({ name: names[i], x: pt.x, y: pt.y });
   }
   return markers;
@@ -277,13 +329,43 @@ function stopMarkersAlongPath(pathD, names) {
 /** Объединяет шаблон маршрута по направлению с реальными остановками выбранного поезда. */
 function mergeRouteVisualForTrain(destinationKey, train) {
   const base = findRouteVisual(destinationKey);
-  if (!train) return base;
+  if (!train) return { ...base, routeClip: null };
+
+  const pathProbe = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  pathProbe.setAttribute("d", base.line);
+  const totalLen = pathProbe.getTotalLength();
+
+  const frac = segmentEndpointFraction(train);
+  let dest = {
+    x: base.destination.x,
+    y: base.destination.y,
+    labelX: base.destination.labelX,
+    labelY: base.destination.labelY,
+  };
+  let routeClip = null;
+
+  if (frac != null && Number.isFinite(totalLen) && totalLen > 0) {
+    const visibleLen = frac * totalLen;
+    const pt = pathProbe.getPointAtLength(visibleLen);
+    dest = {
+      x: pt.x,
+      y: pt.y,
+      labelX: pt.x - 58,
+      labelY: pt.y - 22,
+    };
+    routeClip = { totalLen, visibleLen };
+  }
+
   const names = intermediateStopDisplayNames(train);
-  if (!names.length) return base;
-  const placed = stopMarkersAlongPath(base.line, names);
-  if (!placed) return base;
+  if (!names.length) {
+    return { ...base, destination: dest, stops: [], routeClip };
+  }
+  const placed = stopMarkersAlongPath(base.line, names, frac);
+  if (!placed) {
+    return { ...base, destination: dest, stops: [], routeClip };
+  }
   const stops = [placed[0], placed[1], placed[2]];
-  return { ...base, stops };
+  return { ...base, destination: dest, stops, routeClip };
 }
 
 function trainForRouteMap() {
@@ -293,16 +375,23 @@ function trainForRouteMap() {
   return trains[0];
 }
 
-/** Город/станция назначения для выбора шаблона линии на карте: приоритет у поезда, иначе запрос пользователя. */
-function routeMapDestinationKey(train) {
-  const fromTrain = train && String(train.arrival_station || "").trim();
-  if (fromTrain) return fromTrain;
+/** Шаблон линии на карте по городу назначения из запроса пользователя (не терминус поезда). */
+function routeMapDestinationKey() {
   return String(intent?.destination || "").trim();
 }
 
 function applyRouteGeometry(visual, labelOverride) {
   routeLine.classList.remove("route-line-active");
   routeLine.setAttribute("d", visual.line);
+  if (visual.routeClip && Number.isFinite(visual.routeClip.totalLen) && visual.routeClip.totalLen > 0) {
+    const L = visual.routeClip.totalLen;
+    const v = Math.min(L, Math.max(0, visual.routeClip.visibleLen));
+    routeLine.style.strokeDasharray = String(L);
+    routeLine.style.strokeDashoffset = String(L - v);
+  } else {
+    routeLine.style.strokeDasharray = "";
+    routeLine.style.strokeDashoffset = "";
+  }
   void routeLine.getBoundingClientRect();
   routeLine.classList.add("route-line-active");
   routePulse.classList.add("route-pulse-active");
@@ -312,24 +401,15 @@ function applyRouteGeometry(visual, labelOverride) {
 function updateRouteMapForSelectedTrain() {
   if (!intent && !trainForRouteMap()) return;
   const train = trainForRouteMap();
-  const visual = mergeRouteVisualForTrain(routeMapDestinationKey(train), train);
-  let labels = null;
-  if (train) {
-    const o = String(train.departure_station || intent?.origin || "").trim();
-    const d = String(train.arrival_station || intent?.destination || "").trim();
-    labels = {
-      origin: o || (language === "ru" ? "Москва" : "Moscow"),
-      destination: d || (language === "ru" ? "Казань" : "Kazan"),
-    };
-  }
-  applyRouteGeometry(visual, labels);
-  const trainLine = trainForRouteMap();
-  const metaOrigin = trainLine
-    ? String(trainLine.departure_station || "").trim() || intent?.origin || ""
-    : intent?.origin || "";
-  const metaDest = trainLine
-    ? String(trainLine.arrival_station || "").trim() || intent?.destination || ""
-    : intent?.destination || "";
+  const visual = mergeRouteVisualForTrain(routeMapDestinationKey(), train);
+  const originText =
+    String(intent?.origin || "").trim() || (language === "ru" ? "Москва" : "Moscow");
+  const destText =
+    String(intent?.destination || "").trim() || (language === "ru" ? "Казань" : "Kazan");
+  applyRouteGeometry(visual, { origin: originText, destination: destText });
+
+  const metaOrigin = String(intent?.origin || "").trim();
+  const metaDest = String(intent?.destination || "").trim();
   const kmDur = routeDistanceLabel();
   let metaText = `${metaOrigin} → ${metaDest}`;
   if (kmDur) metaText += ` · ${kmDur}`;
@@ -2167,6 +2247,8 @@ function resetScenario(announce = true) {
       : "A route fact will appear after ticket search.";
   routeLine.classList.remove("route-line-active");
   routePulse.classList.remove("route-pulse-active");
+  routeLine.style.strokeDasharray = "";
+  routeLine.style.strokeDashoffset = "";
   updateMapGeometry(routeVisuals.default);
   setTextInputPanelOpen(false);
   setStage("initial");
