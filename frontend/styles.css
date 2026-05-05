@@ -375,6 +375,53 @@ button {
   scrollbar-gutter: stable;
 }
 
+.text-input-toggle {
+  align-self: flex-end;
+  margin: -8px 0 0;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 999px;
+  color: rgba(142, 168, 199, 0.55);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.65;
+  transition:
+    opacity 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.text-input-toggle:hover,
+.text-input-toggle:focus-visible {
+  opacity: 1;
+  color: var(--cyan);
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.35);
+}
+
+.text-input-panel {
+  margin-top: -6px;
+}
+
+.text-input-panel:not(.hidden) .input-row {
+  animation: inputReveal 0.22s ease-out;
+}
+
+@keyframes inputReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .history-panel {
   padding: 16px;
   border: 1px solid rgba(0, 229, 255, 0.18);

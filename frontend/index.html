@@ -126,9 +126,18 @@
             <div id="dialog-history" class="dialog-history"></div>
           </section>
 
-          <div class="input-row">
-            <input id="user-input" autocomplete="off" placeholder="Например: хочу приехать в Казань к началу рабочего дня 6 мая" />
-            <button id="send-button" class="primary-button">Отправить</button>
+          <button
+            type="button"
+            id="text-input-toggle"
+            class="text-input-toggle"
+            aria-expanded="false"
+            aria-controls="text-input-panel"
+          ></button>
+          <div id="text-input-panel" class="text-input-panel hidden">
+            <div class="input-row">
+              <input id="user-input" autocomplete="off" placeholder="Например: хочу приехать в Казань к началу рабочего дня 6 мая" />
+              <button id="send-button" class="primary-button">Отправить</button>
+            </div>
           </div>
 
           <div id="chips" class="chips"></div>

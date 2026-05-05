@@ -14,6 +14,10 @@ const i18n = {
     listen: "Слушать",
     textPlaceholder: "Например: хочу приехать в Казань к началу рабочего дня 6 мая и выспаться",
     send: "Отправить",
+    textInputReveal: "Текст",
+    textInputHide: "Скрыть",
+    textInputAriaShow: "Показать текстовый ввод",
+    textInputAriaHide: "Скрыть текстовый ввод",
     history: "История диалога",
     understood: "Я понял запрос",
     route: "Маршрут",
@@ -62,6 +66,10 @@ const i18n = {
     listen: "Listen",
     textPlaceholder: "Example: I want to arrive in Kazan before the workday starts on May 6 and sleep",
     send: "Send",
+    textInputReveal: "Text",
+    textInputHide: "Hide",
+    textInputAriaShow: "Show text input",
+    textInputAriaHide: "Hide text input",
     history: "Dialog history",
     understood: "Request understood",
     route: "Route",
@@ -219,6 +227,7 @@ let uiStage = "initial";
 let speechQueue = [];
 let isSpeaking = false;
 let audioContext = null;
+let textInputPanelOpen = false;
 
 const screens = {
   language: document.querySelector("#language-screen"),
@@ -242,6 +251,8 @@ const routePulse = document.querySelector("#route-pulse");
 const dialogHistory = document.querySelector("#dialog-history");
 const newSessionButton = document.querySelector("#new-session-button");
 const routeState = document.querySelector("#route-state");
+const textInputPanel = document.querySelector("#text-input-panel");
+const textInputToggle = document.querySelector("#text-input-toggle");
 
 document.querySelectorAll("[data-language]").forEach((button) => {
   button.addEventListener("click", () => setLanguage(button.dataset.language));
@@ -258,6 +269,28 @@ userInput.addEventListener("keydown", (event) => {
     handleUserText(userInput.value);
   }
 });
+
+textInputToggle.addEventListener("click", () => {
+  setTextInputPanelOpen(!textInputPanelOpen);
+});
+
+function setTextInputPanelOpen(open) {
+  textInputPanelOpen = open;
+  textInputPanel.classList.toggle("hidden", !open);
+  textInputToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  const copy = i18n[language];
+  textInputToggle.textContent = open ? copy.textInputHide : copy.textInputReveal;
+  textInputToggle.setAttribute("aria-label", open ? copy.textInputAriaHide : copy.textInputAriaShow);
+  if (open) {
+    userInput.focus();
+  }
+}
+
+function updateTextInputToggleLabels() {
+  const copy = i18n[language];
+  textInputToggle.textContent = textInputPanelOpen ? copy.textInputHide : copy.textInputReveal;
+  textInputToggle.setAttribute("aria-label", textInputPanelOpen ? copy.textInputAriaHide : copy.textInputAriaShow);
+}
 
 // Чипы меняются в зависимости от стадии сценария: старт, поиск, результаты,
 // оформление. Неактуальные подсказки исчезают, чтобы экран не выглядел шумным.
@@ -308,6 +341,7 @@ function setLanguage(nextLanguage) {
   document.querySelector("#seat-picker-hint").textContent = copy.seatPickerHint;
   confirmSeatsButton.textContent = copy.seatPickerConfirm;
   resetScenario(false);
+  updateTextInputToggleLabels();
   assistantSay(copy.assistantReady, { addToHistory: true });
 }
 
@@ -1012,6 +1046,7 @@ function resetScenario(announce = true) {
   routeLine.classList.remove("route-line-active");
   routePulse.classList.remove("route-pulse-active");
   updateMapGeometry(routeVisuals.default);
+  setTextInputPanelOpen(false);
   setStage("initial");
   renderHistory();
   if (announce) {
