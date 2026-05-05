@@ -387,8 +387,10 @@ def extract_route_distance_km(content: dict) -> int | None:
         "routeDistanceKm",
         "routeDistance",
         "routeLen",
+        "routeLenKm",
         "totalDistance",
         "dist",
+        "distKm",
         "length",
         "routeLength",
     ):
@@ -398,7 +400,65 @@ def extract_route_distance_km(content: dict) -> int | None:
         try:
             v = float(raw)
             if v > 0:
+                if v > 5000:
+                    v = v / 1000.0
                 return int(round(v))
         except (TypeError, ValueError):
             continue
     return None
+
+
+def extract_train_stops(content: dict) -> list[str]:
+    """Имена остановок из разных вариантов JSON слоя поиска поездов РЖД."""
+
+    names: list[str] = []
+    seen: set[str] = set()
+
+    def add(raw: object | None) -> None:
+        if raw is None:
+            return
+        n = str(raw).strip()
+        if len(n) < 2:
+            return
+        key = _norm(n)
+        if key in seen:
+            return
+        seen.add(key)
+        names.append(n)
+
+    raw_list = content.get("stops") or content.get("stopList")
+    if isinstance(raw_list, list):
+        for s in raw_list[:80]:
+            if isinstance(s, str):
+                add(s)
+            elif isinstance(s, dict):
+                add(
+                    s.get("station")
+                    or s.get("stationName")
+                    or s.get("name")
+                    or s.get("title")
+                    or s.get("stName")
+                    or s.get("city")
+                )
+
+    if len(names) < 2:
+        for alt_key in ("routeStops", "stopSchedule", "stationsList", "schedule"):
+            nested = content.get(alt_key)
+            if not isinstance(nested, list):
+                continue
+            for item in nested[:80]:
+                if isinstance(item, str):
+                    add(item)
+                elif isinstance(item, dict):
+                    add(
+                        item.get("station")
+                        or item.get("stationName")
+                        or item.get("name")
+                        or item.get("title")
+                    )
+
+    if len(names) < 2:
+        add(content.get("route0"))
+        add(content.get("route1"))
+
+    return names[:80]

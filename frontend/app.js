@@ -223,15 +223,31 @@ function normalizeStationName(name) {
 
 /** Грубое сопоставление названий станций в разных форматах РЖД («Липецк» / «Липецк пасс»). */
 function stationMatches(stationName, userHint) {
-  const stripSuffix = (s) =>
+  const stripNoise = (s) =>
     normalizeStationName(s)
+      .replace(/\./g, "")
       .replace(/\s+(пасс|пассажирский|главн|главный|центр)\s*$/i, "")
       .trim();
-  const a = stripSuffix(stationName);
-  const b = stripSuffix(userHint);
+
+  const collapseAbbrev = (s) =>
+    s
+      .replace(/\b([а-яa-z])\.\s*/gi, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const a = collapseAbbrev(stripNoise(stationName));
+  const b = collapseAbbrev(stripNoise(userHint));
   if (!a || !b) return false;
   if (a === b) return true;
   if (a.includes(b) || b.includes(a)) return true;
+
+  const tokenHit = (big, small) => {
+    const tokens = big.split(/\s+/).filter((t) => t.length >= 3);
+    return tokens.some((t) => small.length >= 4 && (t.includes(small) || small.includes(t)));
+  };
+  if (b.length >= 4 && tokenHit(a, b)) return true;
+  if (a.length >= 4 && tokenHit(b, a)) return true;
+
   const wa = a.split(/\s+/).filter(Boolean);
   const wb = b.split(/\s+/).filter(Boolean);
   const la = wa.length ? wa[wa.length - 1] : "";
@@ -357,10 +373,20 @@ function mergeRouteVisualForTrain(destinationKey, train) {
   }
 
   const names = intermediateStopDisplayNames(train);
-  if (!names.length) {
-    return { ...base, destination: dest, stops: [], routeClip };
+  let placed =
+    names.length > 0 ? stopMarkersAlongPath(base.line, names, frac) : null;
+
+  if (
+    (!placed || !names.length) &&
+    Array.isArray(base.stops) &&
+    base.stops.length > 0
+  ) {
+    const fbNames = base.stops.map((s) => s.name).filter(Boolean).slice(0, 3);
+    if (fbNames.length) {
+      placed = stopMarkersAlongPath(base.line, fbNames, frac);
+    }
   }
-  const placed = stopMarkersAlongPath(base.line, names, frac);
+
   if (!placed) {
     return { ...base, destination: dest, stops: [], routeClip };
   }

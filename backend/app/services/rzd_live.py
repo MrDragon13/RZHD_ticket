@@ -11,6 +11,7 @@ from app.services.rzd_carriage_parse import (
     aggregate_from_carriages_payload,
     berth_prices_from_seat_entries,
     extract_route_distance_km,
+    extract_train_stops,
     merge_berth_prices,
     seat_details_from_search_car_row,
     sum_seat_details,
@@ -356,20 +357,15 @@ def train_option_from_aiorzd(
     distance_raw = content.get("distance") or content.get("routeDistanceKm") or content.get("routeDistance")
     try:
         route_km = int(float(distance_raw)) if distance_raw is not None else 0
+        if route_km > 8000:
+            route_km = int(round(route_km / 1000))
     except (TypeError, ValueError):
         route_km = 0
     alt_km = extract_route_distance_km(content)
     if alt_km and route_km == 0:
         route_km = alt_km
 
-    stops: list[str] = []
-    raw_stops = content.get("stops") or content.get("stopList")
-    if isinstance(raw_stops, list):
-        for s in raw_stops[:40]:
-            if isinstance(s, str):
-                stops.append(s)
-            elif isinstance(s, dict) and s.get("station"):
-                stops.append(str(s["station"]))
+    stops = extract_train_stops(content if isinstance(content, dict) else {})
 
     features: list[str] = []
     brand = content.get("brand")
