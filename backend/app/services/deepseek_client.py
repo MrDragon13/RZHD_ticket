@@ -2,12 +2,98 @@ from __future__ import annotations
 
 import json
 import os
+from collections import defaultdict
 from datetime import date
 from typing import Any
 
 import httpx
 
-from app.models import TrainOption, TripIntent
+from app.models import CarriageDetail, TrainOption, TripIntent
+
+
+def _dedupe_preserve(items: list[str], *, limit: int, max_len: int) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in items:
+        text = str(raw).strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text[:max_len])
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _compact_stops_for_llm(stops: list[str], *, limit: int = 14) -> list[str]:
+    """Уникальные остановки по порядку следования, без повторов подряд."""
+
+    out: list[str] = []
+    seen: set[str] = set()
+    prev_cf: str | None = None
+    for raw in stops:
+        text = str(raw).strip()
+        if not text:
+            continue
+        cf = text.casefold()
+        if cf == prev_cf:
+            continue
+        prev_cf = cf
+        if cf in seen:
+            continue
+        seen.add(cf)
+        out.append(text[:48])
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _services_tuple(services: list[str]) -> tuple[str, ...]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in services:
+        text = str(raw).strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text[:72])
+        if len(out) >= 10:
+            break
+    return tuple(out)
+
+
+def _compact_carriage_groups(details: list[CarriageDetail], *, max_groups: int = 12) -> list[dict[str, Any]]:
+    """Группирует вагоны с одинаковым типом/полом/набором услуг — короче, чем N почти одинаковых объектов."""
+
+    grouped: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for d in details:
+        key = (
+            (d.type_label or "").strip(),
+            d.compartment_kind,
+            _services_tuple(list(d.services_short or [])),
+        )
+        if key not in grouped:
+            grouped[key] = {
+                "count": 0,
+                "numbers": [],
+                "type": key[0] or "—",
+                "compartment_kind": key[1],
+                "services": list(key[2]),
+            }
+        g = grouped[key]
+        g["count"] += 1
+        num = str(d.number).strip()
+        if num and len(g["numbers"]) < 4:
+            g["numbers"].append(num[:12])
+
+    rows = sorted(grouped.values(), key=lambda x: -x["count"])
+    return rows[:max_groups]
 
 
 # Этот модуль изолирует все обращения к DeepSeek API. Остальная часть backend
@@ -282,13 +368,20 @@ class DeepSeekClient:
             "Отвечай кратко, уверенно и естественно. Не придумывай новых поездов, цен или времен. "
             "Объясняй только переданный вариант."
         )
+        compact_train = train.model_dump(exclude={"carriage_details", "carriage_notes", "stops"})
+        compact_train["stops_sample"] = _compact_stops_for_llm(list(train.stops))
+        compact_train["carriage_notes_unique"] = _dedupe_preserve(
+            list(train.carriage_notes),
+            limit=8,
+            max_len=160,
+        )
+        compact_train["wagons_by_type"] = _compact_carriage_groups(list(train.carriage_details))
+
         user_prompt = json.dumps(
             {
                 "language": language,
                 "user_intent": intent.model_dump(),
-                "recommended_train": train.model_dump(
-                    exclude={"carriage_details", "carriage_notes", "stops"},
-                ),
+                "recommended_train": compact_train,
                 "fallback_explanation": fallback_text,
                 "task": "Скажи 1-2 предложения для голосового ассистента.",
             },
