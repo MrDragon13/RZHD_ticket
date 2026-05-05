@@ -212,6 +212,103 @@ const routeVisuals = {
   },
 };
 
+/** Нормализация названия станции для сравнения с полями intent / поезда. */
+function normalizeStationName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * До трёх промежуточных остановок для карты из списка РЖД (разный состав для каждого поезда).
+ */
+function intermediateStopDisplayNames(train) {
+  const raw = Array.isArray(train?.stops)
+    ? train.stops.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+  if (!raw.length) return [];
+
+  const skip = new Set(
+    [
+      normalizeStationName(intent?.origin),
+      normalizeStationName(intent?.destination),
+      normalizeStationName(train?.departure_station),
+      normalizeStationName(train?.arrival_station),
+    ].filter(Boolean),
+  );
+
+  let mid = raw.filter((name) => !skip.has(normalizeStationName(name)));
+  if (!mid.length && raw.length >= 3) {
+    mid = raw.slice(1, -1);
+  } else if (!mid.length && raw.length === 2) {
+    mid = [raw[0]];
+  }
+
+  const max = 3;
+  if (mid.length <= max) return mid;
+  const out = [];
+  for (let i = 0; i < max; i += 1) {
+    const idx = Math.round(((i + 0.5) / max) * (mid.length - 1));
+    out.push(mid[idx]);
+  }
+  return out;
+}
+
+/**
+ * Точки остановок на линии маршрута: координаты из path по относительной позиции вдоль пути.
+ */
+function stopMarkersAlongPath(pathD, names) {
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", pathD);
+  const totalLen = path.getTotalLength();
+  if (!Number.isFinite(totalLen) || totalLen <= 0) return null;
+  const n = names.length;
+  const markers = [];
+  for (let i = 0; i < n; i += 1) {
+    const t = (i + 1) / (n + 1);
+    const pt = path.getPointAtLength(t * totalLen);
+    markers.push({ name: names[i], x: pt.x, y: pt.y });
+  }
+  return markers;
+}
+
+/** Объединяет шаблон маршрута по направлению с реальными остановками выбранного поезда. */
+function mergeRouteVisualForTrain(destination, train) {
+  const base = findRouteVisual(destination);
+  if (!train) return base;
+  const names = intermediateStopDisplayNames(train);
+  if (!names.length) return base;
+  const placed = stopMarkersAlongPath(base.line, names);
+  if (!placed) return base;
+  const stops = [placed[0], placed[1], placed[2]];
+  return { ...base, stops };
+}
+
+function trainForRouteMap() {
+  if (selectedTrain) return selectedTrain;
+  if (!trains.length) return null;
+  if (recommendations.length) return getSortedTrains()[0] || trains[0];
+  return trains[0];
+}
+
+function applyRouteGeometry(visual) {
+  routeLine.classList.remove("route-line-active");
+  routeLine.setAttribute("d", visual.line);
+  void routeLine.getBoundingClientRect();
+  routeLine.classList.add("route-line-active");
+  routePulse.classList.add("route-pulse-active");
+  updateMapGeometry(visual);
+}
+
+function updateRouteMapForSelectedTrain() {
+  if (!intent) return;
+  const visual = mergeRouteVisualForTrain(intent.destination, trainForRouteMap());
+  applyRouteGeometry(visual);
+  document.querySelector("#route-meta").textContent = `${intent.origin} -> ${intent.destination} · ${routeDistanceLabel()}`;
+}
+
 const amenityLabels = {
   ru: {
     conditioner: "кондиционер",
@@ -693,6 +790,8 @@ async function searchAndRecommend() {
     const s = t.available_seats || {};
     return (s.platzkart || 0) + (s.coupe || 0) + (s.sv || 0) > 0;
   });
+  selectedTrain = null;
+  lastSelectedTrainId = null;
 
   let factText = "";
   try {
@@ -735,6 +834,7 @@ async function searchAndRecommend() {
     assistantSay(localVoiceExplanationFromTrain(trains[0]));
   }
   renderTrains();
+  updateRouteMapForSelectedTrain();
   setStage("results");
 }
 
@@ -756,16 +856,8 @@ function renderIntent(data) {
 }
 
 function renderRoute(factText) {
-  const visual = findRouteVisual(intent.destination);
-  routeLine.classList.remove("route-line-active");
-  routeLine.setAttribute("d", visual.line);
-  // Перезапускаем CSS-анимацию отрисовки маршрута при каждом новом направлении.
-  void routeLine.getBoundingClientRect();
-  routeLine.classList.add("route-line-active");
-  routePulse.classList.add("route-pulse-active");
-  updateMapGeometry(visual);
-  document.querySelector("#route-meta").textContent = `${intent.origin} -> ${intent.destination} · ${routeDistanceLabel()}`;
   document.querySelector("#route-fact").textContent = factText;
+  updateRouteMapForSelectedTrain();
 }
 
 function findRouteVisual(destination) {
@@ -872,8 +964,9 @@ async function postRecommendWithRetries(payload, options = {}) {
 }
 
 function routeDistanceLabel() {
-  const distance = trains[0]?.route_distance_km;
-  const duration = trains[0]?.duration_label;
+  const train = trainForRouteMap();
+  const distance = train?.route_distance_km;
+  const duration = train?.duration_label;
   if (!distance || !duration) return "";
   return `${distance} ${language === "ru" ? "км" : "km"} · ${duration}`;
 }
@@ -972,6 +1065,7 @@ function selectTrain(train) {
   }
   setStage("checkout");
   updateTrainCardHighlight();
+  updateRouteMapForSelectedTrain();
   checkoutPanel.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
