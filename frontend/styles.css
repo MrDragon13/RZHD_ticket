@@ -1163,6 +1163,109 @@ button {
   background: rgba(0, 229, 255, 0.12);
 }
 
+.wagon-meta-panel {
+  margin: -6px 0 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(138, 43, 226, 0.35);
+  background: rgba(138, 43, 226, 0.07);
+  box-shadow: inset 0 0 28px rgba(0, 229, 255, 0.05);
+}
+
+.wagon-meta-panel.hidden {
+  display: none;
+}
+
+.wagon-meta-type {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.wagon-meta-kind {
+  margin: 0 0 8px;
+}
+
+.wagon-meta-kind-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(0, 255, 156, 0.95);
+  border: 1px solid rgba(0, 255, 156, 0.45);
+  background: rgba(0, 255, 156, 0.08);
+}
+
+.wagon-meta-signs {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.wagon-meta-sign-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(0, 229, 255, 0.75);
+}
+
+.wagon-meta-signs code {
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--cyan);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.06);
+}
+
+.wagon-meta-summary {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(238, 248, 255, 0.88);
+}
+
+.wagon-meta-services {
+  margin: 0;
+}
+
+.wagon-meta-services-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(0, 229, 255, 0.75);
+}
+
+.wagon-meta-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wagon-meta-chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  background: rgba(0, 229, 255, 0.06);
+}
+
 #seat-grid.seat-grid {
   display: flex;
   flex-wrap: wrap;

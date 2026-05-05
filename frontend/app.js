@@ -40,6 +40,14 @@ const i18n = {
     carClassPlatzkart: "Плацкарт",
     carClassCoupe: "Купе",
     carClassSV: "СВ",
+    compartmentFemale: "Женское купе",
+    compartmentMale: "Мужское купе",
+    compartmentMixed: "Смешанное купе",
+    compartmentChildren: "Детское",
+    compartmentFamily: "Семейное",
+    compartmentUnknown: "",
+    wagonServices: "Услуги вагона",
+    addSignsLabel: "Код РЖД",
     berthShort: {
       lower: "Н",
       upper: "В",
@@ -96,6 +104,14 @@ const i18n = {
     carClassPlatzkart: "Platzkart",
     carClassCoupe: "Coupe",
     carClassSV: "SV",
+    compartmentFemale: "Female coupe",
+    compartmentMale: "Male coupe",
+    compartmentMixed: "Mixed coupe",
+    compartmentChildren: "Children",
+    compartmentFamily: "Family",
+    compartmentUnknown: "",
+    wagonServices: "Car services",
+    addSignsLabel: "RZD code",
     berthShort: {
       lower: "L",
       upper: "U",
@@ -242,6 +258,117 @@ function carriageClassLabel(car) {
   return i18n[language].carClassPlatzkart;
 }
 
+function mapTypeLabelToCarClass(typeLabel) {
+  const t = String(typeLabel || "").toLowerCase();
+  if (t.includes("св") || t.includes("люкс")) return "sv";
+  if (t.includes("купе") || t.includes("сидяч")) return "coupe";
+  if (t.includes("плац") || t.includes("общ")) return "platzkart";
+  return null;
+}
+
+function normalizeCarriageCodeKey(code) {
+  const s = String(code || "").trim();
+  if (/^\d+$/.test(s)) return s.padStart(2, "0");
+  return s;
+}
+
+function carriageDetailForTab(train, carCode) {
+  const list = train?.carriage_details;
+  if (!Array.isArray(list) || !list.length) return null;
+  const want = normalizeCarriageCodeKey(carCode);
+  for (const d of list) {
+    const raw = String(d.number ?? "");
+    const base = raw.split("-")[0];
+    const keys = new Set([
+      normalizeCarriageCodeKey(raw),
+      normalizeCarriageCodeKey(base),
+      raw,
+      base,
+    ]);
+    if (keys.has(want) || keys.has(String(carCode))) return d;
+  }
+  return null;
+}
+
+function carriageClassFromTrain(train, carCode) {
+  const det = carriageDetailForTab(train, carCode);
+  const mapped = det && mapTypeLabelToCarClass(det.type_label);
+  if (mapped) return mapped;
+  return demoCarClassForCarCode(carCode, train);
+}
+
+function compartmentKindLabel(kind) {
+  const copy = i18n[language];
+  switch (kind) {
+    case "female":
+      return copy.compartmentFemale;
+    case "male":
+      return copy.compartmentMale;
+    case "mixed":
+      return copy.compartmentMixed;
+    case "children":
+      return copy.compartmentChildren;
+    case "family":
+      return copy.compartmentFamily;
+    default:
+      return copy.compartmentUnknown || "";
+  }
+}
+
+/** Показывает данные РЖД по вагону (пол купе, услуги) под вкладками выбора вагона. */
+function renderWagonMetaPanel() {
+  if (!wagonMetaPanel) return;
+  const car = demoCarriages[activeCarriageIndex];
+  const detail = selectedTrain && car ? carriageDetailForTab(selectedTrain, car) : null;
+  if (!detail) {
+    wagonMetaPanel.classList.add("hidden");
+    wagonMetaPanel.setAttribute("aria-hidden", "true");
+    wagonMetaPanel.innerHTML = "";
+    return;
+  }
+
+  const kind = compartmentKindLabel(detail.compartment_kind);
+  const typeLine = String(detail.type_label || "").trim();
+  const summary = String(detail.service_summary || "").trim();
+  const signs = detail.add_signs_raw != null ? String(detail.add_signs_raw).trim() : "";
+  const services = Array.isArray(detail.services_short) ? detail.services_short : [];
+
+  const parts = [];
+  if (typeLine) {
+    parts.push(`<p class="wagon-meta-type">${escapeHtml(typeLine)}</p>`);
+  }
+  if (kind) {
+    parts.push(`<p class="wagon-meta-kind"><span class="wagon-meta-kind-badge">${escapeHtml(kind)}</span></p>`);
+  }
+  if (signs) {
+    parts.push(
+      `<p class="wagon-meta-signs"><span class="wagon-meta-sign-label">${escapeHtml(i18n[language].addSignsLabel)}</span><code>${escapeHtml(signs)}</code></p>`,
+    );
+  }
+  if (summary) {
+    parts.push(`<p class="wagon-meta-summary">${escapeHtml(summary)}</p>`);
+  }
+  if (services.length) {
+    const chips = services
+      .map((s) => `<span class="wagon-meta-chip">${escapeHtml(String(s))}</span>`)
+      .join("");
+    parts.push(
+      `<div class="wagon-meta-services"><span class="wagon-meta-services-label">${escapeHtml(i18n[language].wagonServices)}</span><div class="wagon-meta-chip-row">${chips}</div></div>`,
+    );
+  }
+
+  if (!parts.length) {
+    wagonMetaPanel.classList.add("hidden");
+    wagonMetaPanel.setAttribute("aria-hidden", "true");
+    wagonMetaPanel.innerHTML = "";
+    return;
+  }
+
+  wagonMetaPanel.innerHTML = parts.join("");
+  wagonMetaPanel.classList.remove("hidden");
+  wagonMetaPanel.setAttribute("aria-hidden", "false");
+}
+
 function demoCarClassForCarCode(carCode, train) {
   const n = parseInt(carCode, 10) || 1;
   const hasSv = Boolean(train?.prices?.sv);
@@ -289,6 +416,7 @@ const checkoutTrainSummaryBody = document.querySelector("#checkout-train-summary
 const checkoutTrainSummaryLabel = document.querySelector("#checkout-train-summary-label");
 const checkoutButton = document.querySelector("#checkout-button");
 const confirmSeatsButton = document.querySelector("#confirm-seats-button");
+const wagonMetaPanel = document.querySelector("#wagon-meta-panel");
 const orbButton = document.querySelector("#orb-button");
 const routeLine = document.querySelector("#route-line");
 const routePulse = document.querySelector("#route-pulse");
@@ -909,19 +1037,19 @@ function compartmentCountForCapacity(capacity) {
 function buildSeatPickerModel(train) {
   const layouts = new Map();
   const rng = mulberry32(hashSeed(train.id || train.train_number || "train"));
-  const cars = [];
-  for (let i = 0; i < 8; i += 1) {
-    cars.push(String(i + 1).padStart(2, "0"));
-  }
-  demoCarriages = cars;
+  const rawList =
+    Array.isArray(train.carriage_details) && train.carriage_details.length > 0
+      ? train.carriage_details.map((d) => String(d.number))
+      : Array.from({ length: 8 }, (_, i) => String(i + 1).padStart(2, "0"));
+  demoCarriages = rawList;
   demoCarriageClassByCar = new Map();
-  cars.forEach((car) => {
-    demoCarriageClassByCar.set(car, demoCarClassForCarCode(car, train));
+  rawList.forEach((car) => {
+    demoCarriageClassByCar.set(car, carriageClassFromTrain(train, car));
   });
   activeCarriageIndex = 0;
   selectedSeatKeys = new Set();
 
-  cars.forEach((car) => {
+  rawList.forEach((car) => {
     const cls = carriageClassKey(car);
     const capacity = carriageCapacityForClass(train, cls);
     let seats = [];
@@ -1108,6 +1236,7 @@ function appendStandardCoupeCube(grid, car, compSeats) {
 }
 
 function renderSeatGrid() {
+  renderWagonMetaPanel();
   const grid = document.querySelector("#seat-grid");
   grid.innerHTML = "";
   const car = demoCarriages[activeCarriageIndex];
