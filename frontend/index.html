@@ -17,7 +17,10 @@
             <p id="terminal-subtitle" class="brand-subtitle">Интеллектуальный терминал РЖД</p>
           </div>
         </div>
-        <div id="language-badge" class="status-pill">RU</div>
+        <div class="top-actions">
+          <button id="new-session-button" class="ghost-button hidden">Новый запрос</button>
+          <div id="language-badge" class="status-pill">RU</div>
+        </div>
       </header>
 
       <section id="language-screen" class="screen language-screen">
@@ -58,13 +61,13 @@
             </defs>
             <path d="M70 380 C220 320 340 380 510 280 S720 130 840 190" fill="none" stroke="rgba(0,229,255,.12)" stroke-width="4" />
             <path id="route-line" class="route-line" d="M125 350 C260 255 390 280 535 210 S700 155 790 115" fill="none" stroke="url(#routeGradient)" stroke-width="8" stroke-linecap="round" filter="url(#glow)" />
-            <circle class="city-dot" cx="125" cy="350" r="14" fill="#00e5ff" />
+            <circle id="origin-dot" class="city-dot" cx="125" cy="350" r="14" fill="#00e5ff" />
             <circle id="route-pulse" class="city-dot pulse" cx="790" cy="115" r="24" fill="rgba(0,255,156,.32)" />
-            <circle class="city-dot" cx="790" cy="115" r="16" fill="#00ff9c" />
+            <circle id="destination-dot" class="city-dot" cx="790" cy="115" r="16" fill="#00ff9c" />
             <text id="origin-label" x="82" y="386" fill="#eef8ff" font-size="24">Москва</text>
             <text id="destination-label" x="730" y="95" fill="#eef8ff" font-size="24">Казань</text>
-            <text x="368" y="256" fill="#8ea8c7" font-size="18">Канаш</text>
-            <text x="535" y="195" fill="#8ea8c7" font-size="18">Зеленый Дол</text>
+            <text id="stop-label-a" x="368" y="256" fill="#8ea8c7" font-size="18">Канаш</text>
+            <text id="stop-label-b" x="535" y="195" fill="#8ea8c7" font-size="18">Зеленый Дол</text>
           </svg>
           <article class="fact-card">
             <strong id="fact-title">AI Fact</strong>
@@ -80,6 +83,11 @@
               <p id="assistant-text">Добро пожаловать. Куда направимся?</p>
             </div>
           </div>
+
+          <section class="history-panel">
+            <p class="brand-subtitle" id="history-title">История диалога</p>
+            <div id="dialog-history" class="dialog-history"></div>
+          </section>
 
           <div class="input-row">
             <input id="user-input" autocomplete="off" placeholder="Например: хочу приехать в Казань к началу рабочего дня 6 мая" />

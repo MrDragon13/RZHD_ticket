@@ -86,6 +86,15 @@ class PriceInfo(BaseModel):
     sv: int | None = None
 
 
+class SeatDetails(BaseModel):
+    """Детализация свободных мест: нижние, верхние и боковые полки."""
+
+    lower: int = 0
+    upper: int = 0
+    side_lower: int = 0
+    side_upper: int = 0
+
+
 class TrainOption(BaseModel):
     """Единый формат поезда для интерфейса, рекомендаций и демо-чекаута."""
 
@@ -102,8 +111,11 @@ class TrainOption(BaseModel):
     route_distance_km: int
     stops: list[str]
     available_seats: SeatInfo
+    seat_details: SeatDetails = Field(default_factory=SeatDetails)
     prices: PriceInfo
     features: list[str] = Field(default_factory=list)
+    amenities: list[str] = Field(default_factory=list)
+    carriage_notes: list[str] = Field(default_factory=list)
 
 
 class TicketSearchResponse(BaseModel):
@@ -174,6 +186,7 @@ class DemoTicket(BaseModel):
     arrival: str
     car: str
     seat: str
+    berth_type: str
     travel_class: str
     disclaimer: str
 

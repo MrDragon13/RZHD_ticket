@@ -18,12 +18,19 @@
         "coupe": 9,
         "sv": 2
       },
+      "seat_details": {
+        "lower": 7,
+        "upper": 12,
+        "side_lower": 3,
+        "side_upper": 3
+      },
       "prices": {
         "platzkart": 2860,
         "coupe": 3290,
         "sv": 7890
       },
-      "features": ["night", "sleep", "direct", "balanced"]
+      "features": ["night", "sleep", "direct", "balanced"],
+      "amenities": ["conditioner", "restaurant", "pets_allowed", "female_compartment", "usb"]
     },
   {
     "id": "moscow-kazan-002y",
@@ -43,12 +50,19 @@
       "coupe": 16,
       "sv": 4
     },
+    "seat_details": {
+      "lower": 11,
+      "upper": 10,
+      "side_lower": 2,
+      "side_upper": 3
+    },
     "prices": {
       "platzkart": 3180,
       "coupe": 3580,
       "sv": 8500
     },
-    "features": ["night", "sleep", "comfort", "direct"]
+    "features": ["night", "sleep", "comfort", "direct"],
+    "amenities": ["conditioner", "restaurant", "female_compartment", "quiet_car", "usb"]
   },
   {
     "id": "moscow-kazan-112m",
@@ -68,12 +82,19 @@
       "coupe": 3,
       "sv": 0
     },
+    "seat_details": {
+      "lower": 5,
+      "upper": 15,
+      "side_lower": 6,
+      "side_upper": 5
+    },
     "prices": {
       "platzkart": 2210,
       "coupe": 4100,
       "sv": null
     },
-    "features": ["cheap", "direct"]
+    "features": ["cheap", "direct"],
+    "amenities": ["pets_allowed", "luggage", "wifi_demo"]
   },
   {
     "id": "moscow-spb-758a",
@@ -93,12 +114,19 @@
       "coupe": 0,
       "sv": 0
     },
+    "seat_details": {
+      "lower": 0,
+      "upper": 0,
+      "side_lower": 0,
+      "side_upper": 0
+    },
     "prices": {
       "platzkart": null,
       "coupe": 4390,
       "sv": 8900
     },
-    "features": ["fast", "morning", "direct"]
+    "features": ["fast", "morning", "direct"],
+    "amenities": ["conditioner", "restaurant", "wifi_demo", "business_class", "no_pets"]
   },
     {
       "id": "moscow-sochi-104v",
@@ -118,12 +146,19 @@
         "coupe": 12,
         "sv": 3
       },
+      "seat_details": {
+        "lower": 9,
+        "upper": 14,
+        "side_lower": 5,
+        "side_upper": 8
+      },
       "prices": {
         "platzkart": 4260,
         "coupe": 6120,
         "sv": 13100
       },
-      "features": ["long", "resort", "direct"]
+      "features": ["long", "resort", "direct"],
+      "amenities": ["conditioner", "restaurant", "pets_allowed", "shower", "family_car"]
     }
   ]
 }
