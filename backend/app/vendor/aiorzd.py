@@ -423,9 +423,10 @@ class RzdFetcher:
             raise CaptchaRequired(response.get('error'))
 
         lst = response.get('lst', [])
-        if lst and lst[0]['msgList'] and \
-                lst[0]['msgList'][0].get('errType') == 'ERROR':
-            raise UpstreamError(lst[0]['msgList'][0]['message'])
+        first = lst[0] if lst and isinstance(lst[0], dict) else None
+        msg_list = first.get('msgList') if first else None
+        if msg_list and msg_list[0].get('errType') == 'ERROR':
+            raise UpstreamError(msg_list[0].get('message', 'Unknown error'))
         elif response['result'] == 'OK':
             return response
         elif response['result'] == 'RID':
