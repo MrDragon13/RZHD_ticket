@@ -373,19 +373,7 @@ function mergeRouteVisualForTrain(destinationKey, train) {
   }
 
   const names = intermediateStopDisplayNames(train);
-  let placed =
-    names.length > 0 ? stopMarkersAlongPath(base.line, names, frac) : null;
-
-  if (
-    (!placed || !names.length) &&
-    Array.isArray(base.stops) &&
-    base.stops.length > 0
-  ) {
-    const fbNames = base.stops.map((s) => s.name).filter(Boolean).slice(0, 3);
-    if (fbNames.length) {
-      placed = stopMarkersAlongPath(base.line, fbNames, frac);
-    }
-  }
+  const placed = names.length > 0 ? stopMarkersAlongPath(base.line, names, frac) : null;
 
   if (!placed) {
     return { ...base, destination: dest, stops: [], routeClip };
