@@ -202,6 +202,11 @@ button {
   padding: 26px;
 }
 
+.map-content {
+  position: relative;
+  height: 100%;
+}
+
 .map-title {
   display: flex;
   justify-content: space-between;
@@ -218,10 +223,31 @@ button {
   color: var(--muted);
 }
 
+#route-state {
+  align-self: start;
+  padding: 10px 14px;
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(0, 229, 255, 0.07);
+}
+
 .route-map {
   width: 100%;
   height: calc(100% - 94px);
   min-height: 430px;
+}
+
+.map-landmass {
+  fill: rgba(0, 229, 255, 0.035);
+  stroke: rgba(0, 229, 255, 0.18);
+  stroke-width: 2;
+}
+
+.map-region-line,
+.rail-background {
+  fill: none;
+  stroke: rgba(142, 168, 199, 0.18);
+  stroke-width: 2;
 }
 
 .route-line {
@@ -242,6 +268,23 @@ button {
 .city-dot {
   transition: cx 0.8s ease, cy 0.8s ease;
   filter: drop-shadow(0 0 12px var(--cyan));
+}
+
+.stop-dot {
+  fill: #8a2be2;
+  stroke: #eef8ff;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 10px rgba(138, 43, 226, 0.8));
+}
+
+.stop-dot.hidden-stop,
+.stop-label.hidden-stop {
+  opacity: 0;
+}
+
+.stop-label {
+  fill: #cbeaff;
+  font-size: 18px;
 }
 
 .pulse {
@@ -362,11 +405,35 @@ button {
     0 0 34px rgba(0, 229, 255, 0.5),
     inset 0 0 42px rgba(0, 229, 255, 0.22);
   animation: orb 2.1s ease-in-out infinite;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
 }
 
-.orb.listening {
+.orb-idle {
+  border-color: var(--cyan);
+}
+
+.orb-listening {
   border-color: var(--green);
   box-shadow: 0 0 54px rgba(0, 255, 156, 0.55);
+}
+
+.orb-thinking {
+  border-color: var(--violet);
+  box-shadow:
+    0 0 58px rgba(138, 43, 226, 0.55),
+    inset 0 0 48px rgba(138, 43, 226, 0.22);
+  animation: orb-thinking 1s linear infinite;
+}
+
+.orb-speaking {
+  border-color: #fff;
+  box-shadow:
+    0 0 64px rgba(0, 229, 255, 0.7),
+    0 0 28px rgba(0, 255, 156, 0.35);
+  animation: orb-speaking 0.72s ease-in-out infinite;
 }
 
 @keyframes orb {
@@ -376,6 +443,25 @@ button {
   }
   50% {
     transform: scale(1.05);
+  }
+}
+
+@keyframes orb-thinking {
+  to {
+    transform: rotate(360deg) scale(1.04);
+  }
+}
+
+@keyframes orb-speaking {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.08);
+  }
+  70% {
+    transform: scale(0.98);
   }
 }
 
@@ -390,6 +476,17 @@ button {
   color: #cbeaff;
   font-size: 18px;
   line-height: 1.45;
+}
+
+.assistant-text .orb-hint {
+  min-height: auto;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 255, 156, 0.22);
+  border-radius: 16px;
+  color: var(--green);
+  font-size: 14px;
+  background: rgba(0, 255, 156, 0.07);
 }
 
 .history-panel {
@@ -735,13 +832,11 @@ button {
 }
 
 .ticket-panel {
-  display: grid;
-  place-items: center;
-  padding: 28px;
+  min-height: 100%;
 }
 
 .ticket {
-  width: min(760px, 92vw);
+  width: min(820px, 100%);
   padding: 32px;
   border: 1px dashed var(--green);
   border-radius: 32px;

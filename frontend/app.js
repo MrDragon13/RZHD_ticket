@@ -72,37 +72,62 @@ const routeVisuals = {
   "Казань": {
     destination: { x: 790, y: 115, labelX: 730, labelY: 95 },
     line: "M125 350 C260 255 390 280 535 210 S700 155 790 115",
-    stops: ["Канаш", "Зеленый Дол"],
+    stops: [
+      { name: "Муром", x: 278, y: 276 },
+      { name: "Канаш", x: 535, y: 210 },
+      { name: "Зеленый Дол", x: 665, y: 158 },
+    ],
   },
   "Kazan": {
     destination: { x: 790, y: 115, labelX: 730, labelY: 95 },
     line: "M125 350 C260 255 390 280 535 210 S700 155 790 115",
-    stops: ["Kanash", "Zeleny Dol"],
+    stops: [
+      { name: "Murom", x: 278, y: 276 },
+      { name: "Kanash", x: 535, y: 210 },
+      { name: "Zeleny Dol", x: 665, y: 158 },
+    ],
   },
   "Санкт-Петербург": {
     destination: { x: 430, y: 80, labelX: 335, labelY: 62 },
     line: "M125 350 C190 235 265 150 430 80",
-    stops: ["Тверь", "Бологое"],
+    stops: [
+      { name: "Тверь", x: 220, y: 232 },
+      { name: "Бологое", x: 318, y: 142 },
+    ],
   },
   "Saint Petersburg": {
     destination: { x: 430, y: 80, labelX: 335, labelY: 62 },
     line: "M125 350 C190 235 265 150 430 80",
-    stops: ["Tver", "Bologoye"],
+    stops: [
+      { name: "Tver", x: 220, y: 232 },
+      { name: "Bologoye", x: 318, y: 142 },
+    ],
   },
   "Сочи": {
     destination: { x: 710, y: 455, labelX: 670, labelY: 488 },
     line: "M125 350 C260 420 420 480 560 430 S650 385 710 455",
-    stops: ["Ростов-на-Дону", "Краснодар"],
+    stops: [
+      { name: "Воронеж", x: 330, y: 430 },
+      { name: "Ростов-на-Дону", x: 560, y: 430 },
+      { name: "Краснодар", x: 650, y: 395 },
+    ],
   },
   "Sochi": {
     destination: { x: 710, y: 455, labelX: 670, labelY: 488 },
     line: "M125 350 C260 420 420 480 560 430 S650 385 710 455",
-    stops: ["Rostov-on-Don", "Krasnodar"],
+    stops: [
+      { name: "Voronezh", x: 330, y: 430 },
+      { name: "Rostov-on-Don", x: 560, y: 430 },
+      { name: "Krasnodar", x: 650, y: 395 },
+    ],
   },
   default: {
     destination: { x: 790, y: 115, labelX: 730, labelY: 95 },
     line: "M125 350 C260 255 390 280 535 210 S700 155 790 115",
-    stops: ["Канаш", "Зеленый Дол"],
+    stops: [
+      { name: "Канаш", x: 535, y: 210 },
+      { name: "Зеленый Дол", x: 665, y: 158 },
+    ],
   },
 };
 
@@ -159,16 +184,20 @@ const intentPanel = document.querySelector("#intent-panel");
 const trainsPanel = document.querySelector("#trains-panel");
 const checkoutPanel = document.querySelector("#checkout-panel");
 const ticketPanel = document.querySelector("#ticket-panel");
+const mapContent = document.querySelector("#map-content");
+const orbButton = document.querySelector("#orb-button");
 const routeLine = document.querySelector("#route-line");
 const routePulse = document.querySelector("#route-pulse");
 const dialogHistory = document.querySelector("#dialog-history");
 const newSessionButton = document.querySelector("#new-session-button");
+const routeState = document.querySelector("#route-state");
 
 document.querySelectorAll("[data-language]").forEach((button) => {
   button.addEventListener("click", () => setLanguage(button.dataset.language));
 });
 document.querySelector("#send-button").addEventListener("click", () => handleUserText(userInput.value));
-document.querySelector("#orb-button").addEventListener("click", startVoiceRecognition);
+orbButton.addEventListener("click", startVoiceRecognition);
+orbButton.classList.add("orb-idle");
 document.querySelector("#restart-button").addEventListener("click", () => resetScenario(true));
 newSessionButton.addEventListener("click", () => resetScenario(true));
 userInput.addEventListener("keydown", (event) => {
@@ -240,6 +269,10 @@ function renderChips(stage = uiStage) {
 function setStage(nextStage) {
   uiStage = nextStage;
   renderChips();
+  if (nextStage === "initial") setOrbMode("idle");
+  if (nextStage === "searching") setOrbMode("thinking");
+  if (nextStage === "results") setOrbMode("speaking");
+  if (nextStage === "checkout") setOrbMode("idle");
 }
 
 async function handleUserText(text) {
@@ -350,8 +383,16 @@ function updateMapGeometry(visual) {
   const destinationDot = document.querySelector("#destination-dot");
   const originLabel = document.querySelector("#origin-label");
   const destinationLabel = document.querySelector("#destination-label");
-  const stopA = document.querySelector("#stop-label-a");
-  const stopB = document.querySelector("#stop-label-b");
+  const stopDots = [
+    document.querySelector("#stop-dot-a"),
+    document.querySelector("#stop-dot-b"),
+    document.querySelector("#stop-dot-c"),
+  ];
+  const stopLabels = [
+    document.querySelector("#stop-label-a"),
+    document.querySelector("#stop-label-b"),
+    document.querySelector("#stop-label-c"),
+  ];
   [destinationDot, routePulse].forEach((dot) => {
     if (!dot) return;
     dot.setAttribute("cx", visual.destination.x);
@@ -363,8 +404,22 @@ function updateMapGeometry(visual) {
     destinationLabel.setAttribute("x", visual.destination.labelX);
     destinationLabel.setAttribute("y", visual.destination.labelY);
   }
-  if (stopA) stopA.textContent = visual.stops[0] || "";
-  if (stopB) stopB.textContent = visual.stops[1] || "";
+  stopDots.forEach((dot, index) => updateStopPoint(dot, stopLabels[index], visual.stops[index]));
+}
+
+function updateStopPoint(dot, label, stop) {
+  if (!dot || !label) return;
+  if (!stop) {
+    dot.classList.add("hidden-map-point");
+    label.textContent = "";
+    return;
+  }
+  dot.classList.remove("hidden-map-point");
+  dot.setAttribute("cx", stop.x);
+  dot.setAttribute("cy", stop.y);
+  label.setAttribute("x", stop.x + 12);
+  label.setAttribute("y", stop.y - 12);
+  label.textContent = stop.name;
 }
 
 function routeDistanceLabel() {
@@ -461,6 +516,7 @@ async function createTicket() {
 }
 
 function renderTicket() {
+  mapContent.classList.add("hidden");
   ticketPanel.classList.remove("hidden");
   document.querySelector("#ticket-title").textContent = i18n[language].demoTicket;
   const amenities = selectedTrain ? renderAmenityBadges(selectedTrain.amenities) : "";
@@ -490,7 +546,7 @@ function startVoiceRecognition() {
   recognition.lang = language === "ru" ? "ru-RU" : "en-US";
   recognition.interimResults = false;
   recognition.maxAlternatives = 1;
-  document.querySelector("#orb-button").classList.add("orb-listening");
+  setOrbMode("listening");
   recognition.onresult = (event) => {
     const spokenText = event.results[0][0].transcript;
     // Голосовой ввод сначала появляется в поле: пассажир видит, что понял
@@ -499,16 +555,24 @@ function startVoiceRecognition() {
     handleUserText(spokenText);
   };
   recognition.onerror = () => assistantSay(i18n[language].noSpeech);
-  recognition.onend = () => document.querySelector("#orb-button").classList.remove("orb-listening");
+  recognition.onend = () => {
+    if (uiStage !== "searching") setOrbMode("idle");
+  };
   recognition.start();
 }
 
 function assistantSay(text, options = {}) {
   assistantText.textContent = text;
+  setOrbMode("speaking");
   if (options.addToHistory !== false) {
     addMessage("assistant", text);
   }
   speak(text);
+}
+
+function setOrbMode(mode) {
+  orbButton.classList.remove("orb-idle", "orb-listening", "orb-thinking", "orb-speaking");
+  orbButton.classList.add(`orb-${mode}`);
 }
 
 function addMessage(role, text) {
@@ -537,6 +601,9 @@ function speak(text) {
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = language === "ru" ? "ru-RU" : "en-US";
   utterance.rate = 0.95;
+  utterance.onend = () => {
+    if (uiStage === "initial" || uiStage === "checkout") setOrbMode("idle");
+  };
   window.speechSynthesis.speak(utterance);
 }
 
@@ -595,6 +662,7 @@ function resetScenario(announce = true) {
   transcript.textContent = "";
   assistantText.textContent = i18n[language].assistantReady;
   [intentPanel, trainsPanel, checkoutPanel, ticketPanel].forEach((panel) => panel.classList.add("hidden"));
+  mapContent.classList.remove("hidden");
   document.querySelector("#route-meta").textContent =
     language === "ru" ? "Москва -> Казань" : "Moscow -> Kazan";
   document.querySelector("#route-fact").textContent =
