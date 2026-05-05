@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime
 
 from app.models import PriceInfo, SeatDetails, SeatInfo, TrainOption
+from app.services.rzd_carriage_parse import (
+    aggregate_from_carriages_payload,
+    extract_route_distance_km,
+    seat_details_from_search_car_row,
+    sum_seat_details,
+)
 
 
 def _minutes_to_label(total_minutes: int, language: str) -> str:
@@ -24,16 +31,34 @@ def _normalize_rzd_text(s: str) -> str:
 
 
 def _parse_free_seats(row: dict) -> int:
-    """РЖД в разных ответах может отдавать разные ключи."""
+    """Сумма свободных мест в строке cars[] (верхний уровень или вложенные seats[])."""
 
     for key in ("freeSeats", "free", "places", "seatCount", "quantity"):
         raw = row.get(key)
         if raw is None:
             continue
         try:
-            return int(round(float(raw)))
+            v = int(round(float(raw)))
+            if v > 0:
+                return v
         except (TypeError, ValueError):
             continue
+    seats = row.get("seats")
+    if isinstance(seats, list):
+        nested = 0
+        for s in seats:
+            if not isinstance(s, dict):
+                continue
+            for key in ("free", "freeSeats", "quantity"):
+                raw = s.get(key)
+                if raw is None:
+                    continue
+                try:
+                    nested += int(round(float(raw)))
+                except (TypeError, ValueError):
+                    continue
+        if nested > 0:
+            return nested
     return 0
 
 
@@ -134,12 +159,14 @@ def estimate_seat_details_from_totals(platz: int, coupe: int, sv: int) -> SeatDe
 
 
 def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails, PriceInfo]:
-    """Суммирует строки cars[] из ответа РЖД по типам вагонов."""
+    """Суммирует строки cars[] из ответа РЖД по типам вагонов и вложенные seats[]."""
 
     platz = coupe = sv = unknown = 0
     min_platz: int | None = None
     min_coupe: int | None = None
     min_sv: int | None = None
+
+    details_acc = SeatDetails()
 
     for row in cars:
         free = _parse_free_seats(row)
@@ -165,15 +192,19 @@ def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails
         else:
             unknown += free
 
-    # Нераспознанные места не теряем: показываем в «плацкарт» (самый частый класс в выдаче).
+        row_det = seat_details_from_search_car_row(row)
+        if row_det:
+            details_acc = sum_seat_details(details_acc, row_det)
+
     if unknown:
         platz += unknown
 
-    details = estimate_seat_details_from_totals(platz, coupe, sv)
+    if details_acc.lower + details_acc.upper + details_acc.side_lower + details_acc.side_upper == 0:
+        details_acc = estimate_seat_details_from_totals(platz, coupe, sv)
 
     return (
         SeatInfo(platzkart=platz, coupe=coupe, sv=sv),
-        details,
+        details_acc,
         PriceInfo(platzkart=min_platz, coupe=min_coupe, sv=min_sv),
     )
 
@@ -217,13 +248,44 @@ def aggregate_from_aiorzd_places(places: list) -> tuple[SeatInfo, SeatDetails, P
     if unknown:
         platz += unknown
 
-    details = estimate_seat_details_from_totals(platz, coupe, sv)
+    details_acc = estimate_seat_details_from_totals(platz, coupe, sv)
 
     return (
         SeatInfo(platzkart=platz, coupe=coupe, sv=sv),
-        details,
+        details_acc,
         PriceInfo(platzkart=min_platz, coupe=min_coupe, sv=min_sv),
     )
+
+
+def apply_carriage_layer_payload(train: TrainOption, payload: dict | None) -> TrainOption:
+    """Подмена полок / сумм / вместимости вагона данными слоя 5764 (если разобрались)."""
+
+    if not payload:
+        return train
+    try:
+        det, info, caps, double_deck = aggregate_from_carriages_payload(payload)
+    except Exception:
+        logging.exception("carriage payload parse failed")
+        return train
+
+    upd: dict = {}
+    if det.lower + det.upper + det.side_lower + det.side_upper > 0:
+        upd["seat_details"] = det
+    if info.platzkart + info.coupe + info.sv > 0:
+        upd["available_seats"] = info
+    if caps.get("platzkart_carriage_seats"):
+        upd["platzkart_carriage_seats"] = caps["platzkart_carriage_seats"]
+    if caps.get("coupe_carriage_seats"):
+        upd["coupe_carriage_seats"] = caps["coupe_carriage_seats"]
+    if caps.get("sv_carriage_seats"):
+        upd["sv_carriage_seats"] = caps["sv_carriage_seats"]
+    if double_deck and caps.get("coupe_carriage_seats"):
+        upd["coupe_double_deck_seats"] = caps["coupe_carriage_seats"]
+    if double_deck:
+        upd["coupe_double_deck"] = True
+    if not upd:
+        return train
+    return train.model_copy(update=upd)
 
 
 def train_option_from_aiorzd(
@@ -233,6 +295,7 @@ def train_option_from_aiorzd(
     origin_hint: str | None,
     dest_hint: str | None,
     language: str,
+    carriage_payload: dict | None = None,
 ) -> TrainOption:
     """Преобразует объект aiorzd.Train в TrainOption."""
 
@@ -258,6 +321,9 @@ def train_option_from_aiorzd(
         route_km = int(float(distance_raw)) if distance_raw is not None else 0
     except (TypeError, ValueError):
         route_km = 0
+    alt_km = extract_route_distance_km(content)
+    if alt_km and route_km == 0:
+        route_km = alt_km
 
     stops: list[str] = []
     raw_stops = content.get("stops") or content.get("stopList")
@@ -282,7 +348,7 @@ def train_option_from_aiorzd(
 
     tid = f"rzd-{train_number}-{dep.strftime('%Y%m%d%H%M')}-{index}"
 
-    return TrainOption(
+    base = TrainOption(
         id=tid,
         train_number=train_number,
         origin=origin_hint or route0 or "—",
@@ -302,3 +368,4 @@ def train_option_from_aiorzd(
         amenities=[],
         carriage_notes=[],
     )
+    return apply_carriage_layer_payload(base, carriage_payload)

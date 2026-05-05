@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -61,9 +62,38 @@ class RzdDataAdapter:
         day_start = datetime.combine(travel_date, time.min)
         day_end = datetime.combine(travel_date, time(23, 59, 59))
 
+        enrich = _env_truthy_default_on("RZD_CARRIAGE_ENRICH")
+        max_conc = int(os.getenv("RZD_CARRIAGE_CONCURRENCY", "4") or "4")
+        max_conc = max(1, min(max_conc, 16))
+
         async with RzdFetcher() as fetcher:
             trains_iter = await fetcher.trains(origin, destination, TimeRange(day_start, day_end))
             trains_list = list(trains_iter)
+
+            carriage_by_index: dict[int, dict] = {}
+            if enrich and trains_list:
+                src_code = await fetcher.get_city_code(origin)
+                dst_code = await fetcher.get_city_code(destination)
+
+                sem = asyncio.Semaphore(max_conc)
+
+                async def one_train(idx: int, t) -> None:
+                    num = str(getattr(t, "number", "") or (t.content or {}).get("number") or "")
+                    if not num:
+                        return
+                    dep = getattr(t, "departure_time", None)
+                    if dep is None:
+                        return
+                    async with sem:
+                        try:
+                            raw = await fetcher.get_train_carriages(src_code, dst_code, dep, num)
+                        except Exception:
+                            logging.debug("carriages enrich failed for train %s", num, exc_info=True)
+                            return
+                        if isinstance(raw, dict) and raw.get("result") == "OK":
+                            carriage_by_index[idx] = raw
+
+                await asyncio.gather(*(one_train(i, tr) for i, tr in enumerate(trains_list)))
 
         mapped: list[TrainOption] = []
         for index, train_obj in enumerate(trains_list):
@@ -74,6 +104,7 @@ class RzdDataAdapter:
                     origin_hint=origin,
                     dest_hint=destination,
                     language=request.language,
+                    carriage_payload=carriage_by_index.get(index),
                 ),
             )
 
