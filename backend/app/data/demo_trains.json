@@ -1,0 +1,164 @@
+{
+  "trains": [
+    {
+      "id": "moscow-kazan-024m",
+      "train_number": "024М",
+      "origin": "Москва",
+      "destination": "Казань",
+      "departure_station": "Москва Казанская",
+      "arrival_station": "Казань Пасс",
+      "departure_time": "22:15",
+      "arrival_time": "08:10",
+      "duration_minutes": 595,
+      "duration_label": "9 ч 55 мин",
+      "route_distance_km": 793,
+      "stops": ["Муром", "Канаш", "Зеленый Дол"],
+      "available_seats": {
+        "platzkart": 14,
+        "coupe": 9,
+        "sv": 2
+      },
+      "seat_details": {
+        "lower": 7,
+        "upper": 12,
+        "side_lower": 3,
+        "side_upper": 3
+      },
+      "prices": {
+        "platzkart": 2860,
+        "coupe": 3290,
+        "sv": 7890
+      },
+      "features": ["night", "sleep", "direct", "balanced"],
+      "amenities": ["conditioner", "restaurant", "pets_allowed", "female_compartment", "usb"]
+    },
+  {
+    "id": "moscow-kazan-002y",
+    "train_number": "002Й",
+    "origin": "Москва",
+    "destination": "Казань",
+    "departure_station": "Москва Казанская",
+    "arrival_station": "Казань Пасс",
+    "departure_time": "20:40",
+    "arrival_time": "07:05",
+    "duration_minutes": 625,
+    "duration_label": "10 ч 25 мин",
+    "route_distance_km": 793,
+    "stops": ["Вековка", "Канаш"],
+    "available_seats": {
+      "platzkart": 6,
+      "coupe": 16,
+      "sv": 4
+    },
+    "seat_details": {
+      "lower": 11,
+      "upper": 10,
+      "side_lower": 2,
+      "side_upper": 3
+    },
+    "prices": {
+      "platzkart": 3180,
+      "coupe": 3580,
+      "sv": 8500
+    },
+    "features": ["night", "sleep", "comfort", "direct"],
+    "amenities": ["conditioner", "restaurant", "female_compartment", "quiet_car", "usb"]
+  },
+  {
+    "id": "moscow-kazan-112m",
+    "train_number": "112М",
+    "origin": "Москва",
+    "destination": "Казань",
+    "departure_station": "Москва Казанская",
+    "arrival_station": "Казань Пасс",
+    "departure_time": "16:38",
+    "arrival_time": "05:18",
+    "duration_minutes": 760,
+    "duration_label": "12 ч 40 мин",
+    "route_distance_km": 793,
+    "stops": ["Арзамас", "Сергач", "Канаш"],
+    "available_seats": {
+      "platzkart": 28,
+      "coupe": 3,
+      "sv": 0
+    },
+    "seat_details": {
+      "lower": 5,
+      "upper": 15,
+      "side_lower": 6,
+      "side_upper": 5
+    },
+    "prices": {
+      "platzkart": 2210,
+      "coupe": 4100,
+      "sv": null
+    },
+    "features": ["cheap", "direct"],
+    "amenities": ["pets_allowed", "luggage", "wifi_demo"]
+  },
+  {
+    "id": "moscow-spb-758a",
+    "train_number": "758А",
+    "origin": "Москва",
+    "destination": "Санкт-Петербург",
+    "departure_station": "Москва Ленинградская",
+    "arrival_station": "Санкт-Петербург Главный",
+    "departure_time": "07:00",
+    "arrival_time": "10:46",
+    "duration_minutes": 226,
+    "duration_label": "3 ч 46 мин",
+    "route_distance_km": 650,
+    "stops": ["Тверь", "Бологое"],
+    "available_seats": {
+      "platzkart": 0,
+      "coupe": 0,
+      "sv": 0
+    },
+    "seat_details": {
+      "lower": 0,
+      "upper": 0,
+      "side_lower": 0,
+      "side_upper": 0
+    },
+    "prices": {
+      "platzkart": null,
+      "coupe": 4390,
+      "sv": 8900
+    },
+    "features": ["fast", "morning", "direct"],
+    "amenities": ["conditioner", "restaurant", "wifi_demo", "business_class", "no_pets"]
+  },
+    {
+      "id": "moscow-sochi-104v",
+      "train_number": "104В",
+      "origin": "Москва",
+      "destination": "Сочи",
+      "departure_station": "Москва Казанская",
+      "arrival_station": "Сочи",
+      "departure_time": "10:52",
+      "arrival_time": "14:16",
+      "duration_minutes": 1644,
+      "duration_label": "1 д 3 ч 24 мин",
+      "route_distance_km": 1620,
+      "stops": ["Воронеж", "Ростов-на-Дону", "Краснодар"],
+      "available_seats": {
+        "platzkart": 21,
+        "coupe": 12,
+        "sv": 3
+      },
+      "seat_details": {
+        "lower": 9,
+        "upper": 14,
+        "side_lower": 5,
+        "side_upper": 8
+      },
+      "prices": {
+        "platzkart": 4260,
+        "coupe": 6120,
+        "sv": 13100
+      },
+      "features": ["long", "resort", "direct"],
+      "amenities": ["conditioner", "restaurant", "pets_allowed", "shower", "family_car"]
+    }
+  ]
+}
