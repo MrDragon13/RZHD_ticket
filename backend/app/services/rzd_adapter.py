@@ -104,9 +104,7 @@ class RzdDataAdapter:
                 src_code = await fetcher.get_city_code(origin)
                 dst_code = await fetcher.get_city_code(destination)
 
-                sem_c = asyncio.Semaphore(1)
-                # Слой 5764 при параллели часто даёт Captcha → паузе 120 с в aiorzd.
-                sem_r = asyncio.Semaphore(1)
+                sem_rzd = asyncio.Semaphore(1)
 
                 async def carriage_one(idx: int) -> None:
                     t = trains_list[idx]
@@ -116,7 +114,7 @@ class RzdDataAdapter:
                     dep = getattr(t, "departure_time", None)
                     if dep is None:
                         return
-                    async with sem_c:
+                    async with sem_rzd:
                         try:
                             raw = await fetcher.get_train_carriages(src_code, dst_code, dep, num)
                         except Exception:
@@ -134,7 +132,7 @@ class RzdDataAdapter:
                     dep_date = str(content.get("date0") or "").strip()
                     if not num or not dep_date:
                         return
-                    async with sem_r:
+                    async with sem_rzd:
                         try:
                             route_names = await fetcher.get_basic_route_stops(num, dep_date)
                         except Exception:
@@ -144,10 +142,10 @@ class RzdDataAdapter:
                             basic_stops_by_index[idx] = route_names
 
                 tasks = []
-                for i in carriage_idx:
-                    tasks.append(carriage_one(i))
                 for i in route_idx:
                     tasks.append(route_stops_one(i))
+                for i in carriage_idx:
+                    tasks.append(carriage_one(i))
 
                 if tasks:
                     await asyncio.gather(*tasks)
