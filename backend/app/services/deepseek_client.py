@@ -101,7 +101,14 @@ class DeepSeekClient:
             f"Текущая дата для относительных и неполных дат: {self.current_date}. "
             "Если пользователь не назвал год, выбирай ближайшую будущую дату относительно текущей даты. "
             "preferences заполняй короткими английскими тегами: sleep, comfort, cheap, speed, direct, child, luggage. "
-            "Для фразы про начало рабочего дня ставь arrival_time_window 07:00-09:00."
+            "Временные окна: departure_time_window — когда пассажир хочет УЕХАТЬ/ОТПРАВИТЬСЯ "
+            "(рус.: уехать, выехать, отправление, сесть на поезд; англ.: leave, depart, morning outbound). "
+            "arrival_time_window — когда хочет ПРИЕХАТЬ/ПРИБЫТЬ "
+            "(рус.: приехать, прибытие; англ.: arrive, arrival). "
+            "Не ставь оба окна, если пользователь явно указал только одно направление во времени; второе оставь null. "
+            "«Утром» без уточнения: если речь об отправлении из города отправления — только departure_time_window 06:00-11:00; "
+            "если о прибытии в пункт назначения — только arrival_time_window 06:00-11:00. "
+            "Фраза про начало рабочего дня / к началу работы: arrival_time_window 07:00-09:00 (если это про время прибытия)."
         )
         user_prompt = json.dumps(
             {
@@ -159,8 +166,59 @@ class DeepSeekClient:
         if any(word in normalized for word in ["без перес", "direct", "nonstop"]):
             preferences.append("direct")
 
+        departure_window = None
         arrival_window = None
-        if any(word in normalized for word in ["рабоч", "утром", "morning", "workday"]):
+
+        departure_cues = (
+            "уехать",
+            "уезжа",
+            "выехать",
+            "выезд",
+            "отправлен",
+            "отправиться",
+            "отъезд",
+            "сесть на поезд",
+            "leave ",
+            " depart",
+            "departure",
+            "leave in the",
+        )
+        arrival_cues = (
+            "приехать",
+            "приезжа",
+            "прибыти",
+            "прибыт",
+            "arrive",
+            "arrival",
+            "get there",
+        )
+        wants_departure_time = any(c in normalized for c in departure_cues)
+        wants_arrival_time = any(c in normalized for c in arrival_cues)
+
+        morning_hint = any(w in normalized for w in ("утром", "утро ", " утро", "morning"))
+        workday_arrival = any(w in normalized for w in ("рабоч", "workday", "начал работ", "work day"))
+
+        if morning_hint:
+            if wants_departure_time and not wants_arrival_time:
+                departure_window = {"start": "06:00", "end": "11:00"}
+            elif wants_arrival_time and not wants_departure_time:
+                arrival_window = (
+                    {"start": "07:00", "end": "09:00"}
+                    if workday_arrival
+                    else {"start": "06:00", "end": "11:00"}
+                )
+            elif wants_departure_time and wants_arrival_time:
+                departure_window = {"start": "06:00", "end": "11:00"}
+                arrival_window = {"start": "06:00", "end": "11:00"}
+            else:
+                # «Казань утром» без глагола — по умолчанию время прибытия (как раньше).
+                arrival_window = (
+                    {"start": "07:00", "end": "09:00"}
+                    if workday_arrival
+                    else {"start": "06:00", "end": "11:00"}
+                )
+
+        if not departure_window and not arrival_window and workday_arrival:
             arrival_window = {"start": "07:00", "end": "09:00"}
 
         assistant_text = (
@@ -183,10 +241,14 @@ class DeepSeekClient:
             "origin": origin_hint or ("Москва" if language == "ru" else "Moscow"),
             "destination": destination,
             "date": "2026-05-06" if ("6" in normalized or "шест" in normalized or "may 6" in normalized) else None,
-            "departure_time_window": None,
+            "departure_time_window": departure_window,
             "arrival_time_window": arrival_window,
             "preferences": preferences,
-            "priority": "price" if "cheap" in preferences else ("speed" if "speed" in preferences else "arrival_time"),
+            "priority": (
+                "price"
+                if "cheap" in preferences
+                else ("speed" if departure_window or "speed" in preferences else "arrival_time")
+            ),
             "transfers": "direct_preferred",
             "assistant_text": assistant_text,
             "rank_with_llm": False,

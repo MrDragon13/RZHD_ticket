@@ -41,8 +41,8 @@ def _score_train(train: TrainOption, request: RecommendRequest) -> tuple[float, 
     """Считает локальный рейтинг поезда.
 
     LLM может помочь объяснить выбор, но базовая оценка намеренно считается
-    детерминированно: цена, время, наличие мест и попадание в окно прибытия не
-    должны зависеть от вероятностного ответа модели.
+    детерминированно: цена, время, наличие мест и попадание в окно времени прибытия
+    или отправления не должны зависеть от вероятностного ответа модели.
     """
 
     badges: list[str] = []
@@ -69,6 +69,16 @@ def _score_train(train: TrainOption, request: RecommendRequest) -> tuple[float, 
     ):
         score += 24
         badges.append("Попадает в нужное время" if request.language == "ru" else "Arrives on time")
+
+    if request.intent.departure_time_window and _is_inside_window(
+        train.departure_time,
+        request.intent.departure_time_window.start,
+        request.intent.departure_time_window.end,
+    ):
+        score += 24
+        badges.append(
+            "Отправление в нужное время" if request.language == "ru" else "Departs on time"
+        )
 
     if "sleep" in preferences or "comfort" in preferences:
         if "overnight" in train.features:

@@ -634,14 +634,18 @@ async function searchAndRecommend() {
 
 function renderIntent(data) {
   intentPanel.classList.remove("hidden");
-  const windowText = data.arrival_time_window
+  const arrText = data.arrival_time_window
     ? `${data.arrival_time_window.start}-${data.arrival_time_window.end}`
+    : "-";
+  const depText = data.departure_time_window
+    ? `${data.departure_time_window.start}-${data.departure_time_window.end}`
     : "-";
   document.querySelector("#intent-grid").innerHTML = `
     <div class="glass-card"><span>${language === "ru" ? "Откуда" : "From"}</span><strong>${data.origin || "-"}</strong></div>
     <div class="glass-card"><span>${language === "ru" ? "Куда" : "To"}</span><strong>${data.destination || "-"}</strong></div>
     <div class="glass-card"><span>${language === "ru" ? "Дата" : "Date"}</span><strong>${data.date || "-"}</strong></div>
-    <div class="glass-card"><span>${language === "ru" ? "Прибытие" : "Arrival"}</span><strong>${windowText}</strong></div>
+    <div class="glass-card"><span>${language === "ru" ? "Отправление" : "Departure"}</span><strong>${depText}</strong></div>
+    <div class="glass-card"><span>${language === "ru" ? "Прибытие" : "Arrival"}</span><strong>${arrText}</strong></div>
   `;
 }
 
