@@ -207,8 +207,8 @@ class TrainOption(BaseModel):
     coupe_carriage_seats: int | None = Field(
         default=None,
         ge=1,
-        le=40,
-        description="Типичная вместимость одного купейного вагона (одноэтажный), для демо-схемы.",
+        le=72,
+        description="Типичная вместимость одного купейного вагона (одноэтажный или двухэтажный), для демо-схемы.",
     )
     sv_carriage_seats: int | None = Field(
         default=None,
