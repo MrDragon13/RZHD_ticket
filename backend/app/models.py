@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Literal
+import re
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -16,6 +17,30 @@ class TimeWindow(BaseModel):
 
     start: str = Field(..., examples=["07:00"])
     end: str = Field(..., examples=["09:00"])
+
+
+_TIME_RANGE_RE = re.compile(
+    r"^\s*(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})\s*$",
+)
+
+
+def _coerce_time_window(value: Any) -> Any:
+    """LLM иногда возвращает окно одной строкой «07:00-09:00» вместо объекта."""
+
+    if value is None or isinstance(value, TimeWindow):
+        return value
+    if isinstance(value, dict):
+        return TimeWindow(**value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        match = _TIME_RANGE_RE.match(text)
+        if match:
+            return TimeWindow(start=match.group(1), end=match.group(2))
+        # Иначе валидация упадёт на строке; для опциональных окон безопаснее отбросить.
+        return None
+    return value
 
 
 class UnderstandRequest(BaseModel):
@@ -41,6 +66,11 @@ class TripIntent(BaseModel):
     transfers: str | None = None
     assistant_text: str
     rank_with_llm: bool = False
+
+    @field_validator("departure_time_window", "arrival_time_window", mode="before")
+    @classmethod
+    def _normalize_time_windows(cls, value: Any) -> Any:
+        return _coerce_time_window(value)
 
 
 class DialogRequest(BaseModel):
@@ -69,6 +99,11 @@ class TicketSearchRequest(BaseModel):
     arrival_time_window: TimeWindow | None = None
     departure_time_window: TimeWindow | None = None
     preferences: list[str] = Field(default_factory=list)
+
+    @field_validator("departure_time_window", "arrival_time_window", mode="before")
+    @classmethod
+    def _normalize_search_windows(cls, value: Any) -> Any:
+        return _coerce_time_window(value)
 
 
 class SeatInfo(BaseModel):

@@ -59,6 +59,8 @@ const i18n = {
     newSession: "Новый запрос",
     noSpeech: "Распознавание речи недоступно в этом браузере. Используйте текстовое поле.",
     fallbackError: "Сервер недоступен. Показываю демо-сценарий интерфейса.",
+    recommendPartialError:
+      "Не удалось построить рейтинг поездов; показываю результаты поиска РЖД без подсказок.",
     clarifyHint: "Я дождусь уточнения и только потом подберу варианты.",
     userRole: "Вы",
     assistantRole: "Путь",
@@ -123,6 +125,8 @@ const i18n = {
     newSession: "New request",
     noSpeech: "Speech recognition is not available in this browser. Use the text field.",
     fallbackError: "Server is unavailable. Showing interface demo scenario.",
+    recommendPartialError:
+      "Could not rank trains; showing RZD search results without ranking hints.",
     clarifyHint: "I will wait for clarification before searching options.",
     userRole: "You",
     assistantRole: "Path",
@@ -620,12 +624,27 @@ async function searchAndRecommend() {
     return (s.platzkart || 0) + (s.coupe || 0) + (s.sv || 0) > 0;
   });
   renderRoute(factResponse.fact);
-  const recommendResponse = await postJson("/api/recommend", {
-    language,
-    intent,
-    trains,
-    last_user_message: lastDialogUserText || null,
-  });
+  let recommendResponse;
+  try {
+    recommendResponse = await postJson("/api/recommend", {
+      language,
+      intent,
+      trains,
+      last_user_message: lastDialogUserText || null,
+    });
+  } catch (error) {
+    console.error(error);
+    recommendations = trains.map((t) => ({
+      train_id: t.id,
+      score: 0,
+      badges: [],
+      explanation: "",
+    }));
+    assistantSay(i18n[language].recommendPartialError);
+    renderTrains();
+    setStage("results");
+    return;
+  }
   recommendations = recommendResponse.recommendations;
   assistantSay(recommendResponse.assistant_text);
   renderTrains();
