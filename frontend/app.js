@@ -31,8 +31,9 @@ const i18n = {
     demoFlow: ["Проверка маршрута", "Подготовка выбора мест", "Загрузка схемы вагона", "Готово"],
     seatPickerTitle: "Выбор вагона и мест",
     seatPickerHint:
-      "Как в плацкарте: в каждой колонке снизу нечётное место, над ним чётное. Можно выбрать несколько.",
+      "Места сгруппированы по купе: в кубике четыре места (два ряда по паре ниж/верх). В СВ — один кубик на два места. Можно выбрать несколько.",
     seatPickerSelected: "Выбрано мест",
+    seatPickerTotal: "Сумма",
     seatPickerConfirm: "Подтвердить выбор",
     seatPickerCarriage: "Вагон",
     selectedTrainHeading: "Выбранный поезд",
@@ -86,8 +87,9 @@ const i18n = {
     demoFlow: ["Checking route", "Preparing seat selection", "Loading car layout", "Done"],
     seatPickerTitle: "Choose car and seats",
     seatPickerHint:
-      "Like in a typical carriage: odd seat below, even seat above in each column. Multiple seats allowed.",
+      "Seats are grouped into compartments: each cube is four berths (two columns of lower/upper). SV has one two-berth cube. Multiple seats allowed.",
     seatPickerSelected: "Seats selected",
+    seatPickerTotal: "Total",
     seatPickerConfirm: "Confirm selection",
     seatPickerCarriage: "Car",
     selectedTrainHeading: "Selected train",
@@ -725,6 +727,30 @@ function mulberry32(seed) {
   };
 }
 
+function priceForCarriageClass(train, classKey) {
+  if (!train?.prices) return 0;
+  if (classKey === "sv" && train.prices.sv) return train.prices.sv;
+  if (classKey === "coupe" && train.prices.coupe) return train.prices.coupe;
+  if (train.prices.platzkart) return train.prices.platzkart;
+  if (train.prices.coupe) return train.prices.coupe;
+  if (train.prices.sv) return train.prices.sv;
+  return 0;
+}
+
+function selectedSeatsOrderTotalRub() {
+  if (!selectedTrain) return 0;
+  let sum = 0;
+  for (const car of demoCarriages) {
+    const seats = demoSeatLayouts.get(car) || [];
+    const cls = carriageClassKey(car);
+    const unit = priceForCarriageClass(selectedTrain, cls);
+    seats.forEach((seat) => {
+      if (selectedSeatKeys.has(seat.id)) sum += unit;
+    });
+  }
+  return sum;
+}
+
 function buildSeatPickerModel(train) {
   const layouts = new Map();
   const rng = mulberry32(hashSeed(train.id || train.train_number || "train"));
@@ -740,27 +766,35 @@ function buildSeatPickerModel(train) {
   activeCarriageIndex = 0;
   selectedSeatKeys = new Set();
 
-  const PAIRS = 9;
-
   cars.forEach((car) => {
+    const cls = carriageClassKey(car);
+    const isSv = cls === "sv";
+    const compartments = isSv ? 1 : 2;
+    const pairsPerCompartment = isSv ? 1 : 2;
     const seats = [];
-    for (let pairIdx = 0; pairIdx < PAIRS; pairIdx += 1) {
-      const lowerNum = pairIdx * 2 + 1;
-      const upperNum = pairIdx * 2 + 2;
-      seats.push({
-        id: `${car}-${String(lowerNum).padStart(2, "0")}-lower`,
-        displayNum: String(lowerNum).padStart(2, "0"),
-        berth_kind: "lower",
-        pairIndex: pairIdx,
-        occupied: rng() > 0.42,
-      });
-      seats.push({
-        id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
-        displayNum: String(upperNum).padStart(2, "0"),
-        berth_kind: "upper",
-        pairIndex: pairIdx,
-        occupied: rng() > 0.42,
-      });
+    let globalPair = 0;
+    for (let comp = 0; comp < compartments; comp += 1) {
+      for (let p = 0; p < pairsPerCompartment; p += 1) {
+        const lowerNum = globalPair * 2 + 1;
+        const upperNum = globalPair * 2 + 2;
+        globalPair += 1;
+        seats.push({
+          id: `${car}-${String(lowerNum).padStart(2, "0")}-lower`,
+          displayNum: String(lowerNum).padStart(2, "0"),
+          berth_kind: "lower",
+          compartmentIndex: comp,
+          pairIndex: globalPair - 1,
+          occupied: rng() > 0.42,
+        });
+        seats.push({
+          id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
+          displayNum: String(upperNum).padStart(2, "0"),
+          berth_kind: "upper",
+          compartmentIndex: comp,
+          pairIndex: globalPair - 1,
+          occupied: rng() > 0.42,
+        });
+      }
     }
     layouts.set(car, seats);
   });
@@ -868,39 +902,52 @@ function renderSeatGrid() {
   classLine.textContent = `${carriageClassLabel(car)} · ${i18n[language].seatPickerCarriage} ${car}`;
   grid.append(classLine);
   const seats = demoSeatLayouts.get(car) || [];
-  const byPair = new Map();
+  const byCompartment = new Map();
   seats.forEach((seat) => {
-    const pi = seat.pairIndex ?? 0;
-    if (!byPair.has(pi)) byPair.set(pi, {});
-    const slot = byPair.get(pi);
-    if (seat.berth_kind === "upper") slot.upper = seat;
-    else slot.lower = seat;
+    const ci = seat.compartmentIndex ?? 0;
+    if (!byCompartment.has(ci)) byCompartment.set(ci, []);
+    byCompartment.get(ci).push(seat);
   });
-  const pairIndices = [...byPair.keys()].sort((a, b) => a - b);
-  pairIndices.forEach((pairIdx) => {
-    const slot = byPair.get(pairIdx);
-    const col = document.createElement("div");
-    col.className = "seat-column";
-    const upper = slot.upper;
-    const lower = slot.lower;
-    [upper, lower].forEach((seat) => {
-      if (!seat) return;
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = `seat-cell ${seat.berth_kind === "upper" ? "seat-cell-upper" : "seat-cell-lower"}`;
-      btn.dataset.seatId = seat.id;
-      const short = i18n[language].berthShort[seat.berth_kind] || "";
-      btn.innerHTML = `<span class="seat-num">${seat.displayNum}</span><span class="seat-berth">${short}</span>`;
-      if (seat.occupied) {
-        btn.classList.add("seat-occupied");
-        btn.disabled = true;
-      } else if (selectedSeatKeys.has(seat.id)) {
-        btn.classList.add("seat-selected");
-      }
-      btn.addEventListener("click", () => toggleSeatSelection(car, seat));
-      col.append(btn);
+  const compIndices = [...byCompartment.keys()].sort((a, b) => a - b);
+  compIndices.forEach((compIdx) => {
+    const compSeats = byCompartment.get(compIdx) || [];
+    const byPair = new Map();
+    compSeats.forEach((seat) => {
+      const pi = seat.pairIndex ?? 0;
+      if (!byPair.has(pi)) byPair.set(pi, {});
+      const slot = byPair.get(pi);
+      if (seat.berth_kind === "upper") slot.upper = seat;
+      else slot.lower = seat;
     });
-    grid.append(col);
+    const pairIndices = [...byPair.keys()].sort((a, b) => a - b);
+    const cube = document.createElement("div");
+    cube.className = "compartment-cube";
+    pairIndices.forEach((pairIdx) => {
+      const slot = byPair.get(pairIdx);
+      const col = document.createElement("div");
+      col.className = "seat-column";
+      const upper = slot.upper;
+      const lower = slot.lower;
+      [upper, lower].forEach((seat) => {
+        if (!seat) return;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `seat-cell ${seat.berth_kind === "upper" ? "seat-cell-upper" : "seat-cell-lower"}`;
+        btn.dataset.seatId = seat.id;
+        const short = i18n[language].berthShort[seat.berth_kind] || "";
+        btn.innerHTML = `<span class="seat-num">${seat.displayNum}</span><span class="seat-berth">${short}</span>`;
+        if (seat.occupied) {
+          btn.classList.add("seat-occupied");
+          btn.disabled = true;
+        } else if (selectedSeatKeys.has(seat.id)) {
+          btn.classList.add("seat-selected");
+        }
+        btn.addEventListener("click", () => toggleSeatSelection(car, seat));
+        col.append(btn);
+      });
+      cube.append(col);
+    });
+    grid.append(cube);
   });
 }
 
@@ -941,6 +988,11 @@ function updateSeatPickerChrome() {
   const label = i18n[language].seatPickerSelected;
   document.querySelector("#seat-picker-count").textContent =
     language === "ru" ? `${label}: ${n}` : `${label}: ${n}`;
+  const total = selectedSeatsOrderTotalRub();
+  const totalEl = document.querySelector("#seat-picker-total");
+  if (totalEl) {
+    totalEl.textContent = `${i18n[language].seatPickerTotal}: ${n === 0 ? "—" : formatPrice(total)}`;
+  }
   confirmSeatsButton.disabled = n === 0 || issuingTicket;
 }
 
@@ -1113,8 +1165,8 @@ async function postJson(path, payload) {
 }
 
 function formatPrice(price) {
-  if (!price) return "-";
-  return `${price.toLocaleString(language === "ru" ? "ru-RU" : "en-US")} ₽`;
+  if (price === null || price === undefined) return "-";
+  return `${Number(price).toLocaleString(language === "ru" ? "ru-RU" : "en-US")} ₽`;
 }
 
 function wait(ms) {

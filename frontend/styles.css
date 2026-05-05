@@ -1071,6 +1071,19 @@ button {
   margin-bottom: 16px;
 }
 
+.seat-picker-header > div:first-child {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.seat-picker-metrics {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .seat-picker-header h2 {
   margin: 0 0 6px;
   font-size: 22px;
@@ -1093,6 +1106,17 @@ button {
   font-weight: 700;
   font-size: 14px;
   background: rgba(0, 255, 156, 0.06);
+}
+
+.seat-picker-total {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  color: var(--cyan);
+  font-weight: 800;
+  font-size: 15px;
+  background: rgba(0, 229, 255, 0.08);
 }
 
 .carriage-tabs {
@@ -1143,8 +1167,20 @@ button {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 16px;
   margin-bottom: 18px;
+}
+
+.compartment-cube {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.06);
+  box-shadow: inset 0 0 24px rgba(0, 229, 255, 0.04);
 }
 
 .seat-grid-class-line {
