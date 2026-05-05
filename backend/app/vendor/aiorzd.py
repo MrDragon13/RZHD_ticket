@@ -558,7 +558,7 @@ class RzdFetcher:
         train_number: str,
         dep_date_dmY: str,
         *,
-        max_attempts: int = 18,
+        max_attempts: int = 12,
     ) -> list[str]:
         """Полный список станций поезда по сервису basicRoute (STRUCTURE_ID=704).
 
@@ -581,10 +581,12 @@ class RzdFetcher:
             payload = dict(base_data)
             if rid is not None:
                 payload["rid"] = str(rid)
+            timeout = aiohttp.ClientTimeout(total=55)
             async with self.session.post(
                 self.BASIC_ROUTE_URL,
                 data=payload,
                 headers=_BASIC_ROUTE_HEADERS,
+                timeout=timeout,
             ) as response:
                 text = await response.text()
             try:

@@ -80,7 +80,9 @@ class RzdDataAdapter:
                 dst_code = await fetcher.get_city_code(destination)
 
                 sem_c = asyncio.Semaphore(max_conc)
-                sem_r = asyncio.Semaphore(max_conc)
+                # basicRoute не держит список остановок в слое 5827 — запрашиваем отдельно.
+                # Параллельный шторм к pass.rzd.ru провоцирует Captcha → паузы 120 с в aiorzd.
+                sem_r = asyncio.Semaphore(1)
 
                 async def carriage_one(idx: int, t) -> None:
                     num = str(getattr(t, "number", "") or (t.content or {}).get("number") or "")
