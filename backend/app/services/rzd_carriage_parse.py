@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Iterator
 
-from app.models import SeatDetails, SeatInfo
+from app.models import SeatDetails, SeatInfo, SeatBerthPrices
 
 
 def _norm(s: str) -> str:
@@ -194,7 +194,56 @@ def _capacity_from_wagon(car: dict) -> int | None:
     return cap if cap > 0 else None
 
 
-def aggregate_from_carriages_payload(payload: dict) -> tuple[SeatDetails, SeatInfo, dict[str, int | None], bool]:
+def _min_merge(cur: int | None, val: int | None) -> int | None:
+    if val is None or val <= 0:
+        return cur
+    return val if cur is None else min(cur, val)
+
+
+def merge_berth_prices(acc: SeatBerthPrices, addition: SeatBerthPrices) -> SeatBerthPrices:
+    return SeatBerthPrices(
+        lower=_min_merge(acc.lower, addition.lower),
+        upper=_min_merge(acc.upper, addition.upper),
+        side_lower=_min_merge(acc.side_lower, addition.side_lower),
+        side_upper=_min_merge(acc.side_upper, addition.side_upper),
+    )
+
+
+def berth_prices_from_seat_entries(seats: list[dict]) -> SeatBerthPrices:
+    """Минимальный тариф по подписи категории места (seats[] из РЖД)."""
+
+    bp = SeatBerthPrices()
+    for s in seats:
+        if not isinstance(s, dict):
+            continue
+        free = _int_any(s.get("free"), s.get("freeSeats"))
+        if free is None or free <= 0:
+            continue
+        raw_t = s.get("tariff") or s.get("price") or s.get("cost")
+        try:
+            rub = int(round(float(raw_t))) if raw_t is not None else None
+        except (TypeError, ValueError):
+            rub = None
+        if rub is None or rub <= 0:
+            continue
+        label = _norm(str(s.get("label") or s.get("typeLoc") or ""))
+        if "бок" in label:
+            if "ниж" in label:
+                bp.side_lower = _min_merge(bp.side_lower, rub)
+            elif "верх" in label:
+                bp.side_upper = _min_merge(bp.side_upper, rub)
+            else:
+                bp.side_lower = _min_merge(bp.side_lower, rub)
+        elif "ниж" in label:
+            bp.lower = _min_merge(bp.lower, rub)
+        elif "верх" in label:
+            bp.upper = _min_merge(bp.upper, rub)
+        else:
+            bp.lower = _min_merge(bp.lower, rub)
+    return bp
+
+
+def aggregate_from_carriages_payload(payload: dict) -> tuple[SeatDetails, SeatInfo, dict[str, int | None], bool, SeatBerthPrices]:
     """Полный разбор ответа get_train_carriages для полок, сумм по классам и max вместимости на тип вагона."""
 
     details = SeatDetails()
@@ -204,6 +253,7 @@ def aggregate_from_carriages_payload(payload: dict) -> tuple[SeatDetails, SeatIn
     max_coupe: int | None = None
     max_sv: int | None = None
     double_deck_coupe = False
+    berth_prices = SeatBerthPrices()
 
     for car in _walk_cars_nodes(payload):
         cat = _wagon_category(car)
@@ -222,6 +272,7 @@ def aggregate_from_carriages_payload(payload: dict) -> tuple[SeatDetails, SeatIn
             details = sum_seat_details(details, partial)
 
         seats = car.get("seats") if isinstance(car.get("seats"), list) else []
+        berth_prices = merge_berth_prices(berth_prices, berth_prices_from_seat_entries(seats))
         car_free = 0
         for s in seats:
             if not isinstance(s, dict):
@@ -253,7 +304,7 @@ def aggregate_from_carriages_payload(payload: dict) -> tuple[SeatDetails, SeatIn
         "sv_carriage_seats": max_sv,
     }
     info = SeatInfo(platzkart=platz, coupe=coupe, sv=sv)
-    return details, info, caps, double_deck_coupe
+    return details, info, caps, double_deck_coupe, berth_prices
 
 
 def extract_route_distance_km(content: dict) -> int | None:

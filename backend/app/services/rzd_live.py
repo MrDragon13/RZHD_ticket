@@ -6,10 +6,12 @@ import logging
 import re
 from datetime import datetime
 
-from app.models import PriceInfo, SeatDetails, SeatInfo, TrainOption
+from app.models import PriceInfo, SeatBerthPrices, SeatDetails, SeatInfo, TrainOption
 from app.services.rzd_carriage_parse import (
     aggregate_from_carriages_payload,
+    berth_prices_from_seat_entries,
     extract_route_distance_km,
+    merge_berth_prices,
     seat_details_from_search_car_row,
     sum_seat_details,
 )
@@ -158,7 +160,15 @@ def estimate_seat_details_from_totals(platz: int, coupe: int, sv: int) -> SeatDe
     return SeatDetails(lower=lower, upper=upper, side_lower=side_lower, side_upper=side_upper)
 
 
-def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails, PriceInfo]:
+def _seat_prices_model(bp: SeatBerthPrices | None) -> SeatBerthPrices | None:
+    if bp is None:
+        return None
+    if not any(x is not None for x in (bp.lower, bp.upper, bp.side_lower, bp.side_upper)):
+        return None
+    return bp
+
+
+def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails, PriceInfo, SeatBerthPrices]:
     """Суммирует строки cars[] из ответа РЖД по типам вагонов и вложенные seats[]."""
 
     platz = coupe = sv = unknown = 0
@@ -167,6 +177,7 @@ def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails
     min_sv: int | None = None
 
     details_acc = SeatDetails()
+    berth_acc = SeatBerthPrices()
 
     for row in cars:
         free = _parse_free_seats(row)
@@ -196,6 +207,10 @@ def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails
         if row_det:
             details_acc = sum_seat_details(details_acc, row_det)
 
+        seats_nested = row.get("seats")
+        if isinstance(seats_nested, list):
+            berth_acc = merge_berth_prices(berth_acc, berth_prices_from_seat_entries(seats_nested))
+
     if unknown:
         platz += unknown
 
@@ -206,10 +221,11 @@ def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails
         SeatInfo(platzkart=platz, coupe=coupe, sv=sv),
         details_acc,
         PriceInfo(platzkart=min_platz, coupe=min_coupe, sv=min_sv),
+        berth_acc,
     )
 
 
-def aggregate_from_aiorzd_places(places: list) -> tuple[SeatInfo, SeatDetails, PriceInfo]:
+def aggregate_from_aiorzd_places(places: list) -> tuple[SeatInfo, SeatDetails, PriceInfo, SeatBerthPrices]:
     """Запасной путь: aiorzd уже разложил строки ответа в объекты Place."""
 
     platz = coupe = sv = unknown = 0
@@ -248,12 +264,15 @@ def aggregate_from_aiorzd_places(places: list) -> tuple[SeatInfo, SeatDetails, P
     if unknown:
         platz += unknown
 
+    berth_acc = SeatBerthPrices()
+
     details_acc = estimate_seat_details_from_totals(platz, coupe, sv)
 
     return (
         SeatInfo(platzkart=platz, coupe=coupe, sv=sv),
         details_acc,
         PriceInfo(platzkart=min_platz, coupe=min_coupe, sv=min_sv),
+        berth_acc,
     )
 
 
@@ -263,7 +282,7 @@ def apply_carriage_layer_payload(train: TrainOption, payload: dict | None) -> Tr
     if not payload:
         return train
     try:
-        det, info, caps, double_deck = aggregate_from_carriages_payload(payload)
+        det, info, caps, double_deck, berth_layer = aggregate_from_carriages_payload(payload)
     except Exception:
         logging.exception("carriage payload parse failed")
         return train
@@ -283,6 +302,12 @@ def apply_carriage_layer_payload(train: TrainOption, payload: dict | None) -> Tr
         upd["coupe_double_deck_seats"] = caps["coupe_carriage_seats"]
     if double_deck:
         upd["coupe_double_deck"] = True
+
+    merged_bp = merge_berth_prices(train.seat_prices or SeatBerthPrices(), berth_layer)
+    sp = _seat_prices_model(merged_bp)
+    if sp:
+        upd["seat_prices"] = sp
+
     if not upd:
         return train
     return train.model_copy(update=upd)
@@ -308,10 +333,13 @@ def train_option_from_aiorzd(
     duration_label = _minutes_to_label(dur_min, lang)
 
     cars = content.get("cars") or []
-    seat_info, seat_details, prices = aggregate_cars_to_inventory(cars)
+    seat_info, seat_details, prices, berth_search = aggregate_cars_to_inventory(cars)
     total_shown = seat_info.platzkart + seat_info.coupe + seat_info.sv
     if total_shown == 0 and getattr(train_obj, "seats", None):
-        seat_info, seat_details, prices = aggregate_from_aiorzd_places(list(train_obj.seats.values()))
+        seat_info, seat_details, prices, berth_search_alt = aggregate_from_aiorzd_places(list(train_obj.seats.values()))
+        berth_search = merge_berth_prices(berth_search, berth_search_alt)
+
+    seat_prices_combined = _seat_prices_model(berth_search)
 
     route0 = str(content.get("route0") or origin_hint or "").strip()
     route1 = str(content.get("route1") or dest_hint or "").strip()
@@ -367,5 +395,6 @@ def train_option_from_aiorzd(
         features=features[:6],
         amenities=[],
         carriage_notes=[],
+        seat_prices=seat_prices_combined,
     )
     return apply_carriage_layer_payload(base, carriage_payload)

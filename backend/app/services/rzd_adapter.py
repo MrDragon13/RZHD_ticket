@@ -108,6 +108,12 @@ class RzdDataAdapter:
                 ),
             )
 
+        mapped = [
+            t
+            for t in mapped
+            if t.available_seats.platzkart + t.available_seats.coupe + t.available_seats.sv > 0
+        ]
+
         return TicketSearchResponse(
             source="live-cache",
             updated_at=datetime.now(timezone.utc).isoformat(),

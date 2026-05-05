@@ -96,6 +96,15 @@ class SeatDetails(BaseModel):
     side_upper: int = 0
 
 
+class SeatBerthPrices(BaseModel):
+    """Минимальные цены по категориям полок (если пришли из ответа РЖД по местам)."""
+
+    lower: int | None = None
+    upper: int | None = None
+    side_lower: int | None = None
+    side_upper: int | None = None
+
+
 class TrainOption(BaseModel):
     """Единый формат поезда для интерфейса, рекомендаций и демо-чекаута."""
 
@@ -144,6 +153,10 @@ class TrainOption(BaseModel):
         ge=1,
         le=72,
         description="Вместимость двухэтажного купе на вагон (часто 64), если coupe_double_deck.",
+    )
+    seat_prices: SeatBerthPrices | None = Field(
+        default=None,
+        description="Минимальные цены по типам полок из ответа РЖД (если есть).",
     )
 
 

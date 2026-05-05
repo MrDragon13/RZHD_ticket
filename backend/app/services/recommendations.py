@@ -4,15 +4,22 @@ from .deepseek_client import DeepSeekClient
 from ..models import Recommendation, RecommendRequest, RecommendResponse, TrainOption, TripIntent
 
 
-def _min_price(train: TrainOption) -> int:
-    """Возвращает минимальную доступную цену по всем типам вагонов."""
+def _total_free_seats(train: TrainOption) -> int:
+    s = train.available_seats
+    return s.platzkart + s.coupe + s.sv
 
-    prices = [
-        price
-        for price in [train.prices.platzkart, train.prices.coupe, train.prices.sv]
-        if price is not None
-    ]
-    return min(prices) if prices else 999_999
+
+def _min_price(train: TrainOption) -> int:
+    """Минимальная цена только по классам, где есть свободные места (данные РЖД)."""
+
+    opts: list[int] = []
+    if train.available_seats.platzkart > 0 and train.prices.platzkart is not None:
+        opts.append(train.prices.platzkart)
+    if train.available_seats.coupe > 0 and train.prices.coupe is not None:
+        opts.append(train.prices.coupe)
+    if train.available_seats.sv > 0 and train.prices.sv is not None:
+        opts.append(train.prices.sv)
+    return min(opts) if opts else 999_999
 
 
 def _hour(time_value: str) -> int:
@@ -134,8 +141,11 @@ async def recommend_trains(
 ) -> RecommendResponse:
     """Ранжирует поезда и формирует краткое объяснение для голосового ассистента."""
 
+    eligible = [t for t in request.trains if _total_free_seats(t) > 0]
+    pool = eligible if eligible else []
+
     ranked: list[tuple[TrainOption, float, list[str]]] = []
-    for train in request.trains:
+    for train in pool:
         score, badges = _score_train(train, request)
         ranked.append((train, score, badges))
 
@@ -145,11 +155,11 @@ async def recommend_trains(
         request.intent.rank_with_llm or _heuristic_wants_llm_rank(request.intent, request.last_user_message)
     )
     llm_ids = None
-    if use_llm_order and len(request.trains) > 1:
+    if use_llm_order and len(pool) > 1:
         llm_ids = await deepseek_client.rank_train_order(
             request.language,
             request.intent,
-            request.trains,
+            pool,
             request.last_user_message,
         )
 
@@ -170,6 +180,14 @@ async def recommend_trains(
         )
         for train, score, badges in ranked
     ]
+
+    if not recommendations:
+        empty_text = (
+            "По выбранным параметрам нет поездов со свободными местами. Измените дату или маршрут."
+            if request.language == "ru"
+            else "No trains with available seats for this search. Try another date or route."
+        )
+        return RecommendResponse(recommendations=[], assistant_text=empty_text)
 
     assistant_text = await deepseek_client.explain_recommendation(
         request.language,

@@ -487,7 +487,10 @@ async function searchAndRecommend() {
       destination: intent.destination,
     }),
   ]);
-  trains = ticketResponse.trains;
+  trains = ticketResponse.trains.filter((t) => {
+    const s = t.available_seats || {};
+    return (s.platzkart || 0) + (s.coupe || 0) + (s.sv || 0) > 0;
+  });
   renderRoute(factResponse.fact);
   const recommendResponse = await postJson("/api/recommend", {
     language,
@@ -727,6 +730,17 @@ function mulberry32(seed) {
   };
 }
 
+function priceForSeatBerth(train, berthKind) {
+  const sp = train?.seat_prices;
+  if (sp) {
+    if (berthKind === "lower" && sp.lower != null) return sp.lower;
+    if (berthKind === "upper" && sp.upper != null) return sp.upper;
+    if (berthKind === "side_lower" && sp.side_lower != null) return sp.side_lower;
+    if (berthKind === "side_upper" && sp.side_upper != null) return sp.side_upper;
+  }
+  return null;
+}
+
 function priceForCarriageClass(train, classKey) {
   if (!train?.prices) return 0;
   if (classKey === "sv" && train.prices.sv) return train.prices.sv;
@@ -737,15 +751,21 @@ function priceForCarriageClass(train, classKey) {
   return 0;
 }
 
+function unitPriceForSeat(train, carCode, seat) {
+  if (seat?.price_rub != null && seat.price_rub > 0) return seat.price_rub;
+  const pb = priceForSeatBerth(train, seat.berth_kind);
+  if (pb != null && pb > 0) return pb;
+  return priceForCarriageClass(train, carriageClassKey(carCode));
+}
+
 function selectedSeatsOrderTotalRub() {
   if (!selectedTrain) return 0;
   let sum = 0;
   for (const car of demoCarriages) {
     const seats = demoSeatLayouts.get(car) || [];
-    const cls = carriageClassKey(car);
-    const unit = priceForCarriageClass(selectedTrain, cls);
     seats.forEach((seat) => {
-      if (selectedSeatKeys.has(seat.id)) sum += unit;
+      if (!selectedSeatKeys.has(seat.id)) return;
+      sum += unitPriceForSeat(selectedTrain, car, seat);
     });
   }
   return sum;
@@ -774,6 +794,118 @@ function carriageCapacityForClass(train, cls) {
   return 54;
 }
 
+/** Генерирует места для одного «этажа» вагона (непрерывная нумерация с seatNum). Возвращает { seats, nextNum }. */
+function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, rng, compartmentIndexOffset) {
+  const seats = [];
+  if (capacity <= 0) return { seats, nextNum: startSeatNum };
+  let seatNum = startSeatNum;
+  const fullCompartments = Math.floor(capacity / 4);
+  const remainder = capacity % 4;
+  for (let comp = 0; comp < fullCompartments; comp += 1) {
+    const compIdx = compartmentIndexOffset + comp;
+    for (let pairSlot = 0; pairSlot < 2; pairSlot += 1) {
+      const lowerNum = seatNum;
+      const upperNum = seatNum + 1;
+      seatNum += 2;
+      seats.push({
+        id: `${car}-${String(lowerNum).padStart(2, "0")}-lower`,
+        displayNum: String(lowerNum).padStart(2, "0"),
+        berth_kind: "lower",
+        compartmentIndex: compIdx,
+        pairIndex: pairSlot,
+        deckIndex,
+        occupied: rng() > 0.42,
+      });
+      seats.push({
+        id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
+        displayNum: String(upperNum).padStart(2, "0"),
+        berth_kind: "upper",
+        compartmentIndex: compIdx,
+        pairIndex: pairSlot,
+        deckIndex,
+        occupied: rng() > 0.42,
+      });
+    }
+  }
+  if (remainder === 2) {
+    const comp = compartmentIndexOffset + fullCompartments;
+    const lowerNum = seatNum;
+    const upperNum = seatNum + 1;
+    seats.push({
+      id: `${car}-${String(lowerNum).padStart(2, "0")}-lower`,
+      displayNum: String(lowerNum).padStart(2, "0"),
+      berth_kind: "lower",
+      compartmentIndex: comp,
+      pairIndex: 0,
+      deckIndex,
+      occupied: rng() > 0.42,
+    });
+    seats.push({
+      id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
+      displayNum: String(upperNum).padStart(2, "0"),
+      berth_kind: "upper",
+      compartmentIndex: comp,
+      pairIndex: 0,
+      deckIndex,
+      occupied: rng() > 0.42,
+    });
+  } else if (remainder === 3) {
+    const comp = compartmentIndexOffset + fullCompartments;
+    const lower1 = seatNum;
+    const upper1 = seatNum + 1;
+    const lower2 = seatNum + 2;
+    seatNum += 3;
+    seats.push({
+      id: `${car}-${String(lower1).padStart(2, "0")}-lower`,
+      displayNum: String(lower1).padStart(2, "0"),
+      berth_kind: "lower",
+      compartmentIndex: comp,
+      pairIndex: 0,
+      deckIndex,
+      occupied: rng() > 0.42,
+    });
+    seats.push({
+      id: `${car}-${String(upper1).padStart(2, "0")}-upper`,
+      displayNum: String(upper1).padStart(2, "0"),
+      berth_kind: "upper",
+      compartmentIndex: comp,
+      pairIndex: 0,
+      deckIndex,
+      occupied: rng() > 0.42,
+    });
+    seats.push({
+      id: `${car}-${String(lower2).padStart(2, "0")}-lower`,
+      displayNum: String(lower2).padStart(2, "0"),
+      berth_kind: "lower",
+      compartmentIndex: comp,
+      pairIndex: 1,
+      deckIndex,
+      occupied: rng() > 0.42,
+    });
+  }
+  return { seats, nextNum: seatNum };
+}
+
+function attachSeatPrices(train, carCode, cls, seats) {
+  const sp = train?.seat_prices;
+  if (!sp) return seats;
+  return seats.map((seat) => {
+    let rub = null;
+    if (seat.berth_kind === "lower") rub = sp.lower;
+    else if (seat.berth_kind === "upper") rub = sp.upper;
+    else if (seat.berth_kind === "side_lower") rub = sp.side_lower;
+    else if (seat.berth_kind === "side_upper") rub = sp.side_upper;
+    if (rub == null || rub <= 0) return seat;
+    return { ...seat, price_rub: rub };
+  });
+}
+
+function compartmentCountForCapacity(capacity) {
+  const fc = Math.floor(capacity / 4);
+  const r = capacity % 4;
+  return fc + (r === 2 || r === 3 ? 1 : 0);
+}
+
 function buildSeatPickerModel(train) {
   const layouts = new Map();
   const rng = mulberry32(hashSeed(train.id || train.train_number || "train"));
@@ -792,7 +924,7 @@ function buildSeatPickerModel(train) {
   cars.forEach((car) => {
     const cls = carriageClassKey(car);
     const capacity = carriageCapacityForClass(train, cls);
-    const seats = [];
+    let seats = [];
 
     if (cls === "sv") {
       const compartments = Math.floor(capacity / 2);
@@ -804,6 +936,7 @@ function buildSeatPickerModel(train) {
           berth_kind: "lower",
           compartmentIndex: comp,
           pairIndex: 0,
+          deckIndex: 0,
           occupied: rng() > 0.42,
         });
         seatNum += 1;
@@ -813,94 +946,28 @@ function buildSeatPickerModel(train) {
           berth_kind: "upper",
           compartmentIndex: comp,
           pairIndex: 0,
+          deckIndex: 0,
           occupied: rng() > 0.42,
         });
         seatNum += 1;
       }
+      seats = attachSeatPrices(train, car, cls, seats);
       layouts.set(car, seats);
       return;
     }
 
-    let seatNum = 1;
-    const fullCompartments = Math.floor(capacity / 4);
-    const remainder = capacity % 4;
-
-    for (let comp = 0; comp < fullCompartments; comp += 1) {
-      for (let pairSlot = 0; pairSlot < 2; pairSlot += 1) {
-        const lowerNum = seatNum;
-        const upperNum = seatNum + 1;
-        seatNum += 2;
-        seats.push({
-          id: `${car}-${String(lowerNum).padStart(2, "0")}-lower`,
-          displayNum: String(lowerNum).padStart(2, "0"),
-          berth_kind: "lower",
-          compartmentIndex: comp,
-          pairIndex: pairSlot,
-          occupied: rng() > 0.42,
-        });
-        seats.push({
-          id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
-          displayNum: String(upperNum).padStart(2, "0"),
-          berth_kind: "upper",
-          compartmentIndex: comp,
-          pairIndex: pairSlot,
-          occupied: rng() > 0.42,
-        });
-      }
+    if (cls === "coupe" && train.coupe_double_deck && capacity >= 8) {
+      const perDeck = Math.floor(capacity / 2);
+      const d1 = buildBerthSeatSpan(car, perDeck, 1, 0, rng, 0);
+      const off = compartmentCountForCapacity(perDeck);
+      const d2 = buildBerthSeatSpan(car, perDeck, d1.nextNum, 1, rng, off);
+      seats = attachSeatPrices(train, car, cls, [...d1.seats, ...d2.seats]);
+      layouts.set(car, seats);
+      return;
     }
 
-    if (remainder === 2) {
-      const comp = fullCompartments;
-      const lowerNum = seatNum;
-      const upperNum = seatNum + 1;
-      seats.push({
-        id: `${car}-${String(lowerNum).padStart(2, "0")}-lower`,
-        displayNum: String(lowerNum).padStart(2, "0"),
-        berth_kind: "lower",
-        compartmentIndex: comp,
-        pairIndex: 0,
-        occupied: rng() > 0.42,
-      });
-      seats.push({
-        id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
-        displayNum: String(upperNum).padStart(2, "0"),
-        berth_kind: "upper",
-        compartmentIndex: comp,
-        pairIndex: 0,
-        occupied: rng() > 0.42,
-      });
-    } else if (remainder === 3) {
-      const comp = fullCompartments;
-      const lower1 = seatNum;
-      const upper1 = seatNum + 1;
-      const lower2 = seatNum + 2;
-      seatNum += 3;
-      seats.push({
-        id: `${car}-${String(lower1).padStart(2, "0")}-lower`,
-        displayNum: String(lower1).padStart(2, "0"),
-        berth_kind: "lower",
-        compartmentIndex: comp,
-        pairIndex: 0,
-        occupied: rng() > 0.42,
-      });
-      seats.push({
-        id: `${car}-${String(upper1).padStart(2, "0")}-upper`,
-        displayNum: String(upper1).padStart(2, "0"),
-        berth_kind: "upper",
-        compartmentIndex: comp,
-        pairIndex: 0,
-        occupied: rng() > 0.42,
-      });
-      seats.push({
-        id: `${car}-${String(lower2).padStart(2, "0")}-lower`,
-        displayNum: String(lower2).padStart(2, "0"),
-        berth_kind: "lower",
-        compartmentIndex: comp,
-        pairIndex: 1,
-        occupied: rng() > 0.42,
-      });
-    }
-
+    const span = buildBerthSeatSpan(car, capacity, 1, 0, rng, 0);
+    seats = attachSeatPrices(train, car, cls, span.seats);
     layouts.set(car, seats);
   });
   demoSeatLayouts = layouts;
@@ -1015,6 +1082,31 @@ function renderCarriageTabs() {
   });
 }
 
+function appendStandardCoupeCube(grid, car, compSeats) {
+  const byPair = new Map();
+  compSeats.forEach((seat) => {
+    const pi = seat.pairIndex ?? 0;
+    if (!byPair.has(pi)) byPair.set(pi, {});
+    const slot = byPair.get(pi);
+    if (seat.berth_kind === "upper") slot.upper = seat;
+    else slot.lower = seat;
+  });
+  const pairIndices = [...byPair.keys()].sort((a, b) => a - b);
+  const cube = document.createElement("div");
+  cube.className = "compartment-cube";
+  pairIndices.forEach((pairIdx) => {
+    const slot = byPair.get(pairIdx);
+    const col = document.createElement("div");
+    col.className = "seat-column";
+    [slot.upper, slot.lower].forEach((seat) => {
+      if (!seat) return;
+      col.append(createSeatButton(car, seat));
+    });
+    cube.append(col);
+  });
+  grid.append(cube);
+}
+
 function renderSeatGrid() {
   const grid = document.querySelector("#seat-grid");
   grid.innerHTML = "";
@@ -1032,10 +1124,46 @@ function renderSeatGrid() {
   });
   const cls = carriageClassKey(car);
   const compIndices = [...byCompartment.keys()].sort((a, b) => a - b);
+  const isDoubleCoupe = cls === "coupe" && selectedTrain?.coupe_double_deck;
+  if (isDoubleCoupe) {
+    const d0 = compIndices.filter((i) => (byCompartment.get(i) || []).some((s) => s.deckIndex === 0));
+    const d1 = compIndices.filter((i) => (byCompartment.get(i) || []).some((s) => s.deckIndex === 1));
+    if (d0.length) {
+      const row0 = document.createElement("div");
+      row0.className = "car-deck-row";
+      const l0 = document.createElement("p");
+      l0.className = "car-deck-label";
+      l0.textContent = language === "ru" ? "1 этаж" : "1st deck";
+      row0.append(l0);
+      const flex0 = document.createElement("div");
+      flex0.className = "car-deck-cubes";
+      d0.forEach((compIdx) => {
+        appendStandardCoupeCube(flex0, car, byCompartment.get(compIdx) || []);
+      });
+      row0.append(flex0);
+      grid.append(row0);
+    }
+    if (d1.length) {
+      const row1 = document.createElement("div");
+      row1.className = "car-deck-row";
+      const l1 = document.createElement("p");
+      l1.className = "car-deck-label";
+      l1.textContent = language === "ru" ? "2 этаж" : "2nd deck";
+      row1.append(l1);
+      const flex1 = document.createElement("div");
+      flex1.className = "car-deck-cubes";
+      d1.forEach((compIdx) => {
+        appendStandardCoupeCube(flex1, car, byCompartment.get(compIdx) || []);
+      });
+      row1.append(flex1);
+      grid.append(row1);
+    }
+    return;
+  }
   compIndices.forEach((compIdx) => {
     const compSeats = byCompartment.get(compIdx) || [];
-    const cube = document.createElement("div");
     if (cls === "sv") {
+      const cube = document.createElement("div");
       cube.className = "compartment-cube compartment-cube--sv";
       [...compSeats]
         .sort((a, b) => parseInt(a.displayNum, 10) - parseInt(b.displayNum, 10))
@@ -1045,29 +1173,7 @@ function renderSeatGrid() {
       grid.append(cube);
       return;
     }
-    const byPair = new Map();
-    compSeats.forEach((seat) => {
-      const pi = seat.pairIndex ?? 0;
-      if (!byPair.has(pi)) byPair.set(pi, {});
-      const slot = byPair.get(pi);
-      if (seat.berth_kind === "upper") slot.upper = seat;
-      else slot.lower = seat;
-    });
-    const pairIndices = [...byPair.keys()].sort((a, b) => a - b);
-    cube.className = "compartment-cube";
-    pairIndices.forEach((pairIdx) => {
-      const slot = byPair.get(pairIdx);
-      const col = document.createElement("div");
-      col.className = "seat-column";
-      const upper = slot.upper;
-      const lower = slot.lower;
-      [upper, lower].forEach((seat) => {
-        if (!seat) return;
-        col.append(createSeatButton(car, seat));
-      });
-      cube.append(col);
-    });
-    grid.append(cube);
+    appendStandardCoupeCube(grid, car, compSeats);
   });
 }
 

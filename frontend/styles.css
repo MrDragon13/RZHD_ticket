@@ -1172,6 +1172,41 @@ button {
   margin-bottom: 18px;
 }
 
+.car-deck-row {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.car-deck-label {
+  flex: 0 0 100%;
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(0, 229, 255, 0.85);
+}
+
+.car-deck-cubes {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  width: 100%;
+  scrollbar-width: thin;
+}
+
+.car-deck-cubes::-webkit-scrollbar {
+  height: 6px;
+}
+
 .compartment-cube {
   display: flex;
   flex-wrap: nowrap;
