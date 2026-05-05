@@ -241,6 +241,127 @@ button {
   padding: 26px;
 }
 
+.map-panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.checkout-train-summary {
+  flex-shrink: 0;
+  padding: 18px 20px;
+  border: 1px solid rgba(0, 255, 156, 0.28);
+  border-radius: 24px;
+  background: rgba(0, 255, 156, 0.06);
+  pointer-events: none;
+  user-select: none;
+}
+
+.checkout-train-summary-label {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.checkout-train-summary-body {
+  color: var(--text);
+}
+
+.checkout-train-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.checkout-train-num {
+  font-size: 26px;
+  font-weight: 900;
+  color: var(--cyan);
+}
+
+.checkout-train-badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 255, 156, 0.35);
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+  background: rgba(0, 255, 156, 0.08);
+}
+
+.checkout-train-times {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0 8px;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.checkout-train-dash {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--cyan), var(--violet), var(--green));
+}
+
+.checkout-train-route,
+.checkout-train-meta {
+  margin: 6px 0 0;
+  color: #cbeaff;
+  line-height: 1.45;
+}
+
+.checkout-train-meta {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.checkout-train-reason {
+  margin: 10px 0 0;
+  color: #cbeaff;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.checkout-train-amenities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.checkout-train-prices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  color: var(--green);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.map-panel-stack .map-content {
+  flex: 1;
+  min-height: 280px;
+}
+
+.map-panel-stack .route-map {
+  min-height: 260px;
+  height: auto;
+}
+
+.seat-picker-panel {
+  flex-shrink: 0;
+}
+
 .map-content {
   position: relative;
   height: 100%;
@@ -883,10 +1004,6 @@ button {
 .checkout-step-done {
   border-color: rgba(0, 255, 156, 0.45);
   color: var(--green);
-}
-
-.seat-picker-panel {
-  min-height: 100%;
 }
 
 .glass-panel {

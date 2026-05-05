@@ -35,6 +35,7 @@ const i18n = {
     seatPickerSelected: "Выбрано мест",
     seatPickerConfirm: "Подтвердить выбор",
     seatPickerCarriage: "Вагон",
+    selectedTrainHeading: "Выбранный поезд",
     berthShort: {
       lower: "Н",
       upper: "В",
@@ -86,6 +87,7 @@ const i18n = {
     seatPickerSelected: "Seats selected",
     seatPickerConfirm: "Confirm selection",
     seatPickerCarriage: "Car",
+    selectedTrainHeading: "Selected train",
     berthShort: {
       lower: "L",
       upper: "U",
@@ -245,6 +247,9 @@ const checkoutPanel = document.querySelector("#checkout-panel");
 const ticketPanel = document.querySelector("#ticket-panel");
 const seatPickerPanel = document.querySelector("#seat-picker-panel");
 const mapContent = document.querySelector("#map-content");
+const checkoutTrainSummary = document.querySelector("#checkout-train-summary");
+const checkoutTrainSummaryBody = document.querySelector("#checkout-train-summary-body");
+const checkoutTrainSummaryLabel = document.querySelector("#checkout-train-summary-label");
 const checkoutButton = document.querySelector("#checkout-button");
 const confirmSeatsButton = document.querySelector("#confirm-seats-button");
 const orbButton = document.querySelector("#orb-button");
@@ -723,9 +728,42 @@ function buildSeatPickerModel(train) {
   demoSeatLayouts = layouts;
 }
 
+function renderCheckoutTrainSummary(train) {
+  if (!checkoutTrainSummary || !checkoutTrainSummaryBody || !checkoutTrainSummaryLabel) return;
+  checkoutTrainSummaryLabel.textContent = i18n[language].selectedTrainHeading;
+  const recommendation = recommendationFor(train.id);
+  checkoutTrainSummaryBody.innerHTML = `
+    <div class="checkout-train-row checkout-train-main">
+      <span class="checkout-train-num">${train.train_number}</span>
+      <span class="checkout-train-badge">${recommendation?.badges?.[0] || (language === "ru" ? "Выбор" : "Pick")}</span>
+    </div>
+    <div class="checkout-train-times">
+      <strong>${train.departure_time}</strong>
+      <span class="checkout-train-dash"></span>
+      <strong>${train.arrival_time}</strong>
+    </div>
+    <p class="checkout-train-route">${train.departure_station} → ${train.arrival_station}</p>
+    <p class="checkout-train-meta">${train.duration_label} · ${train.route_distance_km} ${language === "ru" ? "км" : "km"}</p>
+    ${recommendation?.explanation ? `<p class="checkout-train-reason">${escapeHtml(recommendation.explanation)}</p>` : ""}
+    <div class="checkout-train-amenities">${renderAmenityBadges(train.amenities)}</div>
+    <div class="checkout-train-prices">
+      <span>${language === "ru" ? "Купе" : "Coupe"}: ${formatPrice(train.prices.coupe)}</span>
+      <span>${language === "ru" ? "Плацкарт" : "Platzkart"}: ${formatPrice(train.prices.platzkart)}</span>
+    </div>
+  `;
+  checkoutTrainSummary.classList.remove("hidden");
+  checkoutTrainSummary.setAttribute("aria-hidden", "false");
+}
+
+function hideCheckoutTrainSummary() {
+  if (!checkoutTrainSummary) return;
+  checkoutTrainSummary.classList.add("hidden");
+  checkoutTrainSummary.setAttribute("aria-hidden", "true");
+}
+
 function showSeatPicker() {
-  mapContent.classList.add("hidden");
   ticketPanel.classList.add("hidden");
+  if (selectedTrain) renderCheckoutTrainSummary(selectedTrain);
   seatPickerPanel.classList.remove("hidden");
   document.querySelector("#seat-picker-title").textContent = i18n[language].seatPickerTitle;
   document.querySelector("#seat-picker-hint").textContent = i18n[language].seatPickerHint;
@@ -739,7 +777,7 @@ function showSeatPicker() {
       ? "Выберите вагон и места на схеме. Можно указать несколько мест."
       : "Choose a car and seats on the layout. Multiple seats are allowed.",
   );
-  seatPickerPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+  document.querySelector("#route-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderCarriageTabs() {
@@ -865,8 +903,9 @@ async function confirmSeatSelection() {
 }
 
 function renderTicket() {
-  mapContent.classList.add("hidden");
+  hideCheckoutTrainSummary();
   seatPickerPanel.classList.add("hidden");
+  mapContent.classList.add("hidden");
   ticketPanel.classList.remove("hidden");
   setStage("ticket");
   document.querySelector("#ticket-title").textContent = i18n[language].demoTicket;
@@ -1073,6 +1112,7 @@ function resetScenario(announce = true) {
   [intentPanel, trainsPanel, checkoutPanel, seatPickerPanel, ticketPanel].forEach((panel) =>
     panel.classList.add("hidden"),
   );
+  hideCheckoutTrainSummary();
   mapContent.classList.remove("hidden");
   document.querySelector("#checkout-steps").innerHTML = "";
   document.querySelector("#route-meta").textContent =
