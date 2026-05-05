@@ -1,0 +1,28 @@
+# Установка на VDS (один раз):
+#   sudo cp deploy/path-terminal.service /etc/systemd/system/
+#   sudo sed -i "s|REPLACE_WITH_PROJECT_DIR|/home/cursor/path-terminal|g" /etc/systemd/system/path-terminal.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now path-terminal.service
+#
+# Пользователь и каталог должны совпадать с тем, где лежит docker-compose.yml.
+# Если используется только `restart: unless-stopped` в compose, этот unit не обязателен.
+
+[Unit]
+Description=Путь — терминал (docker compose)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=cursor
+Group=cursor
+WorkingDirectory=REPLACE_WITH_PROJECT_DIR
+# На сервере был docker-compose v1; при наличии плагина Compose v2 можно заменить на: docker compose up -d
+ExecStart=/usr/bin/docker-compose up -d
+ExecStop=/usr/bin/docker-compose down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
