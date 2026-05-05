@@ -62,8 +62,6 @@ const i18n = {
     fallbackError: "Сервер недоступен. Показываю демо-сценарий интерфейса.",
     searchTicketError:
       "Не удалось загрузить поезда с сайта РЖД. Проверьте соединение или попробуйте позже.",
-    searchRecommendFallback:
-      "Поезда загружены по данным РЖД; голосовое пояснение временно недоступно.",
     routeFactUnavailable: "Факт о маршруте временно недоступен.",
     clarifyHint: "Я дождусь уточнения и только потом подберу варианты.",
     userRole: "Вы",
@@ -132,8 +130,6 @@ const i18n = {
     fallbackError: "Server is unavailable. Showing interface demo scenario.",
     searchTicketError:
       "Could not load trains from RZD. Check your connection or try again later.",
-    searchRecommendFallback:
-      "Trains loaded from RZD; spoken explanation is temporarily unavailable.",
     routeFactUnavailable: "Route fact is temporarily unavailable.",
     clarifyHint: "I will wait for clarification before searching options.",
     userRole: "You",
@@ -684,7 +680,7 @@ async function searchAndRecommend() {
   }
 
   try {
-    const recommendResponse = await postJson("/api/recommend", {
+    const recommendResponse = await postRecommendWithRetries({
       language,
       intent,
       trains,
@@ -693,14 +689,9 @@ async function searchAndRecommend() {
     recommendations = recommendResponse.recommendations;
     assistantSay(recommendResponse.assistant_text);
   } catch (error) {
-    console.error("recommend failed", error);
-    recommendations = trains.map((t) => ({
-      train_id: t.id,
-      score: 0,
-      badges: [],
-      explanation: "",
-    }));
-    assistantSay(i18n[language].searchRecommendFallback);
+    console.error("recommend failed after retries", error);
+    recommendations = buildFallbackRecommendationsFromTrains(trains);
+    assistantSay(localVoiceExplanationFromTrain(trains[0]));
   }
   renderTrains();
   setStage("results");
@@ -785,6 +776,58 @@ function updateStopPoint(dot, label, stop) {
   label.setAttribute("x", stop.x + 12);
   label.setAttribute("y", stop.y - 12);
   label.textContent = stop.name;
+}
+
+function localVoiceExplanationFromTrain(train) {
+  if (!train) return "";
+  if (language === "ru") {
+    return (
+      `Рекомендую поезд ${train.train_number}: отправление ${train.departure_time}, прибытие ${train.arrival_time}, в пути ${train.duration_label}.`
+    );
+  }
+  return (
+    `I recommend train ${train.train_number}: departs ${train.departure_time}, arrives ${train.arrival_time}, travel time ${train.duration_label}.`
+  );
+}
+
+function buildFallbackRecommendationsFromTrains(trainList) {
+  return trainList.map((t) => ({
+    train_id: t.id,
+    score: 0,
+    badges: [],
+    explanation: localVoiceExplanationFromTrain(t),
+  }));
+}
+
+async function postRecommendWithRetries(payload, options = {}) {
+  const timeoutMs = options.timeoutMs ?? 240000;
+  const maxAttempts = options.retries ?? 3;
+  let lastError = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/recommend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!response.ok) {
+        throw new Error(`API error ${response.status}`);
+      }
+      return response.json();
+    } catch (err) {
+      clearTimeout(timer);
+      lastError = err;
+      console.error(`recommend attempt ${attempt + 1} failed`, err);
+      if (attempt < maxAttempts - 1) {
+        await wait(1200 * (attempt + 1));
+      }
+    }
+  }
+  throw lastError || new Error("recommend failed");
 }
 
 function routeDistanceLabel() {

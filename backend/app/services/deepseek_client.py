@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import os
-from collections import defaultdict
 from datetime import date
 from typing import Any
 
@@ -106,7 +107,8 @@ class DeepSeekClient:
         self.api_key = os.getenv("DEEPSEEK_API_KEY", "")
         self.base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
         self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
-        self.timeout = float(os.getenv("DEEPSEEK_TIMEOUT_SECONDS", "20"))
+        self.timeout = float(os.getenv("DEEPSEEK_TIMEOUT_SECONDS", "90"))
+        self.explain_timeout = float(os.getenv("DEEPSEEK_EXPLAIN_TIMEOUT_SECONDS", str(max(self.timeout, 120.0))))
         # Для защиты удобно фиксировать демо-дату: тогда фраза "6 мая" всегда
         # превращается в ожидаемый 2026-05-06, а не зависит от даты на VDS.
         self.current_date = os.getenv("PATH_CURRENT_DATE", date.today().isoformat())
@@ -117,7 +119,13 @@ class DeepSeekClient:
 
         return bool(self.api_key)
 
-    async def chat_text(self, system_prompt: str, user_prompt: str) -> str:
+    async def chat_text(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> str:
         """Возвращает обычный текстовый ответ LLM.
 
         Метод используется для реплик ассистента, объяснений рекомендаций и
@@ -138,7 +146,12 @@ class DeepSeekClient:
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        total = timeout_seconds if timeout_seconds is not None else self.timeout
+        total = max(5.0, total)
+        connect_cap = min(45.0, total)
+        timeout_cfg = httpx.Timeout(total, connect=connect_cap)
+
+        async with httpx.AsyncClient(timeout=timeout_cfg) as client:
             response = await client.post(
                 f"{self.base_url.rstrip('/')}/chat/completions",
                 headers=headers,
@@ -387,10 +400,25 @@ class DeepSeekClient:
             },
             ensure_ascii=False,
         )
-        try:
-            return await self.chat_text(system_prompt, user_prompt)
-        except Exception:
-            return fallback_text
+        last_err: BaseException | None = None
+        for attempt in range(3):
+            try:
+                return await self.chat_text(
+                    system_prompt,
+                    user_prompt,
+                    timeout_seconds=self.explain_timeout,
+                )
+            except Exception as exc:
+                last_err = exc
+                logging.warning(
+                    "explain_recommendation DeepSeek attempt %s failed: %s",
+                    attempt + 1,
+                    exc,
+                )
+                if attempt < 2:
+                    await asyncio.sleep(1.2 * (attempt + 1))
+        logging.warning("explain_recommendation exhausted retries: %s", last_err)
+        return fallback_text
 
     async def rank_train_order(
         self,

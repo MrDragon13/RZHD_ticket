@@ -1,12 +1,24 @@
 # Доступ по IP только по HTTP — страница открывается без предупреждений о сертификате.
 # Для голосового ввода в Chrome используйте HTTPS: https://176.109.100.199.nip.io/
 http://176.109.100.199 {
-    reverse_proxy frontend:80
+    reverse_proxy frontend:80 {
+        transport http {
+            read_timeout 300s
+            write_timeout 300s
+            dial_timeout 60s
+        }
+    }
 }
 
 # Рекомендуемый адрес: валидный Let's Encrypt, микрофон в Chrome работает.
 176.109.100.199.nip.io {
     # Caddy автоматически получает и обновляет TLS-сертификат Let's Encrypt.
     # HTTPS нужен для Chrome: без secure context браузер блокирует микрофон.
-    reverse_proxy frontend:80
+    reverse_proxy frontend:80 {
+        transport http {
+            read_timeout 300s
+            write_timeout 300s
+            dial_timeout 60s
+        }
+    }
 }
