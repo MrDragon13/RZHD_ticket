@@ -96,6 +96,20 @@ class SeatDetails(BaseModel):
     side_upper: int = 0
 
 
+CompartmentKind = Literal["unknown", "female", "male", "mixed", "children", "family"]
+
+
+class CarriageDetail(BaseModel):
+    """Метаданные одного вагона из слоя РЖД (5764): номер, тип, пол купе, услуги."""
+
+    number: str = Field(..., min_length=1, max_length=8)
+    type_label: str = Field(default="", description="Купе / СВ / Плацкарт и т.д.")
+    compartment_kind: CompartmentKind = "unknown"
+    add_signs_raw: str | None = Field(default=None, description="Сырой код addSigns с сайта РЖД.")
+    service_summary: str | None = Field(default=None, description="Краткий текст из clsName без HTML.")
+    services_short: list[str] = Field(default_factory=list, description="Подписи услуг (биотуалет, кондиционер…).")
+
+
 class SeatBerthPrices(BaseModel):
     """Минимальные цены по категориям полок (если пришли из ответа РЖД по местам)."""
 
@@ -157,6 +171,10 @@ class TrainOption(BaseModel):
     seat_prices: SeatBerthPrices | None = Field(
         default=None,
         description="Минимальные цены по типам полок из ответа РЖД (если есть).",
+    )
+    carriage_details: list[CarriageDetail] = Field(
+        default_factory=list,
+        description="Список вагонов из слоя 5764 (номер, тип, пол купе, услуги).",
     )
 
 

@@ -15,6 +15,7 @@ from app.services.rzd_carriage_parse import (
     seat_details_from_search_car_row,
     sum_seat_details,
 )
+from app.services.rzd_wagon_details import carriage_details_from_payload
 
 
 def _minutes_to_label(total_minutes: int, language: str) -> str:
@@ -307,6 +308,14 @@ def apply_carriage_layer_payload(train: TrainOption, payload: dict | None) -> Tr
     sp = _seat_prices_model(merged_bp)
     if sp:
         upd["seat_prices"] = sp
+
+    try:
+        wagons = carriage_details_from_payload(payload)
+    except Exception:
+        logging.exception("carriage details parse failed")
+        wagons = []
+    if wagons:
+        upd["carriage_details"] = wagons
 
     if not upd:
         return train
