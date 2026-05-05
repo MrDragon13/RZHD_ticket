@@ -65,6 +65,7 @@ class RzdDataAdapter:
         day_end = datetime.combine(travel_date, time(23, 59, 59))
 
         enrich = _env_truthy_default_on("RZD_CARRIAGE_ENRICH")
+        route_stops_enrich = _env_truthy_default_on("RZD_ROUTE_STOPS_ENRICH")
         max_conc = int(os.getenv("RZD_CARRIAGE_CONCURRENCY", "4") or "4")
         max_conc = max(1, min(max_conc, 16))
 
@@ -73,20 +74,22 @@ class RzdDataAdapter:
             trains_list = list(trains_iter)
 
             carriage_by_index: dict[int, dict] = {}
-            if enrich and trains_list:
+            basic_stops_by_index: dict[int, list[str]] = {}
+            if trains_list:
                 src_code = await fetcher.get_city_code(origin)
                 dst_code = await fetcher.get_city_code(destination)
 
-                sem = asyncio.Semaphore(max_conc)
+                sem_c = asyncio.Semaphore(max_conc)
+                sem_r = asyncio.Semaphore(max_conc)
 
-                async def one_train(idx: int, t) -> None:
+                async def carriage_one(idx: int, t) -> None:
                     num = str(getattr(t, "number", "") or (t.content or {}).get("number") or "")
                     if not num:
                         return
                     dep = getattr(t, "departure_time", None)
                     if dep is None:
                         return
-                    async with sem:
+                    async with sem_c:
                         try:
                             raw = await fetcher.get_train_carriages(src_code, dst_code, dep, num)
                         except Exception:
@@ -95,7 +98,31 @@ class RzdDataAdapter:
                         if isinstance(raw, dict) and raw.get("result") == "OK":
                             carriage_by_index[idx] = raw
 
-                await asyncio.gather(*(one_train(i, tr) for i, tr in enumerate(trains_list)))
+                async def route_stops_one(idx: int, t) -> None:
+                    if not route_stops_enrich:
+                        return
+                    content = t.content or {}
+                    num = str(getattr(t, "number", "") or content.get("number") or "")
+                    dep_date = str(content.get("date0") or "").strip()
+                    if not num or not dep_date:
+                        return
+                    async with sem_r:
+                        try:
+                            route_names = await fetcher.get_basic_route_stops(num, dep_date)
+                        except Exception:
+                            logging.debug("basicRoute stops failed for train %s", num, exc_info=True)
+                            return
+                        if len(route_names) >= 2:
+                            basic_stops_by_index[idx] = route_names
+
+                tasks = []
+                for i, tr in enumerate(trains_list):
+                    if enrich:
+                        tasks.append(carriage_one(i, tr))
+                    tasks.append(route_stops_one(i, tr))
+
+                if tasks:
+                    await asyncio.gather(*tasks)
 
         mapped: list[TrainOption] = []
         for index, train_obj in enumerate(trains_list):
@@ -107,6 +134,7 @@ class RzdDataAdapter:
                     dest_hint=destination,
                     language=request.language,
                     carriage_payload=carriage_by_index.get(index),
+                    basic_route_stops=basic_stops_by_index.get(index),
                 ),
             )
 

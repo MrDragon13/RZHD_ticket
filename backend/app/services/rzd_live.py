@@ -359,6 +359,7 @@ def train_option_from_aiorzd(
     dest_hint: str | None,
     language: str,
     carriage_payload: dict | None = None,
+    basic_route_stops: list[str] | None = None,
 ) -> TrainOption:
     """Преобразует объект aiorzd.Train в TrainOption."""
 
@@ -395,6 +396,8 @@ def train_option_from_aiorzd(
 
     stops = extract_train_stops(content if isinstance(content, dict) else {})
     stops = _merge_stop_lists_from_carriage_layer(stops, carriage_payload)
+    if basic_route_stops and len(basic_route_stops) >= 2:
+        stops = list(basic_route_stops)[:80]
 
     train_number = str(getattr(train_obj, "number", "") or content.get("number") or "")
 

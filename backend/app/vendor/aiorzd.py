@@ -11,6 +11,18 @@ from typing import Iterable
 import aiohttp
 
 
+# Список остановок по ходу следования (НЕ layer 5827): официальный сервис маршрута,
+# см. visavi/rzd-api trainStationList → pass.rzd.ru/ticket/services/route/basicRoute
+_BASIC_ROUTE_HEADERS = {
+    "Accept": "application/json",
+    "Referer": "https://pass.rzd.ru/",
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; PathTerminal/1.0; +https://pass.rzd.ru/) "
+        "AppleWebKit/537.36 (KHTML, like Gecko)"
+    ),
+}
+
+
 def __func__():
     """ Returns current function name """
     return stack()[1][3]
@@ -194,6 +206,8 @@ class RzdCarriagesRequest(RzdRequest):
 class RzdFetcher:
     TRAIN_LAYER_ID = 5827
     CARRIAGES_LAYER_ID = 5764
+    STATIONS_STRUCTURE_ID = 704
+    BASIC_ROUTE_URL = "https://pass.rzd.ru/ticket/services/route/basicRoute"
 
     site_url = 'https://pass.rzd.ru'
     request_url = '/timetable/public/ru'
@@ -538,3 +552,108 @@ class RzdFetcher:
         )
 
         return r.result
+
+    async def get_basic_route_stops(
+        self,
+        train_number: str,
+        dep_date_dmY: str,
+        *,
+        max_attempts: int = 18,
+    ) -> list[str]:
+        """Полный список станций поезда по сервису basicRoute (STRUCTURE_ID=704).
+
+        Параметры как на сайте РЖД: trainNumber (например «121В»), depDate в формате d.m.Y
+        из поля date0 ответа поиска поездов.
+        """
+
+        num = str(train_number or "").strip()
+        dep = str(dep_date_dmY or "").strip()
+        if not num or not dep:
+            return []
+
+        base_data = {
+            "STRUCTURE_ID": str(self.STATIONS_STRUCTURE_ID),
+            "trainNumber": num,
+            "depDate": dep,
+        }
+        rid = None
+        for attempt in range(max_attempts):
+            payload = dict(base_data)
+            if rid is not None:
+                payload["rid"] = str(rid)
+            async with self.session.post(
+                self.BASIC_ROUTE_URL,
+                data=payload,
+                headers=_BASIC_ROUTE_HEADERS,
+            ) as response:
+                text = await response.text()
+            try:
+                doc = json.loads(text)
+            except json.JSONDecodeError:
+                logging.warning(
+                    "rzd basicRoute non-json train=%s attempt=%s body=%s",
+                    num,
+                    attempt,
+                    text[:240],
+                )
+                return []
+
+            res = doc.get("result")
+            if res in ("RID", "REQUEST_ID"):
+                rid = doc.get("RID") or doc.get("rid")
+                await asyncio.sleep(1)
+                continue
+            if res == "FAIL":
+                logging.info(
+                    "rzd basicRoute FAIL train=%s dep=%s detail=%s",
+                    num,
+                    dep,
+                    doc.get("error") or doc.get("detail"),
+                )
+                return []
+            if res != "OK":
+                logging.warning(
+                    "rzd basicRoute unexpected result=%s train=%s body=%s",
+                    res,
+                    num,
+                    text[:400],
+                )
+                return []
+
+            data_block = doc.get("data") or {}
+            routes = data_block.get("routes")
+            if not isinstance(routes, list) or not routes:
+                logging.info("rzd basicRoute empty routes train=%s", num)
+                return []
+
+            route0 = routes[0]
+            if not isinstance(route0, dict):
+                return []
+            raw_stops = route0.get("stops")
+            if not isinstance(raw_stops, list):
+                return []
+
+            names: list[str] = []
+            for item in raw_stops[:120]:
+                if not isinstance(item, dict):
+                    continue
+                st = item.get("station")
+                label = None
+                if isinstance(st, dict):
+                    label = st.get("name") or st.get("engName")
+                elif isinstance(st, str):
+                    label = st
+                if label:
+                    names.append(str(label).strip())
+
+            if len(names) >= 2:
+                logging.info(
+                    "rzd basicRoute ok train=%s dep=%s stop_count=%s",
+                    num,
+                    dep,
+                    len(names),
+                )
+            return names[:80]
+
+        logging.warning("rzd basicRoute rid timeout train=%s", num)
+        return []
