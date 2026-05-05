@@ -275,8 +275,8 @@ function stopMarkersAlongPath(pathD, names) {
 }
 
 /** Объединяет шаблон маршрута по направлению с реальными остановками выбранного поезда. */
-function mergeRouteVisualForTrain(destination, train) {
-  const base = findRouteVisual(destination);
+function mergeRouteVisualForTrain(destinationKey, train) {
+  const base = findRouteVisual(destinationKey);
   if (!train) return base;
   const names = intermediateStopDisplayNames(train);
   if (!names.length) return base;
@@ -293,20 +293,47 @@ function trainForRouteMap() {
   return trains[0];
 }
 
-function applyRouteGeometry(visual) {
+/** Город/станция назначения для выбора шаблона линии на карте: приоритет у поезда, иначе запрос пользователя. */
+function routeMapDestinationKey(train) {
+  const fromTrain = train && String(train.arrival_station || "").trim();
+  if (fromTrain) return fromTrain;
+  return String(intent?.destination || "").trim();
+}
+
+function applyRouteGeometry(visual, labelOverride) {
   routeLine.classList.remove("route-line-active");
   routeLine.setAttribute("d", visual.line);
   void routeLine.getBoundingClientRect();
   routeLine.classList.add("route-line-active");
   routePulse.classList.add("route-pulse-active");
-  updateMapGeometry(visual);
+  updateMapGeometry(visual, labelOverride);
 }
 
 function updateRouteMapForSelectedTrain() {
-  if (!intent) return;
-  const visual = mergeRouteVisualForTrain(intent.destination, trainForRouteMap());
-  applyRouteGeometry(visual);
-  document.querySelector("#route-meta").textContent = `${intent.origin} -> ${intent.destination} · ${routeDistanceLabel()}`;
+  if (!intent && !trainForRouteMap()) return;
+  const train = trainForRouteMap();
+  const visual = mergeRouteVisualForTrain(routeMapDestinationKey(train), train);
+  let labels = null;
+  if (train) {
+    const o = String(train.departure_station || intent?.origin || "").trim();
+    const d = String(train.arrival_station || intent?.destination || "").trim();
+    labels = {
+      origin: o || (language === "ru" ? "Москва" : "Moscow"),
+      destination: d || (language === "ru" ? "Казань" : "Kazan"),
+    };
+  }
+  applyRouteGeometry(visual, labels);
+  const trainLine = trainForRouteMap();
+  const metaOrigin = trainLine
+    ? String(trainLine.departure_station || "").trim() || intent?.origin || ""
+    : intent?.origin || "";
+  const metaDest = trainLine
+    ? String(trainLine.arrival_station || "").trim() || intent?.destination || ""
+    : intent?.destination || "";
+  const kmDur = routeDistanceLabel();
+  let metaText = `${metaOrigin} → ${metaDest}`;
+  if (kmDur) metaText += ` · ${kmDur}`;
+  document.querySelector("#route-meta").textContent = metaText;
 }
 
 const amenityLabels = {
@@ -441,11 +468,33 @@ function berthTotalsSum(detail) {
   return (t.lower || 0) + (t.upper || 0) + (t.side_lower || 0) + (t.side_upper || 0);
 }
 
+/**
+ * РЖД иногда отдаёт сумму только по части купе (например 8 мест = два отсека),
+ * из‑за чего строилась нереалистичная «мини-схема». Для целого вагона берём сумму
+ * только если она похожа на полную вместимость класса.
+ */
+function berthTotalsLookLikeWholeCarriage(cls, sum, detail) {
+  if (sum < 4) return false;
+  const tt = detail?.berth_totals;
+  const side = tt ? (tt.side_lower || 0) + (tt.side_upper || 0) : 0;
+  if (cls === "platzkart") {
+    if (side >= 8) return true;
+    return sum >= 36;
+  }
+  if (cls === "coupe") {
+    return sum >= 16;
+  }
+  if (cls === "sv") {
+    return sum >= 12;
+  }
+  return sum >= 4;
+}
+
 /** Вместимость вагона для схемы: приоритет сумме berth_totals из РЖД. */
 function carriageCapacityFromRzd(train, carCode, cls, fallbackCapacity) {
   const det = carriageDetailForTab(train, carCode);
   const sum = berthTotalsSum(det);
-  if (sum >= 4) return Math.min(sum, 72);
+  if (berthTotalsLookLikeWholeCarriage(cls, sum, det)) return Math.min(sum, 72);
   return fallbackCapacity;
 }
 
@@ -868,7 +917,15 @@ function findRouteVisual(destination) {
   return routeVisuals.default;
 }
 
-function updateMapGeometry(visual) {
+function updateMapGeometry(visual, labelOverride) {
+  const originText =
+    labelOverride?.origin ??
+    intent?.origin ??
+    (language === "ru" ? "Москва" : "Moscow");
+  const destText =
+    labelOverride?.destination ??
+    intent?.destination ??
+    (language === "ru" ? "Казань" : "Kazan");
   const destinationDot = document.querySelector("#destination-dot");
   const originLabel = document.querySelector("#origin-label");
   const destinationLabel = document.querySelector("#destination-label");
@@ -887,9 +944,9 @@ function updateMapGeometry(visual) {
     dot.setAttribute("cx", visual.destination.x);
     dot.setAttribute("cy", visual.destination.y);
   });
-  if (originLabel) originLabel.textContent = intent.origin || (language === "ru" ? "Москва" : "Moscow");
+  if (originLabel) originLabel.textContent = originText;
   if (destinationLabel) {
-    destinationLabel.textContent = intent.destination || (language === "ru" ? "Казань" : "Kazan");
+    destinationLabel.textContent = destText;
     destinationLabel.setAttribute("x", visual.destination.labelX);
     destinationLabel.setAttribute("y", visual.destination.labelY);
   }
