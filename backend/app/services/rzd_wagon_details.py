@@ -6,7 +6,7 @@ import html
 import re
 from typing import Any
 
-from app.models import CarriageDetail, CompartmentKind
+from app.models import CarriageDetail, CompartmentKind, SeatDetails
 
 
 def _strip_html(text: str) -> str:
@@ -72,6 +72,11 @@ def _service_labels(services: Any, limit: int = 12) -> list[str]:
 
 
 def carriage_detail_from_rzd_car(car: dict) -> CarriageDetail | None:
+    from app.services.rzd_carriage_parse import (
+        seat_details_available_from_car_row_nested,
+        seat_details_totals_from_car_row_nested,
+    )
+
     if not isinstance(car, dict):
         return None
     num = car.get("cnumber")
@@ -92,6 +97,9 @@ def carriage_detail_from_rzd_car(car: dict) -> CarriageDetail | None:
 
     services_short = _service_labels(car.get("services"))
 
+    berth_totals = seat_details_totals_from_car_row_nested(car)
+    berth_available = seat_details_available_from_car_row_nested(car)
+
     return CarriageDetail(
         number=number,
         type_label=type_label,
@@ -99,7 +107,17 @@ def carriage_detail_from_rzd_car(car: dict) -> CarriageDetail | None:
         add_signs_raw=add_raw,
         service_summary=summary,
         services_short=services_short,
+        berth_totals=_clean_seat_details(berth_totals),
+        berth_available=_clean_seat_details(berth_available),
     )
+
+
+def _clean_seat_details(d: SeatDetails | None) -> SeatDetails | None:
+    if d is None:
+        return None
+    if d.lower + d.upper + d.side_lower + d.side_upper <= 0:
+        return None
+    return d
 
 
 def carriage_details_from_payload(payload: dict) -> list[CarriageDetail]:

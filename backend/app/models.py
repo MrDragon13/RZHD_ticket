@@ -145,6 +145,14 @@ class CarriageDetail(BaseModel):
     add_signs_raw: str | None = Field(default=None, description="Сырой код addSigns с сайта РЖД.")
     service_summary: str | None = Field(default=None, description="Краткий текст из clsName без HTML.")
     services_short: list[str] = Field(default_factory=list, description="Подписи услуг (биотуалет, кондиционер…).")
+    berth_totals: SeatDetails | None = Field(
+        default=None,
+        description="Вместимость по категориям полок из seats[] вагона (РЖД).",
+    )
+    berth_available: SeatDetails | None = Field(
+        default=None,
+        description="Свободные места по категориям полок для этого вагона (РЖД).",
+    )
 
 
 class SeatBerthPrices(BaseModel):

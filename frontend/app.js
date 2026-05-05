@@ -292,6 +292,26 @@ function carriageDetailForTab(train, carCode) {
   return null;
 }
 
+/** Сумма мест по полкам из ответа РЖД для конкретного вагона (если есть). */
+function berthTotalsSum(detail) {
+  const t = detail?.berth_totals;
+  if (!t) return 0;
+  return (t.lower || 0) + (t.upper || 0) + (t.side_lower || 0) + (t.side_upper || 0);
+}
+
+/** Вместимость вагона для схемы: приоритет сумме berth_totals из РЖД. */
+function carriageCapacityFromRzd(train, carCode, cls, fallbackCapacity) {
+  const det = carriageDetailForTab(train, carCode);
+  const sum = berthTotalsSum(det);
+  if (sum >= 4) return Math.min(sum, 72);
+  return fallbackCapacity;
+}
+
+function parseSeatOrdinal(displayNum) {
+  const n = parseInt(String(displayNum), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function carriageClassFromTrain(train, carCode) {
   const det = carriageDetailForTab(train, carCode);
   const mapped = det && mapTypeLabelToCarClass(det.type_label);
@@ -929,7 +949,7 @@ function carriageCapacityForClass(train, cls) {
 }
 
 /** Генерирует места для одного «этажа» вагона (непрерывная нумерация с seatNum). Возвращает { seats, nextNum }. */
-function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, rng, compartmentIndexOffset) {
+function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, compartmentIndexOffset) {
   const seats = [];
   if (capacity <= 0) return { seats, nextNum: startSeatNum };
   let seatNum = startSeatNum;
@@ -948,7 +968,7 @@ function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, rng, compart
         compartmentIndex: compIdx,
         pairIndex: pairSlot,
         deckIndex,
-        occupied: rng() > 0.42,
+        occupied: false,
       });
       seats.push({
         id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
@@ -957,7 +977,7 @@ function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, rng, compart
         compartmentIndex: compIdx,
         pairIndex: pairSlot,
         deckIndex,
-        occupied: rng() > 0.42,
+        occupied: false,
       });
     }
   }
@@ -972,7 +992,7 @@ function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, rng, compart
       compartmentIndex: comp,
       pairIndex: 0,
       deckIndex,
-      occupied: rng() > 0.42,
+      occupied: false,
     });
     seats.push({
       id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
@@ -981,7 +1001,7 @@ function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, rng, compart
       compartmentIndex: comp,
       pairIndex: 0,
       deckIndex,
-      occupied: rng() > 0.42,
+      occupied: false,
     });
   } else if (remainder === 3) {
     const comp = compartmentIndexOffset + fullCompartments;
@@ -996,7 +1016,7 @@ function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, rng, compart
       compartmentIndex: comp,
       pairIndex: 0,
       deckIndex,
-      occupied: rng() > 0.42,
+      occupied: false,
     });
     seats.push({
       id: `${car}-${String(upper1).padStart(2, "0")}-upper`,
@@ -1005,7 +1025,7 @@ function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, rng, compart
       compartmentIndex: comp,
       pairIndex: 0,
       deckIndex,
-      occupied: rng() > 0.42,
+      occupied: false,
     });
     seats.push({
       id: `${car}-${String(lower2).padStart(2, "0")}-lower`,
@@ -1014,7 +1034,7 @@ function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, rng, compart
       compartmentIndex: comp,
       pairIndex: 1,
       deckIndex,
-      occupied: rng() > 0.42,
+      occupied: false,
     });
   }
   return { seats, nextNum: seatNum };
@@ -1040,8 +1060,96 @@ function compartmentCountForCapacity(capacity) {
   return fc + (r === 2 || r === 3 ? 1 : 0);
 }
 
+/** Подсчёт мест на схеме по типам полок (для стыковки с суммами РЖД). */
+function countBerthsByKind(seats) {
+  const o = { lower: 0, upper: 0, side_lower: 0, side_upper: 0 };
+  seats.forEach((s) => {
+    const k = s.berth_kind;
+    if (o[k] !== undefined) o[k] += 1;
+  });
+  return o;
+}
+
+/**
+ * Если РЖД не отдали полные суммы по полкам, дополняем berth_totals числом мест на нашей схеме,
+ * чтобы занятость считалась согласованно с раскладкой.
+ */
+function mergedCarriageDetailForLayout(train, car, seats) {
+  const d = carriageDetailForTab(train, car);
+  if (!d) return null;
+  const layout = countBerthsByKind(seats);
+  const sum =
+    layout.lower + layout.upper + layout.side_lower + layout.side_upper;
+  const tt = d.berth_totals;
+  const ttSum = tt
+    ? (tt.lower || 0) + (tt.upper || 0) + (tt.side_lower || 0) + (tt.side_upper || 0)
+    : 0;
+  if (!tt || ttSum < sum) {
+    return { ...d, berth_totals: layout };
+  }
+  return d;
+}
+
+/** Детерминированная занятость по счётчикам РЖД для вагона; иначе — прежний rng. */
+function finalizeSeatOccupancy(seats, detail, rng) {
+  if (
+    detail &&
+    detail.berth_available &&
+    detail.berth_totals &&
+    applyOccupancyFromRzd(detail, seats)
+  ) {
+    return;
+  }
+  seats.forEach((s) => {
+    s.occupied = rng() > 0.42;
+  });
+}
+
+/**
+ * Распределяет занятые места по категориям полок так, чтобы число свободных совпало с РЖД.
+ * @returns true если применили данные РЖД
+ */
+function applyOccupancyFromRzd(detail, seats) {
+  const av = detail.berth_available;
+  const tt = detail.berth_totals;
+  if (!av || !tt) return false;
+  const num = (x) => {
+    const n = Number(x);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const kinds = ["lower", "upper", "side_lower", "side_upper"];
+  let any = false;
+  const occ = {};
+  for (const k of kinds) {
+    const t = num(tt[k]);
+    let f = num(av[k]);
+    if (t <= 0) {
+      occ[k] = 0;
+      continue;
+    }
+    any = true;
+    f = Math.min(f, t);
+    occ[k] = Math.max(0, t - f);
+  }
+  if (!any) return false;
+  const byKind = { lower: [], upper: [], side_lower: [], side_upper: [] };
+  seats.forEach((s) => {
+    const arr = byKind[s.berth_kind];
+    if (arr) arr.push(s);
+  });
+  for (const k of kinds) {
+    const list = byKind[k].sort((a, b) => parseSeatOrdinal(a.displayNum) - parseSeatOrdinal(b.displayNum));
+    let n = occ[k] ?? 0;
+    n = Math.min(n, list.length);
+    for (let i = 0; i < list.length; i += 1) {
+      list[i].occupied = i < n;
+    }
+  }
+  return true;
+}
+
 /** Классическая схема плацкарта 54 места: 9×4 в открытой части (1–36), боковые у окна (37–54). */
-function buildPlatzkart54Seats(car, rng) {
+function buildPlatzkart54Seats(car) {
   const seats = [];
   for (let comp = 0; comp < 9; comp += 1) {
     const base = comp * 8 + 1;
@@ -1056,7 +1164,7 @@ function buildPlatzkart54Seats(car, rng) {
         pairIndex: pairSlot,
         deckIndex: 0,
         zone: "open",
-        occupied: rng() > 0.42,
+        occupied: false,
       });
       seats.push({
         id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
@@ -1066,7 +1174,7 @@ function buildPlatzkart54Seats(car, rng) {
         pairIndex: pairSlot,
         deckIndex: 0,
         zone: "open",
-        occupied: rng() > 0.42,
+        occupied: false,
       });
     }
   }
@@ -1082,7 +1190,7 @@ function buildPlatzkart54Seats(car, rng) {
       pairIndex: 0,
       deckIndex: 0,
       zone: "side",
-      occupied: rng() > 0.42,
+      occupied: false,
     });
     seats.push({
       id: `${car}-${String(lowerNum).padStart(2, "0")}-side_lower`,
@@ -1092,7 +1200,7 @@ function buildPlatzkart54Seats(car, rng) {
       pairIndex: 0,
       deckIndex: 0,
       zone: "side",
-      occupied: rng() > 0.42,
+      occupied: false,
     });
   }
   return seats;
@@ -1115,7 +1223,8 @@ function buildSeatPickerModel(train) {
 
   rawList.forEach((car) => {
     const cls = carriageClassKey(car);
-    const capacity = carriageCapacityForClass(train, cls);
+    const fallbackCap = carriageCapacityForClass(train, cls);
+    const capacity = carriageCapacityFromRzd(train, car, cls, fallbackCap);
     let seats = [];
 
     if (cls === "sv") {
@@ -1129,7 +1238,7 @@ function buildSeatPickerModel(train) {
           compartmentIndex: comp,
           pairIndex: 0,
           deckIndex: 0,
-          occupied: rng() > 0.42,
+          occupied: false,
         });
         seatNum += 1;
         seats.push({
@@ -1139,33 +1248,37 @@ function buildSeatPickerModel(train) {
           compartmentIndex: comp,
           pairIndex: 0,
           deckIndex: 0,
-          occupied: rng() > 0.42,
+          occupied: false,
         });
         seatNum += 1;
       }
       seats = attachSeatPrices(train, car, cls, seats);
+      finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng);
       layouts.set(car, seats);
       return;
     }
 
     if (cls === "coupe" && train.coupe_double_deck && capacity >= 8) {
       const perDeck = Math.floor(capacity / 2);
-      const d1 = buildBerthSeatSpan(car, perDeck, 1, 0, rng, 0);
+      const d1 = buildBerthSeatSpan(car, perDeck, 1, 0, 0);
       const off = compartmentCountForCapacity(perDeck);
-      const d2 = buildBerthSeatSpan(car, perDeck, d1.nextNum, 1, rng, off);
+      const d2 = buildBerthSeatSpan(car, perDeck, d1.nextNum, 1, off);
       seats = attachSeatPrices(train, car, cls, [...d1.seats, ...d2.seats]);
+      finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng);
       layouts.set(car, seats);
       return;
     }
 
     if (cls === "platzkart" && capacity === 54) {
-      seats = attachSeatPrices(train, car, cls, buildPlatzkart54Seats(car, rng));
+      seats = attachSeatPrices(train, car, cls, buildPlatzkart54Seats(car));
+      finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng);
       layouts.set(car, seats);
       return;
     }
 
-    const span = buildBerthSeatSpan(car, capacity, 1, 0, rng, 0);
+    const span = buildBerthSeatSpan(car, capacity, 1, 0, 0);
     seats = attachSeatPrices(train, car, cls, span.seats);
+    finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng);
     layouts.set(car, seats);
   });
   demoSeatLayouts = layouts;

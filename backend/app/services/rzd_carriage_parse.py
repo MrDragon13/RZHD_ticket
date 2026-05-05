@@ -50,24 +50,96 @@ def seat_details_from_car_row_nested(row: dict) -> SeatDetails | None:
             str(s.get("label") or s.get("typeLoc") or s.get("title") or s.get("name") or ""),
         )
         any_nonzero = True
-        if "бок" in label:
-            if "ниж" in label or label.endswith(" н"):
-                acc.side_lower += free
-            elif "верх" in label or "врх" in label:
-                acc.side_upper += free
-            else:
-                acc.side_lower += free // 2
-                acc.side_upper += free - free // 2
-        elif "ниж" in label:
-            acc.lower += free
-        elif "верх" in label or "врх" in label:
-            acc.upper += free
-        else:
-            acc.lower += (free + 1) // 2
-            acc.upper += free // 2
+        _add_free_by_label(acc, label, free)
     if not any_nonzero:
         return None
     return acc
+
+
+def _seat_total_from_entry(s: dict) -> int | None:
+    """Всего мест в категории тарифа (ёмкость), если РЖД передала счётчик или список мест."""
+
+    n = _int_any(
+        s.get("placeCount"),
+        s.get("placesTotal"),
+        s.get("total"),
+        s.get("capacity"),
+        s.get("seatCount"),
+    )
+    if n is not None and n > 0:
+        return min(n, 200)
+    places = s.get("places")
+    if isinstance(places, list) and places:
+        return len(places)
+    if isinstance(places, str) and places.strip():
+        return len(re.findall(r"\d+", places))
+    return None
+
+
+def _add_free_by_label(acc: SeatDetails, label: str, free: int) -> None:
+    if "бок" in label:
+        if "ниж" in label or label.endswith(" н"):
+            acc.side_lower += free
+        elif "верх" in label or "врх" in label:
+            acc.side_upper += free
+        else:
+            acc.side_lower += free // 2
+            acc.side_upper += free - free // 2
+    elif "ниж" in label:
+        acc.lower += free
+    elif "верх" in label or "врх" in label:
+        acc.upper += free
+    else:
+        acc.lower += (free + 1) // 2
+        acc.upper += free // 2
+
+
+def _add_total_by_label(acc: SeatDetails, label: str, total: int) -> None:
+    if "бок" in label:
+        if "ниж" in label or label.endswith(" н"):
+            acc.side_lower += total
+        elif "верх" in label or "врх" in label:
+            acc.side_upper += total
+        else:
+            acc.side_lower += total // 2
+            acc.side_upper += total - total // 2
+    elif "ниж" in label:
+        acc.lower += total
+    elif "верх" in label or "врх" in label:
+        acc.upper += total
+    else:
+        acc.lower += (total + 1) // 2
+        acc.upper += total // 2
+
+
+def seat_details_totals_from_car_row_nested(row: dict) -> SeatDetails | None:
+    """Суммарная вместимость по категориям полок из seats[] (placeCount / список places)."""
+
+    seats = row.get("seats")
+    if not isinstance(seats, list) or not seats:
+        return None
+    acc = SeatDetails()
+    any_nonzero = False
+    for s in seats:
+        if not isinstance(s, dict):
+            continue
+        total = _seat_total_from_entry(s)
+        if total is None or total <= 0:
+            continue
+        label = _norm(
+            str(s.get("label") or s.get("typeLoc") or s.get("title") or s.get("name") or ""),
+        )
+        any_nonzero = True
+        _add_total_by_label(acc, label, total)
+    if not any_nonzero:
+        return None
+    return acc
+
+
+def seat_details_available_from_car_row_nested(row: dict) -> SeatDetails | None:
+    """Свободные места по категориям для одного вагона (та же логика, что seat_details_from_car_row_nested)."""
+
+    return seat_details_from_car_row_nested(row)
 
 
 def seat_details_from_car_row_flat(row: dict) -> SeatDetails | None:
