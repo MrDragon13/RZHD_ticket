@@ -124,11 +124,12 @@ docker compose up --build
 
 После запуска:
 
-- frontend: <http://localhost:8080>
+- frontend: <http://localhost>
+- backend API через frontend nginx: <http://localhost/api/health>
 - backend API: <http://localhost:8000>
 - документация API: <http://localhost:8000/docs>
 
-Для VDS обычно достаточно открыть порт `8080` для интерфейса и `8000` для API либо поставить Caddy/Nginx как внешний reverse proxy.
+Для VDS обычно достаточно открыть порт `80` для интерфейса. Frontend-контейнер проксирует `/api/*` в backend-контейнер, поэтому браузеру не нужен прямой доступ к порту `8000`.
 
 ## Локальный запуск backend без Docker
 
