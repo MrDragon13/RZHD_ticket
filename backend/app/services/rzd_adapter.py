@@ -68,8 +68,8 @@ class RzdDataAdapter:
         route_stops_enrich = _env_truthy_default_on("RZD_ROUTE_STOPS_ENRICH")
         route_stops_max = int(os.getenv("RZD_ROUTE_STOPS_MAX_TRAINS", "12") or "12")
         route_stops_max = max(1, min(route_stops_max, 40))
-        max_conc = int(os.getenv("RZD_CARRIAGE_CONCURRENCY", "4") or "4")
-        max_conc = max(1, min(max_conc, 16))
+        carriage_max = int(os.getenv("RZD_CARRIAGE_ENRICH_MAX_TRAINS", "15") or "15")
+        carriage_max = max(1, min(carriage_max, 40))
 
         async with RzdFetcher() as fetcher:
             trains_iter = await fetcher.trains(origin, destination, TimeRange(day_start, day_end))
@@ -96,6 +96,7 @@ class RzdDataAdapter:
                 if t.available_seats.platzkart + t.available_seats.coupe + t.available_seats.sv > 0
             ]
             route_idx = eligible_idx[:route_stops_max] if route_stops_enrich else []
+            carriage_idx = eligible_idx[:carriage_max] if enrich else []
 
             carriage_by_index: dict[int, dict] = {}
             basic_stops_by_index: dict[int, list[str]] = {}
@@ -103,9 +104,8 @@ class RzdDataAdapter:
                 src_code = await fetcher.get_city_code(origin)
                 dst_code = await fetcher.get_city_code(destination)
 
-                sem_c = asyncio.Semaphore(max_conc)
-                # basicRoute не держит список остановок в слое 5827 — запрашиваем отдельно.
-                # Параллельный шторм к pass.rzd.ru провоцирует Captcha → паузы 120 с в aiorzd.
+                sem_c = asyncio.Semaphore(1)
+                # Слой 5764 при параллели часто даёт Captcha → паузе 120 с в aiorzd.
                 sem_r = asyncio.Semaphore(1)
 
                 async def carriage_one(idx: int) -> None:
@@ -144,9 +144,8 @@ class RzdDataAdapter:
                             basic_stops_by_index[idx] = route_names
 
                 tasks = []
-                for i in eligible_idx:
-                    if enrich:
-                        tasks.append(carriage_one(i))
+                for i in carriage_idx:
+                    tasks.append(carriage_one(i))
                 for i in route_idx:
                     tasks.append(route_stops_one(i))
 
