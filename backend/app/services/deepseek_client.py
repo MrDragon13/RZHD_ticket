@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date
 from typing import Any
 
 import httpx
@@ -20,6 +21,9 @@ class DeepSeekClient:
         self.base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
         self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
         self.timeout = float(os.getenv("DEEPSEEK_TIMEOUT_SECONDS", "20"))
+        # Для защиты удобно фиксировать демо-дату: тогда фраза "6 мая" всегда
+        # превращается в ожидаемый 2026-05-06, а не зависит от даты на VDS.
+        self.current_date = os.getenv("PATH_CURRENT_DATE", date.today().isoformat())
 
     @property
     def enabled(self) -> bool:
@@ -94,12 +98,15 @@ class DeepSeekClient:
             "Ты смысловой модуль билетного терминала РЖД «Путь». "
             "Верни строго JSON без markdown. Не выдумывай цены и номера поездов. "
             "Если параметр неизвестен, используй null. "
+            f"Текущая дата для относительных и неполных дат: {self.current_date}. "
+            "Если пользователь не назвал год, выбирай ближайшую будущую дату относительно текущей даты. "
             "preferences заполняй короткими английскими тегами: sleep, comfort, cheap, speed, direct, child, luggage. "
             "Для фразы про начало рабочего дня ставь arrival_time_window 07:00-09:00."
         )
         user_prompt = json.dumps(
             {
                 "language": language,
+                "current_date": self.current_date,
                 "origin_hint": origin_hint,
                 "user_text": text,
                 "required_schema": {
