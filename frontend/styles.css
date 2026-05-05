@@ -558,6 +558,12 @@ button {
   background: linear-gradient(135deg, var(--cyan), var(--green));
 }
 
+.primary-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+}
+
 .ghost-button {
   padding: 0 22px;
   color: var(--cyan);
@@ -829,6 +835,11 @@ button {
 .checkout-step-done {
   border-color: rgba(0, 255, 156, 0.45);
   color: var(--green);
+}
+
+.checkout-step-active {
+  border-color: rgba(0, 229, 255, 0.55);
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.18);
 }
 
 .ticket-panel {

@@ -20,6 +20,10 @@ const i18n = {
     fact: "AI Fact",
     options: "Рекомендованные поезда",
     checkout: "Оформить демо-билет",
+    checkoutBusy: "Оформление…",
+    checkoutFinalizing: "Отправка на сервер и получение билета…",
+    checkoutError:
+      "Не удалось оформить демо-билет. Проверьте соединение и нажмите кнопку ещё раз.",
     demoFlow: ["Проверка маршрута", "Резервирование демонстрационного места", "Формирование QR-билета", "Готово"],
     demoTicket: "ДЕМО-БИЛЕТ",
     restart: "Начать заново",
@@ -34,6 +38,7 @@ const i18n = {
       searching: ["Покажи купе", "А есть быстрее?", "Самый дешевый", "Можно с животными?", "Женское купе"],
       results: ["Почему этот поезд?", "Покажи нижние места", "Есть ресторан?", "Выбрать лучший", "Начать заново"],
       checkout: ["Повтори билет", "Начать заново"],
+      ticket: ["Повтори билет", "Начать заново"],
     },
   },
   en: {
@@ -50,6 +55,9 @@ const i18n = {
     fact: "AI Fact",
     options: "Recommended trains",
     checkout: "Create demo ticket",
+    checkoutBusy: "Processing…",
+    checkoutFinalizing: "Sending request and receiving your ticket…",
+    checkoutError: "Could not issue the demo ticket. Check your connection and tap the button again.",
     demoFlow: ["Checking route", "Reserving demo seat", "Generating QR ticket", "Done"],
     demoTicket: "DEMO TICKET",
     restart: "Start over",
@@ -64,6 +72,7 @@ const i18n = {
       searching: ["Show coupe", "Any faster?", "Lowest price", "Pets allowed?", "Female compartment"],
       results: ["Why this train?", "Show lower berths", "Restaurant car?", "Choose best", "Start over"],
       checkout: ["Repeat ticket", "Start over"],
+      ticket: ["Repeat ticket", "Start over"],
     },
   },
 };
@@ -171,6 +180,7 @@ let trains = [];
 let recommendations = [];
 let selectedTrain = null;
 let demoTicket = null;
+let checkoutInProgress = false;
 let dialogMessages = [];
 let uiStage = "initial";
 let speechQueue = [];
@@ -196,6 +206,7 @@ const routePulse = document.querySelector("#route-pulse");
 const dialogHistory = document.querySelector("#dialog-history");
 const newSessionButton = document.querySelector("#new-session-button");
 const routeState = document.querySelector("#route-state");
+const checkoutButton = document.querySelector("#checkout-button");
 
 document.querySelectorAll("[data-language]").forEach((button) => {
   button.addEventListener("click", () => setLanguage(button.dataset.language));
@@ -205,6 +216,7 @@ orbButton.addEventListener("click", startVoiceRecognition);
 orbButton.classList.add("orb-idle");
 document.querySelector("#restart-button").addEventListener("click", () => resetScenario(true));
 newSessionButton.addEventListener("click", () => resetScenario(true));
+checkoutButton.addEventListener("click", () => createTicket());
 userInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     handleUserText(userInput.value);
@@ -225,7 +237,12 @@ document.querySelector("#chips").addEventListener("click", (event) => {
     return;
   }
   if (action === "repeat-ticket" && demoTicket) {
-    enqueueSpeech(language === "ru" ? "Демо-билет уже готов на экране." : "The demo ticket is already on screen.");
+    if (uiStage === "ticket") {
+      ticketPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+      enqueueSpeech(language === "ru" ? "Билет на экране слева." : "Your ticket is on the left screen.");
+    } else {
+      enqueueSpeech(language === "ru" ? "Демо-билет уже готов на экране." : "The demo ticket is already on screen.");
+    }
     return;
   }
   handleUserText(event.target.textContent);
@@ -277,7 +294,7 @@ function setStage(nextStage) {
   if (nextStage === "initial") setOrbMode("idle");
   if (nextStage === "searching") setOrbMode("thinking");
   if (nextStage === "results") setOrbMode("speaking");
-  if (nextStage === "checkout") setOrbMode("idle");
+  if (nextStage === "checkout" || nextStage === "ticket") setOrbMode("idle");
 }
 
 async function handleUserText(text) {
@@ -501,9 +518,10 @@ function renderAmenityBadges(amenities = []) {
 function selectTrain(train) {
   selectedTrain = train;
   checkoutPanel.classList.remove("hidden");
-  const button = document.querySelector("#checkout-button");
-  button.textContent = i18n[language].checkout;
-  button.onclick = createTicket;
+  if (!checkoutInProgress) {
+    checkoutButton.textContent = i18n[language].checkout;
+    checkoutButton.disabled = false;
+  }
   const phrase =
     language === "ru"
       ? `Выбран поезд ${train.train_number}. Доступны нижние места: ${train.seat_details?.lower ?? 0}.`
@@ -514,23 +532,45 @@ function selectTrain(train) {
 }
 
 async function createTicket() {
+  if (checkoutInProgress || !selectedTrain) return;
+  checkoutInProgress = true;
+  checkoutButton.disabled = true;
+  checkoutButton.textContent = i18n[language].checkoutBusy;
   const steps = document.querySelector("#checkout-steps");
   steps.innerHTML = "";
-  for (const step of i18n[language].demoFlow) {
-    const item = document.createElement("div");
-    item.className = "checkout-step";
-    item.textContent = step;
-    steps.append(item);
-    await wait(260);
-    item.classList.add("checkout-step-done");
+  try {
+    for (const step of i18n[language].demoFlow) {
+      const item = document.createElement("div");
+      item.className = "checkout-step";
+      item.textContent = step;
+      steps.append(item);
+      await wait(260);
+      item.classList.add("checkout-step-done");
+    }
+    const finalizing = document.createElement("div");
+    finalizing.className = "checkout-step checkout-step-active";
+    finalizing.textContent = i18n[language].checkoutFinalizing;
+    steps.append(finalizing);
+    demoTicket = await postJson("/api/checkout/demo", { language, train: selectedTrain });
+    finalizing.classList.add("checkout-step-done");
+    finalizing.classList.remove("checkout-step-active");
+    checkoutPanel.classList.add("hidden");
+    steps.innerHTML = "";
+    renderTicket();
+  } catch {
+    assistantSay(i18n[language].checkoutError);
+    steps.innerHTML = "";
+  } finally {
+    checkoutInProgress = false;
+    checkoutButton.disabled = false;
+    checkoutButton.textContent = i18n[language].checkout;
   }
-  demoTicket = await postJson("/api/checkout/demo", { language, train: selectedTrain });
-  renderTicket();
 }
 
 function renderTicket() {
   mapContent.classList.add("hidden");
   ticketPanel.classList.remove("hidden");
+  setStage("ticket");
   document.querySelector("#ticket-title").textContent = i18n[language].demoTicket;
   const amenities = selectedTrain ? renderAmenityBadges(selectedTrain.amenities) : "";
   document.querySelector("#ticket-body").innerHTML = `
@@ -547,6 +587,7 @@ function renderTicket() {
   `;
   document.querySelector("#qr-payload").textContent = demoTicket.ticket_id;
   assistantSay(language === "ru" ? "Демонстрационный билет готов." : "Your demo ticket is ready.");
+  ticketPanel.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function startVoiceRecognition() {
@@ -619,7 +660,7 @@ function enqueueSpeech(text) {
 function speakNext() {
   if (!speechQueue.length) {
     isSpeaking = false;
-    if (uiStage === "initial" || uiStage === "checkout") setOrbMode("idle");
+    if (uiStage === "initial" || uiStage === "checkout" || uiStage === "ticket") setOrbMode("idle");
     return;
   }
   isSpeaking = true;
@@ -715,6 +756,7 @@ function resetScenario(announce = true) {
   recommendations = [];
   selectedTrain = null;
   demoTicket = null;
+  checkoutInProgress = false;
   dialogMessages = [];
   speechQueue = [];
   isSpeaking = false;
@@ -723,6 +765,7 @@ function resetScenario(announce = true) {
   transcript.textContent = "";
   assistantText.textContent = i18n[language].assistantReady;
   [intentPanel, trainsPanel, checkoutPanel, ticketPanel].forEach((panel) => panel.classList.add("hidden"));
+  document.querySelector("#checkout-steps").innerHTML = "";
   mapContent.classList.remove("hidden");
   document.querySelector("#route-meta").textContent =
     language === "ru" ? "Москва -> Казань" : "Moscow -> Kazan";
