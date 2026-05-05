@@ -35,6 +35,7 @@ const i18n = {
     seatPickerSelected: "Выбрано мест",
     seatPickerTotal: "Сумма",
     seatPickerConfirm: "Подтвердить выбор",
+    seatPickerCarriage: "Вагон",
     seatPickerZoneOpen: "Открытая часть вагона (места 1–36)",
     seatPickerZoneSide: "Боковые места у окна (места 37–54)",
     selectedTrainHeading: "Выбранный поезд",
@@ -103,6 +104,7 @@ const i18n = {
     seatPickerSelected: "Seats selected",
     seatPickerTotal: "Total",
     seatPickerConfirm: "Confirm selection",
+    seatPickerCarriage: "Car",
     seatPickerZoneOpen: "Open section (seats 1–36)",
     seatPickerZoneSide: "Side berths by the window (seats 37–54)",
     selectedTrainHeading: "Selected train",
@@ -268,10 +270,47 @@ function carriageClassLabel(car) {
 
 function mapTypeLabelToCarClass(typeLabel) {
   const t = String(typeLabel || "").toLowerCase();
-  if (t.includes("св") || t.includes("люкс")) return "sv";
-  if (t.includes("купе") || t.includes("сидяч")) return "coupe";
+  // SV и люкс проверяем до «купе»: у РЖД часто бывает «Купе СВ» / «спальный вагон».
+  if (
+    t.includes("люкс") ||
+    t.includes("спальный") ||
+    (t.includes("св") && !t.includes("плац"))
+  ) {
+    return "sv";
+  }
   if (t.includes("плац") || t.includes("общ")) return "platzkart";
+  if (t.includes("куп") || t.includes("сидяч")) return "coupe";
   return null;
+}
+
+/** Боковые полки почти всегда означают плацкарт (даже если в typeLoc нет слова «плац»). */
+function inferCarClassFromBerthTotals(detail) {
+  const tt = detail?.berth_totals;
+  if (!tt) return null;
+  const side = (tt.side_lower || 0) + (tt.side_upper || 0);
+  if (side >= 4) return "platzkart";
+  return null;
+}
+
+function carriageDetailLooksLikeDoubleDeck(detail) {
+  const t = String(detail?.type_label || "").toLowerCase();
+  return (
+    t.includes("двухэтаж") ||
+    t.includes("двухъэтаж") ||
+    t.includes("2 этаж") ||
+    t.includes("2-этаж") ||
+    t.includes("двух ярус")
+  );
+}
+
+/** Совпадает с логикой buildSeatPickerModel для двухэтажного купе. */
+function carriageIsDoubleDeckCoupeLayout(train, car) {
+  const cls = carriageClassKey(car);
+  if (cls !== "coupe") return false;
+  const fallbackCap = carriageCapacityForClass(train, cls);
+  const capacity = carriageCapacityFromRzd(train, car, cls, fallbackCap);
+  const det = carriageDetailForTab(train, car);
+  return capacity >= 8 && (train.coupe_double_deck || carriageDetailLooksLikeDoubleDeck(det));
 }
 
 function normalizeCarriageCodeKey(code) {
@@ -322,6 +361,8 @@ function carriageClassFromTrain(train, carCode) {
   const det = carriageDetailForTab(train, carCode);
   const mapped = det && mapTypeLabelToCarClass(det.type_label);
   if (mapped) return mapped;
+  const fromBerths = det && inferCarClassFromBerthTotals(det);
+  if (fromBerths) return fromBerths;
   return demoCarClassForCarCode(carCode, train);
 }
 
@@ -1353,7 +1394,7 @@ function buildSeatPickerModel(train) {
       return;
     }
 
-    if (cls === "coupe" && train.coupe_double_deck && capacity >= 8) {
+    if (carriageIsDoubleDeckCoupeLayout(train, car)) {
       const perDeck = Math.floor(capacity / 2);
       const d1 = buildBerthSeatSpan(car, perDeck, 1, 0, 0);
       const off = compartmentCountForCapacity(perDeck);
@@ -1590,7 +1631,7 @@ function renderSeatGrid() {
     grid.append(secSide);
     return;
   }
-  const isDoubleCoupe = cls === "coupe" && selectedTrain?.coupe_double_deck;
+  const isDoubleCoupe = carriageIsDoubleDeckCoupeLayout(selectedTrain, car);
   if (isDoubleCoupe) {
     const d0 = compIndices.filter((i) => (byCompartment.get(i) || []).some((s) => s.deckIndex === 0));
     const d1 = compIndices.filter((i) => (byCompartment.get(i) || []).some((s) => s.deckIndex === 1));
