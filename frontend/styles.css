@@ -1194,6 +1194,12 @@ button {
   min-width: 76px;
 }
 
+/* В горизонтальном СВ не применяем order ниж/верх — порядок задаётся номерами мест в разметке. */
+.compartment-cube--sv .seat-cell-upper,
+.compartment-cube--sv .seat-cell-lower {
+  order: 0;
+}
+
 .seat-grid-class-line {
   flex: 1 1 100%;
   margin: 0 0 4px;
