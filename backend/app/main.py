@@ -93,7 +93,7 @@ async def dialog(request: DialogRequest) -> DialogResponse:
     else:
         current_state.pop("pending_fields", None)
         action = "search_tickets"
-        assistant_text = payload["assistant_text"]
+        assistant_text = _ready_to_search_text(request.language, current_state)
     return DialogResponse(
         assistant_text=assistant_text,
         action=action,
@@ -133,6 +133,17 @@ def _clarification_text(language: str, missing_fields: list[str]) -> str:
     if missing == {"origin", "destination"}:
         return "Уточните, пожалуйста, город отправления и город назначения."
     return "Уточните, пожалуйста, город отправления, город назначения и дату поездки."
+
+
+def _ready_to_search_text(language: str, state: dict) -> str:
+    """Финальная реплика перед поиском, когда все обязательные поля уже собраны."""
+
+    origin = state.get("origin")
+    destination = state.get("destination")
+    date = state.get("date")
+    if language == "en":
+        return f"Thank you. I have the route: {origin} to {destination}, {date}. Searching suitable trains."
+    return f"Спасибо. Маршрут собран: {origin} -> {destination}, {date}. Подбираю подходящие поезда."
 
 
 @app.post("/api/tickets/search", response_model=TicketSearchResponse)

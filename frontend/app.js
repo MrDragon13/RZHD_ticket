@@ -313,7 +313,7 @@ function normalizeIntent(rawState, assistant_text) {
   return {
     intent: rawState.intent || "search_ticket",
     language,
-    origin: rawState.origin || (language === "ru" ? "Москва" : "Moscow"),
+    origin: rawState.origin || null,
     destination: rawState.destination || null,
     date: rawState.date || null,
     departure_time_window: rawState.departure_time_window || null,
@@ -689,7 +689,15 @@ function escapeHtml(value) {
 
 function runLocalDemoFallback() {
   assistantSay(i18n[language].fallbackError);
-  intent = normalizeIntent({}, i18n[language].fallbackError);
+  intent = normalizeIntent(
+    {
+      origin: language === "ru" ? "Москва" : "Moscow",
+      destination: language === "ru" ? "Казань" : "Kazan",
+      date: "2026-05-06",
+      arrival_time_window: { start: "07:00", end: "09:00" },
+    },
+    i18n[language].fallbackError,
+  );
   renderIntent(intent);
   trains = [];
   renderRoute(
