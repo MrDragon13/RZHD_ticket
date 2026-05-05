@@ -10,6 +10,7 @@ from app.models import PriceInfo, SeatBerthPrices, SeatDetails, SeatInfo, TrainO
 from app.services.rzd_carriage_parse import (
     aggregate_from_carriages_payload,
     berth_prices_from_seat_entries,
+    collect_station_like_strings,
     extract_route_distance_km,
     extract_train_stops,
     merge_berth_prices,
@@ -323,6 +324,33 @@ def apply_carriage_layer_payload(train: TrainOption, payload: dict | None) -> Tr
     return train.model_copy(update=upd)
 
 
+def _merge_stop_lists_from_carriage_layer(primary: list[str], carriage_payload: dict | None) -> list[str]:
+    """Дополняет stops из слоя вагонов (5764), если слой поиска не содержит списка остановок."""
+
+    if carriage_payload is None or not isinstance(carriage_payload, dict):
+        return primary[:80]
+    if len(primary) >= 2:
+        return primary[:80]
+    extra = extract_train_stops(carriage_payload)
+    if len(extra) < 2:
+        extra = collect_station_like_strings(carriage_payload)
+    merged: list[str] = []
+    seen: set[str] = set()
+    for seq in (primary, extra):
+        for s in seq:
+            n = str(s).strip()
+            if len(n) < 2:
+                continue
+            key = _normalize_rzd_text(n)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(n)
+            if len(merged) >= 80:
+                break
+    return merged
+
+
 def train_option_from_aiorzd(
     train_obj,
     index: int,
@@ -366,14 +394,18 @@ def train_option_from_aiorzd(
         route_km = alt_km
 
     stops = extract_train_stops(content if isinstance(content, dict) else {})
+    stops = _merge_stop_lists_from_carriage_layer(stops, carriage_payload)
 
     train_number = str(getattr(train_obj, "number", "") or content.get("number") or "")
 
     if len(stops) < 2:
         logging.info(
-            "train_search stops sparse train=%s keys_sample=%s",
+            "train_search stops sparse train=%s search_keys=%s carriage_keys=%s",
             train_number,
             sorted(list(content.keys()))[:40] if isinstance(content, dict) else [],
+            sorted(list(carriage_payload.keys()))[:40]
+            if isinstance(carriage_payload, dict)
+            else [],
         )
 
     features: list[str] = []

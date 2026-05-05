@@ -115,6 +115,8 @@ async def resolve_route_segment(
     search_destination: str,
     departure_station: str,
     arrival_station: str,
+    route_terminal_from: str | None = None,
+    route_terminal_to: str | None = None,
     train_number: str,
     train_id: str,
     deepseek: DeepSeekClient | None,
@@ -123,9 +125,79 @@ async def resolve_route_segment(
     raw = [str(s).strip() for s in stops if str(s).strip()]
     n = len(raw)
 
+    r0 = str(route_terminal_from or "").strip()
+    r1 = str(route_terminal_to or "").strip()
     steps.append(f"train_id={train_id} number={train_number} raw_stop_count={n}")
+    steps.append(f"route_terminals={r0!r}->{r1!r}")
+
+    def _try_segment_from_stops(
+        stop_list: list[str],
+        *,
+        tag: str,
+    ) -> RouteSegmentResult | None:
+        """Возвращает результат при успешном совпадении индексов, иначе None."""
+
+        lst = [str(s).strip() for s in stop_list if str(s).strip()]
+        m = len(lst)
+        if m < 2:
+            return None
+        o_ = search_origin.strip()
+        d_ = search_destination.strip()
+        i0 = next((i for i, name in enumerate(lst) if station_matches(name, o_)), -1)
+        i1 = next((i for i, name in enumerate(lst) if station_matches(name, d_)), -1)
+        if i0 < 0:
+            i0 = next(
+                (i for i, name in enumerate(lst) if station_matches(name, departure_station)),
+                -1,
+            )
+        if i1 < 0:
+            i1 = next(
+                (i for i, name in enumerate(lst) if station_matches(name, arrival_station)),
+                -1,
+            )
+        steps.append(f"{tag} i_from={i0} i_to={i1}")
+        if i0 >= 0 and i1 >= 0 and i0 != i1:
+            inter = _segment_between_indices(lst, i0, i1)
+            idx_end = i1 if i0 < i1 else i0
+            frac = _fraction_for_indices(m, idx_end)
+            steps.append(
+                f"{tag}_ok intermediate_count={len(inter)} fraction={frac} m_stops={m}"
+            )
+            logging.info("route_segment %s", " | ".join(steps))
+            return RouteSegmentResult(
+                intermediate_stops=inter[:40],
+                endpoint_fraction=frac,
+                origin_index=i0,
+                destination_index=i1,
+                method=tag,
+                debug_steps=steps,
+            )
+        return None
+
     if n <= 1:
-        steps.append("abort: fewer than 2 stops in list")
+        steps.append("few_or_no_stops_in_payload")
+
+        if deepseek is not None and deepseek.enabled:
+            try:
+                synth = await _llm_synthesize_route_stops(
+                    train_number=train_number,
+                    user_origin=search_origin.strip(),
+                    user_dest=search_destination.strip(),
+                    dep_board=departure_station.strip(),
+                    arr_board=arrival_station.strip(),
+                    route_from=r0,
+                    route_to=r1,
+                    deepseek=deepseek,
+                )
+                steps.append(f"llm_synth_stop_count={len(synth)}")
+                raw = synth
+                n = len(raw)
+            except Exception:
+                logging.exception("route_segment llm synthesize failed train_id=%s", train_id)
+                steps.append("llm_synth_exception")
+
+    if n <= 1:
+        steps.append("abort: fewer than 2 stops after synth")
         logging.info("route_segment %s", " | ".join(steps))
         return RouteSegmentResult(method="empty", debug_steps=steps)
 
@@ -136,31 +208,9 @@ async def resolve_route_segment(
     preview = raw[:12]
     steps.append(f"stops_preview={preview}{'...' if n > 12 else ''}")
 
-    i_from = next((i for i, name in enumerate(raw) if station_matches(name, o)), -1)
-    i_to = next((i for i, name in enumerate(raw) if station_matches(name, d)), -1)
-    steps.append(f"heuristic_user i_from={i_from} i_to={i_to}")
-
-    if i_from < 0:
-        i_from = next((i for i, name in enumerate(raw) if station_matches(name, departure_station)), -1)
-        steps.append(f"heuristic_dep_station i_from={i_from}")
-    if i_to < 0:
-        i_to = next((i for i, name in enumerate(raw) if station_matches(name, arrival_station)), -1)
-        steps.append(f"heuristic_arr_station i_to={i_to}")
-
-    if i_from >= 0 and i_to >= 0 and i_from != i_to:
-        intermediate = _segment_between_indices(raw, i_from, i_to)
-        idx_end = i_to if i_from < i_to else i_from
-        frac = _fraction_for_indices(n, idx_end)
-        steps.append(f"heuristic_ok intermediate_count={len(intermediate)} fraction={frac}")
-        logging.info("route_segment %s", " | ".join(steps))
-        return RouteSegmentResult(
-            intermediate_stops=intermediate[:40],
-            endpoint_fraction=frac,
-            origin_index=i_from,
-            destination_index=i_to,
-            method="heuristic",
-            debug_steps=steps,
-        )
+    heuristic_hit = _try_segment_from_stops(raw, tag="heuristic")
+    if heuristic_hit is not None:
+        return heuristic_hit
 
     steps.append("heuristic_miss: trying DeepSeek index match")
 
@@ -202,6 +252,28 @@ async def resolve_route_segment(
         logging.exception("route_segment LLM failed train_id=%s", train_id)
         steps.append("llm_exception")
 
+    if deepseek is not None and deepseek.enabled:
+        steps.append("final_attempt: llm_synthesize_stops_after_failed_match")
+        try:
+            synth2 = await _llm_synthesize_route_stops(
+                train_number=train_number,
+                user_origin=o,
+                user_dest=d,
+                dep_board=departure_station.strip(),
+                arr_board=arrival_station.strip(),
+                route_from=r0,
+                route_to=r1,
+                deepseek=deepseek,
+            )
+            steps.append(f"llm_synth2_stop_count={len(synth2)}")
+            synth_hit = _try_segment_from_stops(synth2, tag="llm_synth_retry")
+            if synth_hit is not None:
+                return synth_hit
+            steps.append("llm_synth2_no_index_match")
+        except Exception:
+            logging.exception("route_segment llm synth2 failed train_id=%s", train_id)
+            steps.append("llm_synth2_exception")
+
     logging.warning("route_segment %s", " | ".join(steps))
     return RouteSegmentResult(method="failed", debug_steps=steps)
 
@@ -235,3 +307,81 @@ async def _llm_resolve_indices(
     )
     data = await deepseek.chat_json(system, user)
     return data if isinstance(data, dict) else {}
+
+
+def _stops_list_from_llm_payload(data: dict[str, Any]) -> list[str]:
+    """Достаёт упорядоченный список названий станций из JSON ответа LLM."""
+
+    for key in ("stops", "route_stops", "stations", "route"):
+        val = data.get(key)
+        if not isinstance(val, list):
+            continue
+        out: list[str] = []
+        for item in val:
+            if isinstance(item, str):
+                t = item.strip()
+                if t:
+                    out.append(t[:120])
+            elif isinstance(item, dict):
+                name = item.get("name") or item.get("station") or item.get("title")
+                if name is not None:
+                    t = str(name).strip()
+                    if t:
+                        out.append(t[:120])
+        if len(out) >= 2:
+            # Убираем только подряд идущие дубликаты, порядок сохраняем.
+            deduped: list[str] = []
+            prev_cf: str | None = None
+            for s in out:
+                cf = _norm(s)
+                if cf == prev_cf:
+                    continue
+                prev_cf = cf
+                deduped.append(s)
+            if len(deduped) >= 2:
+                return deduped[:80]
+    return []
+
+
+async def _llm_synthesize_route_stops(
+    *,
+    train_number: str,
+    user_origin: str,
+    user_dest: str,
+    dep_board: str,
+    arr_board: str,
+    route_from: str,
+    route_to: str,
+    deepseek: DeepSeekClient,
+) -> list[str]:
+    """Строит правдоподобный список остановок, если в ответе РЖД нет полного маршрута."""
+
+    system = (
+        "Ты помощник железнодорожного терминала РЖД. "
+        "Нужен упорядоченный список остановок поезда по ходу следования для отображения на карте. "
+        "Верни строго JSON без markdown и без комментариев: "
+        '{"stops": ["Название станции 1", "Название станции 2", ...]}. '
+        "Ключ только stops — массив строк, от начального пункта маршрута поезда до конечного, по порядку. "
+        "Включи станции посадки и высадки пассажира, если они на этом пути. "
+        "Промежуточные — типичные крупные узлы на железной дороге между городами (Россия). "
+        "Не повторяй подряд одинаковые названия. От 4 до 24 элементов. "
+        "Названия — как в расписании (можно с уточнением вокзала: «Москва Казанская»). "
+        "Не выдумывай вымышленные города; используй реальные узлы на типичном пути следования."
+    )
+    user = "\n".join(
+        [
+            f"Номер поезда (если известен): {train_number}",
+            f"Маршрут поезда (терминусы, если известны): {route_from or 'неизвестно'} → {route_to or 'неизвестно'}",
+            f"Пассажир запрашивает: {user_origin} → {user_dest}",
+            f"Станции из билета/поиска РЖД (посадка / высадка): {dep_board} → {arr_board}",
+            "Составь список остановок по порядку следования.",
+        ]
+    )
+    data = await deepseek.chat_json(system, user)
+    stops = _stops_list_from_llm_payload(data)
+    if len(stops) < 2:
+        logging.warning(
+            "route_segment llm synthesize returned too few stops keys=%s",
+            list(data.keys()) if isinstance(data, dict) else type(data),
+        )
+    return stops

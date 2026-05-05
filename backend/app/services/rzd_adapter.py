@@ -146,6 +146,8 @@ class RzdDataAdapter:
                 search_destination=destination,
                 departure_station=t.departure_station,
                 arrival_station=t.arrival_station,
+                route_terminal_from=t.origin,
+                route_terminal_to=t.destination,
                 train_number=t.train_number,
                 train_id=t.id,
                 deepseek=self._deepseek,

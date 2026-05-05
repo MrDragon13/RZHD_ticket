@@ -408,8 +408,85 @@ def extract_route_distance_km(content: dict) -> int | None:
     return None
 
 
-def extract_train_stops(content: dict) -> list[str]:
-    """Имена остановок из разных вариантов JSON слоя поиска поездов РЖД."""
+_STATION_NAME_KEYS = frozenset(
+    {
+        "station",
+        "stationName",
+        "stationTitle",
+        "stName",
+        "name",
+        "title",
+        "city",
+        "cityName",
+        "localName",
+        "nm",
+        "n",
+        "stationNm",
+        "routeStationName",
+    },
+)
+
+
+def _looks_like_station_name(text: str) -> bool:
+    t = text.strip()
+    if len(t) < 3 or len(t) > 72:
+        return False
+    if t.isdigit():
+        return False
+    lower = t.casefold()
+    skip_sub = ("тариф", "купе", "плац", "мест", "руб", "вагон", "тип", "класс", "скид")
+    if any(x in lower for x in skip_sub):
+        return False
+    if any("\u0400" <= c <= "\u04ff" for c in t):
+        return True
+    return len(t) >= 5 and any(c.isalpha() for c in t)
+
+
+def collect_station_like_strings(payload: dict | list | None, *, max_strings: int = 120) -> list[str]:
+    """Рекурсивно собирает строки из полей station*/name/title в JSON поезда."""
+
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def push(val: object) -> None:
+        if len(out) >= max_strings:
+            return
+        if val is None:
+            return
+        n = str(val).strip()
+        if not _looks_like_station_name(n):
+            return
+        key = _norm(n)
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(n[:96])
+
+    def walk(obj: object, depth: int) -> None:
+        if len(out) >= max_strings or depth > 14:
+            return
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                ks = str(k).lower()
+                if ks in _STATION_NAME_KEYS or "station" in ks or "stname" in ks:
+                    if isinstance(v, str):
+                        push(v)
+                    elif isinstance(v, dict):
+                        push(v.get("title") or v.get("name") or v.get("station"))
+                walk(v, depth + 1)
+        elif isinstance(obj, list):
+            for item in obj[:100]:
+                walk(item, depth + 1)
+
+    if isinstance(payload, dict):
+        walk(payload, 0)
+    elif isinstance(payload, list):
+        walk(payload, 0)
+    return out
+
+
+def _extract_train_stops_explicit(content: dict) -> list[str]:
+    """Имена остановок из явных массивов в ответе слоя поиска."""
 
     names: list[str] = []
     seen: set[str] = set()
@@ -468,3 +545,25 @@ def extract_train_stops(content: dict) -> list[str]:
                     )
 
     return names[:80]
+
+
+def extract_train_stops(content: dict) -> list[str]:
+    """Имена остановок: явные списки + рекурсивный сбор из JSON поезда."""
+
+    explicit = _extract_train_stops_explicit(content)
+    if len(explicit) >= 2:
+        return explicit[:80]
+
+    deep = collect_station_like_strings(content)
+    merged: list[str] = []
+    seen: set[str] = set()
+    for seq in (explicit, deep):
+        for s in seq:
+            key = _norm(s)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(str(s).strip())
+            if len(merged) >= 80:
+                break
+    return merged[:80]
