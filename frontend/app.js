@@ -31,7 +31,7 @@ const i18n = {
     demoFlow: ["Проверка маршрута", "Подготовка выбора мест", "Загрузка схемы вагона", "Готово"],
     seatPickerTitle: "Выбор вагона и мест",
     seatPickerHint:
-      "Места сгруппированы по купе: в кубике четыре места (два ряда по паре ниж/верх). В СВ — один кубик на два места. Можно выбрать несколько.",
+      "Места сгруппированы по купе: в кубике четыре места (два ряда по паре нижний/верхний). В СВ — купе из двух мест в ряд. Число мест на вагон соответствует типичной вместимости. Можно выбрать несколько.",
     seatPickerSelected: "Выбрано мест",
     seatPickerTotal: "Сумма",
     seatPickerConfirm: "Подтвердить выбор",
@@ -87,7 +87,7 @@ const i18n = {
     demoFlow: ["Checking route", "Preparing seat selection", "Loading car layout", "Done"],
     seatPickerTitle: "Choose car and seats",
     seatPickerHint:
-      "Seats are grouped into compartments: each cube is four berths (two columns of lower/upper). SV has one two-berth cube. Multiple seats allowed.",
+      "Seats are grouped into compartments: each cube is four berths (two columns of lower/upper). SV compartments show two berths side by side. Car capacity follows typical layouts. Multiple seats allowed.",
     seatPickerSelected: "Seats selected",
     seatPickerTotal: "Total",
     seatPickerConfirm: "Confirm selection",
@@ -751,6 +751,29 @@ function selectedSeatsOrderTotalRub() {
   return sum;
 }
 
+/** Типичная вместимость одного вагона для демо-схемы (данные с бэкенда или запасные значения). */
+function carriageCapacityForClass(train, cls) {
+  const t = train || {};
+  if (cls === "sv") {
+    const n = Number(t.sv_carriage_seats);
+    if (Number.isFinite(n) && n >= 2) return Math.min(Math.max(Math.round(n), 2), 24);
+    return 18;
+  }
+  if (cls === "coupe") {
+    if (t.coupe_double_deck) {
+      const n = Number(t.coupe_double_deck_seats);
+      if (Number.isFinite(n) && n >= 4) return Math.min(Math.max(Math.round(n), 4), 72);
+      return 64;
+    }
+    const n = Number(t.coupe_carriage_seats);
+    if (Number.isFinite(n) && n >= 4) return Math.min(Math.max(Math.round(n), 4), 40);
+    return 36;
+  }
+  const n = Number(t.platzkart_carriage_seats);
+  if (Number.isFinite(n) && n >= 4) return Math.min(Math.max(Math.round(n), 4), 72);
+  return 54;
+}
+
 function buildSeatPickerModel(train) {
   const layouts = new Map();
   const rng = mulberry32(hashSeed(train.id || train.train_number || "train"));
@@ -768,22 +791,51 @@ function buildSeatPickerModel(train) {
 
   cars.forEach((car) => {
     const cls = carriageClassKey(car);
-    const isSv = cls === "sv";
-    const compartments = isSv ? 1 : 2;
-    const pairsPerCompartment = isSv ? 1 : 2;
+    const capacity = carriageCapacityForClass(train, cls);
     const seats = [];
-    let globalPair = 0;
-    for (let comp = 0; comp < compartments; comp += 1) {
-      for (let p = 0; p < pairsPerCompartment; p += 1) {
-        const lowerNum = globalPair * 2 + 1;
-        const upperNum = globalPair * 2 + 2;
-        globalPair += 1;
+
+    if (cls === "sv") {
+      const compartments = Math.floor(capacity / 2);
+      let seatNum = 1;
+      for (let comp = 0; comp < compartments; comp += 1) {
+        seats.push({
+          id: `${car}-${String(seatNum).padStart(2, "0")}-lower`,
+          displayNum: String(seatNum).padStart(2, "0"),
+          berth_kind: "lower",
+          compartmentIndex: comp,
+          pairIndex: 0,
+          occupied: rng() > 0.42,
+        });
+        seatNum += 1;
+        seats.push({
+          id: `${car}-${String(seatNum).padStart(2, "0")}-upper`,
+          displayNum: String(seatNum).padStart(2, "0"),
+          berth_kind: "upper",
+          compartmentIndex: comp,
+          pairIndex: 0,
+          occupied: rng() > 0.42,
+        });
+        seatNum += 1;
+      }
+      layouts.set(car, seats);
+      return;
+    }
+
+    let seatNum = 1;
+    const fullCompartments = Math.floor(capacity / 4);
+    const remainder = capacity % 4;
+
+    for (let comp = 0; comp < fullCompartments; comp += 1) {
+      for (let pairSlot = 0; pairSlot < 2; pairSlot += 1) {
+        const lowerNum = seatNum;
+        const upperNum = seatNum + 1;
+        seatNum += 2;
         seats.push({
           id: `${car}-${String(lowerNum).padStart(2, "0")}-lower`,
           displayNum: String(lowerNum).padStart(2, "0"),
           berth_kind: "lower",
           compartmentIndex: comp,
-          pairIndex: globalPair - 1,
+          pairIndex: pairSlot,
           occupied: rng() > 0.42,
         });
         seats.push({
@@ -791,14 +843,84 @@ function buildSeatPickerModel(train) {
           displayNum: String(upperNum).padStart(2, "0"),
           berth_kind: "upper",
           compartmentIndex: comp,
-          pairIndex: globalPair - 1,
+          pairIndex: pairSlot,
           occupied: rng() > 0.42,
         });
       }
     }
+
+    if (remainder === 2) {
+      const comp = fullCompartments;
+      const lowerNum = seatNum;
+      const upperNum = seatNum + 1;
+      seats.push({
+        id: `${car}-${String(lowerNum).padStart(2, "0")}-lower`,
+        displayNum: String(lowerNum).padStart(2, "0"),
+        berth_kind: "lower",
+        compartmentIndex: comp,
+        pairIndex: 0,
+        occupied: rng() > 0.42,
+      });
+      seats.push({
+        id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
+        displayNum: String(upperNum).padStart(2, "0"),
+        berth_kind: "upper",
+        compartmentIndex: comp,
+        pairIndex: 0,
+        occupied: rng() > 0.42,
+      });
+    } else if (remainder === 3) {
+      const comp = fullCompartments;
+      const lower1 = seatNum;
+      const upper1 = seatNum + 1;
+      const lower2 = seatNum + 2;
+      seatNum += 3;
+      seats.push({
+        id: `${car}-${String(lower1).padStart(2, "0")}-lower`,
+        displayNum: String(lower1).padStart(2, "0"),
+        berth_kind: "lower",
+        compartmentIndex: comp,
+        pairIndex: 0,
+        occupied: rng() > 0.42,
+      });
+      seats.push({
+        id: `${car}-${String(upper1).padStart(2, "0")}-upper`,
+        displayNum: String(upper1).padStart(2, "0"),
+        berth_kind: "upper",
+        compartmentIndex: comp,
+        pairIndex: 0,
+        occupied: rng() > 0.42,
+      });
+      seats.push({
+        id: `${car}-${String(lower2).padStart(2, "0")}-lower`,
+        displayNum: String(lower2).padStart(2, "0"),
+        berth_kind: "lower",
+        compartmentIndex: comp,
+        pairIndex: 1,
+        occupied: rng() > 0.42,
+      });
+    }
+
     layouts.set(car, seats);
   });
   demoSeatLayouts = layouts;
+}
+
+function createSeatButton(car, seat) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = `seat-cell ${seat.berth_kind === "upper" ? "seat-cell-upper" : "seat-cell-lower"}`;
+  btn.dataset.seatId = seat.id;
+  const short = i18n[language].berthShort[seat.berth_kind] || "";
+  btn.innerHTML = `<span class="seat-num">${seat.displayNum}</span><span class="seat-berth">${short}</span>`;
+  if (seat.occupied) {
+    btn.classList.add("seat-occupied");
+    btn.disabled = true;
+  } else if (selectedSeatKeys.has(seat.id)) {
+    btn.classList.add("seat-selected");
+  }
+  btn.addEventListener("click", () => toggleSeatSelection(car, seat));
+  return btn;
 }
 
 function renderCheckoutTrainSummary(train) {
@@ -908,9 +1030,21 @@ function renderSeatGrid() {
     if (!byCompartment.has(ci)) byCompartment.set(ci, []);
     byCompartment.get(ci).push(seat);
   });
+  const cls = carriageClassKey(car);
   const compIndices = [...byCompartment.keys()].sort((a, b) => a - b);
   compIndices.forEach((compIdx) => {
     const compSeats = byCompartment.get(compIdx) || [];
+    const cube = document.createElement("div");
+    if (cls === "sv") {
+      cube.className = "compartment-cube compartment-cube--sv";
+      [...compSeats]
+        .sort((a, b) => parseInt(a.displayNum, 10) - parseInt(b.displayNum, 10))
+        .forEach((seat) => {
+          cube.append(createSeatButton(car, seat));
+        });
+      grid.append(cube);
+      return;
+    }
     const byPair = new Map();
     compSeats.forEach((seat) => {
       const pi = seat.pairIndex ?? 0;
@@ -920,7 +1054,6 @@ function renderSeatGrid() {
       else slot.lower = seat;
     });
     const pairIndices = [...byPair.keys()].sort((a, b) => a - b);
-    const cube = document.createElement("div");
     cube.className = "compartment-cube";
     pairIndices.forEach((pairIdx) => {
       const slot = byPair.get(pairIdx);
@@ -930,20 +1063,7 @@ function renderSeatGrid() {
       const lower = slot.lower;
       [upper, lower].forEach((seat) => {
         if (!seat) return;
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = `seat-cell ${seat.berth_kind === "upper" ? "seat-cell-upper" : "seat-cell-lower"}`;
-        btn.dataset.seatId = seat.id;
-        const short = i18n[language].berthShort[seat.berth_kind] || "";
-        btn.innerHTML = `<span class="seat-num">${seat.displayNum}</span><span class="seat-berth">${short}</span>`;
-        if (seat.occupied) {
-          btn.classList.add("seat-occupied");
-          btn.disabled = true;
-        } else if (selectedSeatKeys.has(seat.id)) {
-          btn.classList.add("seat-selected");
-        }
-        btn.addEventListener("click", () => toggleSeatSelection(car, seat));
-        col.append(btn);
+        col.append(createSeatButton(car, seat));
       });
       cube.append(col);
     });

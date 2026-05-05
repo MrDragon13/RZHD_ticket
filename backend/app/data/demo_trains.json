@@ -30,7 +30,10 @@
         "sv": 7890
       },
       "features": ["night", "sleep", "direct", "balanced"],
-      "amenities": ["conditioner", "restaurant", "pets_allowed", "female_compartment", "usb"]
+      "amenities": ["conditioner", "restaurant", "pets_allowed", "female_compartment", "usb"],
+      "platzkart_carriage_seats": 54,
+      "coupe_carriage_seats": 36,
+      "sv_carriage_seats": 18
     },
   {
     "id": "moscow-kazan-002y",
@@ -62,7 +65,12 @@
       "sv": 8500
     },
     "features": ["night", "sleep", "comfort", "direct"],
-    "amenities": ["conditioner", "restaurant", "female_compartment", "quiet_car", "usb"]
+    "amenities": ["conditioner", "restaurant", "female_compartment", "quiet_car", "usb"],
+    "platzkart_carriage_seats": 54,
+    "coupe_double_deck": true,
+    "coupe_double_deck_seats": 64,
+    "coupe_carriage_seats": 36,
+    "sv_carriage_seats": 18
   },
   {
     "id": "moscow-kazan-112m",
@@ -94,7 +102,9 @@
       "sv": null
     },
     "features": ["cheap", "direct"],
-    "amenities": ["pets_allowed", "luggage", "wifi_demo"]
+    "amenities": ["pets_allowed", "luggage", "wifi_demo"],
+    "platzkart_carriage_seats": 54,
+    "coupe_carriage_seats": 36
   },
   {
     "id": "moscow-spb-758a",
@@ -126,7 +136,10 @@
       "sv": 8900
     },
     "features": ["fast", "morning", "direct"],
-    "amenities": ["conditioner", "restaurant", "wifi_demo", "business_class", "no_pets"]
+    "amenities": ["conditioner", "restaurant", "wifi_demo", "business_class", "no_pets"],
+    "coupe_carriage_seats": 36,
+    "coupe_double_deck": true,
+    "coupe_double_deck_seats": 64
   },
     {
       "id": "moscow-sochi-104v",
@@ -158,7 +171,10 @@
         "sv": 13100
       },
       "features": ["long", "resort", "direct"],
-      "amenities": ["conditioner", "restaurant", "pets_allowed", "shower", "family_car"]
+      "amenities": ["conditioner", "restaurant", "pets_allowed", "shower", "family_car"],
+      "platzkart_carriage_seats": 54,
+      "coupe_carriage_seats": 36,
+      "sv_carriage_seats": 16
     }
   ]
 }

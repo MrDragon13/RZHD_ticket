@@ -117,6 +117,34 @@ class TrainOption(BaseModel):
     features: list[str] = Field(default_factory=list)
     amenities: list[str] = Field(default_factory=list)
     carriage_notes: list[str] = Field(default_factory=list)
+    platzkart_carriage_seats: int | None = Field(
+        default=None,
+        ge=1,
+        le=72,
+        description="Типичная вместимость одного плацкартного вагона (места 1–N), для демо-схемы.",
+    )
+    coupe_carriage_seats: int | None = Field(
+        default=None,
+        ge=1,
+        le=40,
+        description="Типичная вместимость одного купейного вагона (одноэтажный), для демо-схемы.",
+    )
+    sv_carriage_seats: int | None = Field(
+        default=None,
+        ge=1,
+        le=24,
+        description="Типичная вместимость вагона СВ (часто 16–18), для демо-схемы.",
+    )
+    coupe_double_deck: bool = Field(
+        default=False,
+        description="Если true, купейные вагоны поезда считаются двухэтажными (другая вместимость).",
+    )
+    coupe_double_deck_seats: int | None = Field(
+        default=None,
+        ge=1,
+        le=72,
+        description="Вместимость двухэтажного купе на вагон (часто 64), если coupe_double_deck.",
+    )
 
 
 class TicketSearchResponse(BaseModel):
