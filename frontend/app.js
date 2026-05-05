@@ -547,10 +547,12 @@ function renderTrains() {
   trainsPanel.classList.remove("hidden");
   const list = document.querySelector("#trains-list");
   list.innerHTML = "";
-  getSortedTrains().forEach((train, index) => {
+  const highlightId = getTrainHighlightId();
+  getSortedTrains().forEach((train) => {
     const recommendation = recommendationFor(train.id);
     const card = document.createElement("article");
-    card.className = `train-card ${index === 0 ? "train-card-best" : ""}`;
+    card.dataset.trainId = train.id;
+    card.className = `train-card ${train.id === highlightId ? "train-card-best" : ""}`;
     card.innerHTML = `
       <div class="train-card-header">
         <span class="train-number">${train.train_number}</span>
@@ -592,6 +594,24 @@ function getSortedTrains() {
     .sort((a, b) => (recommendationsById.get(b.id)?.score || 0) - (recommendationsById.get(a.id)?.score || 0));
 }
 
+function getTrainHighlightId() {
+  const sorted = getSortedTrains();
+  if (!sorted.length) return null;
+  if (selectedTrain && sorted.some((t) => t.id === selectedTrain.id)) {
+    return selectedTrain.id;
+  }
+  return sorted[0].id;
+}
+
+function updateTrainCardHighlight() {
+  const list = document.querySelector("#trains-list");
+  if (!list) return;
+  const highlightId = getTrainHighlightId();
+  list.querySelectorAll(".train-card").forEach((card) => {
+    card.classList.toggle("train-card-best", highlightId !== null && card.dataset.trainId === highlightId);
+  });
+}
+
 function renderAmenityBadges(amenities = []) {
   return amenities
     .slice(0, 5)
@@ -616,6 +636,7 @@ function selectTrain(train) {
     assistantSay(phrase);
   }
   setStage("checkout");
+  updateTrainCardHighlight();
   checkoutPanel.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
