@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.models import (
     DemoCheckoutRequest,
@@ -40,6 +44,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_engineering_log(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Логируем тело запроса при 422, чтобы отлавливать несовпадение схемы с ответом LLM."""
+
+    body = getattr(exc, "body", None)
+    preview = None
+    if isinstance(body, (bytes, bytearray)):
+        preview = bytes(body)[:8000].decode("utf-8", errors="replace")
+    elif body is not None:
+        preview = str(body)[:8000]
+    logging.warning(
+        "request validation failed %s %s errors=%s body_preview=%s",
+        request.method,
+        request.url.path,
+        exc.errors(),
+        preview,
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
 
 deepseek_client = DeepSeekClient()
 rzd_adapter = RzdDataAdapter()

@@ -108,7 +108,14 @@ class DeepSeekClient:
             "Не ставь оба окна, если пользователь явно указал только одно направление во времени; второе оставь null. "
             "«Утром» без уточнения: если речь об отправлении из города отправления — только departure_time_window 06:00-11:00; "
             "если о прибытии в пункт назначения — только arrival_time_window 06:00-11:00. "
-            "Фраза про начало рабочего дня / к началу работы: arrival_time_window 07:00-09:00 (если это про время прибытия)."
+            "Фраза про начало рабочего дня / к началу работы: arrival_time_window 07:00-09:00 (если это про время прибытия). "
+            "Формат JSON (пример значений; подставь свои или null): "
+            '{"intent":"search_ticket","language":"ru","origin":"Москва","destination":"Казань","date":"2026-05-06",'
+            '"departure_time_window":null,"arrival_time_window":{"start":"07:00","end":"09:00"},'
+            '"preferences":["sleep"],"priority":"arrival_time","transfers":"direct_preferred",'
+            '"assistant_text":"Краткая реплика на языке language","rank_with_llm":false}. '
+            "departure_time_window и arrival_time_window — только объект с полями start и end (строки HH:MM) или null; "
+            "не используй одну строку для всего окна."
         )
         user_prompt = json.dumps(
             {
@@ -122,8 +129,8 @@ class DeepSeekClient:
                     "origin": "string|null",
                     "destination": "string|null",
                     "date": "YYYY-MM-DD|null",
-                    "departure_time_window": {"start": "HH:MM", "end": "HH:MM"},
-                    "arrival_time_window": {"start": "HH:MM", "end": "HH:MM"},
+                    "departure_time_window": 'null или {"start":"HH:MM","end":"HH:MM"} — только объект, не строка',
+                    "arrival_time_window": 'null или {"start":"HH:MM","end":"HH:MM"} — только объект, не строка',
                     "preferences": ["sleep"],
                     "priority": "arrival_time|price|speed|comfort|null",
                     "transfers": "direct_preferred|null",

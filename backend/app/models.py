@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # В этом файле собраны Pydantic-модели, которыми обмениваются API-эндпоинты.
@@ -53,6 +53,8 @@ class UnderstandRequest(BaseModel):
 
 class TripIntent(BaseModel):
     """Структурированное намерение пассажира после обработки естественной речи."""
+
+    model_config = ConfigDict(extra="ignore")
 
     intent: str = "search_ticket"
     language: Language = "ru"
@@ -137,7 +139,7 @@ CompartmentKind = Literal["unknown", "female", "male", "mixed", "children", "fam
 class CarriageDetail(BaseModel):
     """Метаданные одного вагона из слоя РЖД (5764): номер, тип, пол купе, услуги."""
 
-    number: str = Field(..., min_length=1, max_length=8)
+    number: str = Field(..., min_length=1, max_length=24)
     type_label: str = Field(default="", description="Купе / СВ / Плацкарт и т.д.")
     compartment_kind: CompartmentKind = "unknown"
     add_signs_raw: str | None = Field(default=None, description="Сырой код addSigns с сайта РЖД.")
@@ -156,6 +158,8 @@ class SeatBerthPrices(BaseModel):
 
 class TrainOption(BaseModel):
     """Единый формат поезда для интерфейса, рекомендаций и демо-чекаута."""
+
+    model_config = ConfigDict(extra="ignore")
 
     id: str
     train_number: str
@@ -223,6 +227,8 @@ class TicketSearchResponse(BaseModel):
 
 class RecommendRequest(BaseModel):
     """Запрос на гибридную рекомендацию: локальный скоринг + LLM-текст."""
+
+    model_config = ConfigDict(extra="ignore")
 
     language: Language
     intent: TripIntent
