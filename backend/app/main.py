@@ -154,7 +154,7 @@ async def search_tickets(request: TicketSearchRequest) -> TicketSearchResponse:
     для будущего live-парсера или официальной интеграции с данными РЖД.
     """
 
-    return rzd_adapter.search(request)
+    return await rzd_adapter.search(request)
 
 
 @app.post("/api/recommend", response_model=RecommendResponse)
