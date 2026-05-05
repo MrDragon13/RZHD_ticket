@@ -18,21 +18,102 @@ def _minutes_to_label(total_minutes: int, language: str) -> str:
     return f"{h} h {m} min" if m else f"{h} h"
 
 
+def _normalize_rzd_text(s: str) -> str:
+    t = s.casefold().replace("ё", "е")
+    return t
+
+
+def _parse_free_seats(row: dict) -> int:
+    """РЖД в разных ответах может отдавать разные ключи."""
+
+    for key in ("freeSeats", "free", "places", "seatCount", "quantity"):
+        raw = row.get(key)
+        if raw is None:
+            continue
+        try:
+            return int(round(float(raw)))
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
 def _classify_car_row(text: str) -> str | None:
-    t = text.lower()
-    if any(x in t for x in ("св", "люкс", "lux", "мягк")):
+    """Грубая категория для UI (плац / купе / св)."""
+
+    t = _normalize_rzd_text(text)
+    # СВ / люкс / мягкий
+    if any(
+        x in t
+        for x in (
+            " св ",
+            "(св)",
+            "св,",
+            "-св",
+            "люкс",
+            "lux",
+            "мягк",
+            "deluxe",
+        )
+    ):
         return "sv"
-    if any(x in t for x in ("купе", "coupe", "сидяч")):
+    if t.startswith("св ") or t.endswith(" св") or t == "св":
+        return "sv"
+    # Купе, сидячий, пасс. с местами и т.п.
+    if any(
+        x in t
+        for x in (
+            "купе",
+            "coupe",
+            "сидяч",
+            "пасс",
+            "фирм",
+            "скорост",
+            "ласточ",
+            "сапсан",
+            "резерв",
+            " пк ",
+            "пк-",
+        )
+    ):
         return "coupe"
-    if any(x in t for x in ("плац", "platz", "общ")):
+    # Плацкарт / общий
+    if any(x in t for x in ("плац", "platz", "общ", "плацкарт")):
         return "platzkart"
+    return None
+
+
+def _classify_car_dict(row: dict) -> str | None:
+    """Классификация по всем текстовым полям строки cars[]."""
+
+    parts = [
+        str(row.get("type") or ""),
+        str(row.get("typeLoc") or ""),
+        str(row.get("servCls") or ""),
+        str(row.get("category") or ""),
+        str(row.get("carType") or ""),
+        str(row.get("itype") or ""),
+    ]
+    combined = " ".join(parts)
+    cat = _classify_car_row(combined)
+    if cat:
+        return cat
+
+    # Коды класса обслуживания (часто латиница/цифры): 3П — плацкарт, 2К/2Ю — купе и т.д.
+    serv = _normalize_rzd_text(str(row.get("servCls") or ""))
+    if any(x in serv for x in ("3п", "3п-", "плац")):
+        return "platzkart"
+    if any(x in serv for x in ("св", "люкс", "lux")):
+        return "sv"
+    if any(x in serv for x in ("2к", "2ю", "2ж", "2э", "купе", "куп")):
+        return "coupe"
+
     return None
 
 
 def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails, PriceInfo]:
     """Суммирует строки cars[] из ответа РЖД по типам вагонов."""
 
-    platz = coupe = sv = 0
+    platz = coupe = sv = unknown = 0
     min_platz: int | None = None
     min_coupe: int | None = None
     min_sv: int | None = None
@@ -40,18 +121,14 @@ def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails
     lower = upper = side_lower = side_upper = 0
 
     for row in cars:
-        try:
-            free = int(row.get("freeSeats") or 0)
-        except (TypeError, ValueError):
-            free = 0
+        free = _parse_free_seats(row)
         raw_tariff = row.get("tariff")
         try:
             price_rub = int(round(float(raw_tariff))) if raw_tariff is not None else None
         except (TypeError, ValueError):
             price_rub = None
 
-        label = f"{row.get('type', '')} {row.get('typeLoc', '')}"
-        cat = _classify_car_row(label)
+        cat = _classify_car_dict(row)
         if cat == "platzkart":
             platz += free
             if price_rub is not None:
@@ -64,8 +141,66 @@ def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails
             sv += free
             if price_rub is not None:
                 min_sv = price_rub if min_sv is None else min(min_sv, price_rub)
+        else:
+            unknown += free
 
-    # Грубая оценка полок: если класс не разобрали, не заполняем детализацию.
+    # Нераспознанные места не теряем: показываем в «плацкарт» (самый частый класс в выдаче).
+    if unknown:
+        platz += unknown
+
+    # Грубая оценка полок для плацкарта.
+    if platz and coupe == 0 and sv == 0:
+        lower = int(platz * 0.45)
+        upper = platz - lower
+
+    return (
+        SeatInfo(platzkart=platz, coupe=coupe, sv=sv),
+        SeatDetails(lower=lower, upper=upper, side_lower=side_lower, side_upper=side_upper),
+        PriceInfo(platzkart=min_platz, coupe=min_coupe, sv=min_sv),
+    )
+
+
+def aggregate_from_aiorzd_places(places: list) -> tuple[SeatInfo, SeatDetails, PriceInfo]:
+    """Запасной путь: aiorzd уже разложил строки ответа в объекты Place."""
+
+    platz = coupe = sv = unknown = 0
+    min_platz: int | None = None
+    min_coupe: int | None = None
+    min_sv: int | None = None
+
+    lower = upper = side_lower = side_upper = 0
+
+    for place in places:
+        label = getattr(place, "type", None) or ""
+        try:
+            free = int(getattr(place, "quantity", 0) or 0)
+        except (TypeError, ValueError):
+            free = 0
+        raw_price = getattr(place, "price", None)
+        try:
+            price_rub = int(round(float(raw_price))) if raw_price is not None else None
+        except (TypeError, ValueError):
+            price_rub = None
+
+        cat = _classify_car_row(str(label))
+        if cat == "platzkart":
+            platz += free
+            if price_rub is not None:
+                min_platz = price_rub if min_platz is None else min(min_platz, price_rub)
+        elif cat == "coupe":
+            coupe += free
+            if price_rub is not None:
+                min_coupe = price_rub if min_coupe is None else min(min_coupe, price_rub)
+        elif cat == "sv":
+            sv += free
+            if price_rub is not None:
+                min_sv = price_rub if min_sv is None else min(min_sv, price_rub)
+        else:
+            unknown += free
+
+    if unknown:
+        platz += unknown
+
     if platz and coupe == 0 and sv == 0:
         lower = int(platz * 0.45)
         upper = platz - lower
@@ -97,6 +232,9 @@ def train_option_from_aiorzd(
 
     cars = content.get("cars") or []
     seat_info, seat_details, prices = aggregate_cars_to_inventory(cars)
+    total_shown = seat_info.platzkart + seat_info.coupe + seat_info.sv
+    if total_shown == 0 and getattr(train_obj, "seats", None):
+        seat_info, seat_details, prices = aggregate_from_aiorzd_places(list(train_obj.seats.values()))
 
     route0 = str(content.get("route0") or origin_hint or "").strip()
     route1 = str(content.get("route1") or dest_hint or "").strip()
