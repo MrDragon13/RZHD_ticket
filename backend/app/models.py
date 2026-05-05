@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # В этом файле собраны Pydantic-модели, которыми обмениваются API-эндпоинты.
@@ -165,12 +165,38 @@ class FunFactResponse(BaseModel):
     source: Literal["llm", "fallback"]
 
 
+BerthKind = Literal["lower", "upper", "side_lower", "side_upper"]
+
+
+class SelectedSeat(BaseModel):
+    """Одно место в демо-заказе (номер вагона задаётся для каждого места отдельно)."""
+
+    seat_number: str = Field(..., min_length=1, max_length=4)
+    berth_kind: BerthKind
+    carriage: str | None = Field(
+        default=None,
+        description="Номер вагона для этого места (например '05').",
+    )
+
+
 class DemoCheckoutRequest(BaseModel):
     """Запрос демонстрационного оформления выбранного поезда."""
 
     language: Language
     train: TrainOption
     passenger_label: str | None = None
+    selected_carriage: str | None = Field(
+        default=None,
+        description="Устаревший общий номер вагона; если в каждом месте указан carriage, поле игнорируется.",
+    )
+    selected_seats: list[SelectedSeat] | None = None
+
+    @field_validator("selected_seats")
+    @classmethod
+    def limit_party_size(cls, seats: list[SelectedSeat] | None) -> list[SelectedSeat] | None:
+        if seats is not None and len(seats) > 8:
+            raise ValueError("Не более 8 мест в одном демо-заказе.")
+        return seats
 
 
 class DemoTicket(BaseModel):

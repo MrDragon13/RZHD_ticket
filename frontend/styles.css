@@ -837,9 +837,128 @@ button {
   color: var(--green);
 }
 
-.checkout-step-active {
-  border-color: rgba(0, 229, 255, 0.55);
-  box-shadow: 0 0 18px rgba(0, 229, 255, 0.18);
+.seat-picker-panel {
+  min-height: 100%;
+}
+
+.glass-panel {
+  width: min(860px, 100%);
+  padding: 24px 26px 28px;
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: 28px;
+  background: rgba(12, 24, 38, 0.72);
+  box-shadow: 0 0 40px rgba(0, 229, 255, 0.08);
+}
+
+.seat-picker-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.seat-picker-header h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+}
+
+.seat-picker-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  max-width: 520px;
+}
+
+.seat-picker-count {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 255, 156, 0.35);
+  color: var(--green);
+  font-weight: 700;
+  font-size: 14px;
+  background: rgba(0, 255, 156, 0.06);
+}
+
+.carriage-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.carriage-tab {
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  color: var(--text);
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+}
+
+.carriage-tab-active {
+  border-color: rgba(0, 229, 255, 0.65);
+  box-shadow: 0 0 22px rgba(0, 229, 255, 0.2);
+  background: rgba(0, 229, 255, 0.12);
+}
+
+#seat-grid.seat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.seat-cell {
+  display: grid;
+  gap: 2px;
+  place-items: center;
+  min-height: 64px;
+  padding: 8px 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  color: var(--text);
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.seat-cell:hover:not(:disabled) {
+  border-color: rgba(0, 229, 255, 0.75);
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.18);
+}
+
+.seat-num {
+  font-size: 17px;
+}
+
+.seat-berth {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.seat-selected {
+  border-color: rgba(0, 255, 156, 0.65);
+  box-shadow: 0 0 18px rgba(0, 255, 156, 0.28);
+  background: rgba(0, 255, 156, 0.14);
+}
+
+.seat-occupied {
+  opacity: 0.38;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.seat-picker-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .ticket-panel {
