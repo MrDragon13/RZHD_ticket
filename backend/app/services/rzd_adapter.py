@@ -186,8 +186,8 @@ class RzdDataAdapter:
 
         origin = (request.origin or "").strip()
         destination = (request.destination or "").strip()
-        out: list[TrainOption] = []
-        for t in trains:
+
+        async def one_train(t: TrainOption) -> TrainOption:
             seg = await resolve_route_segment(
                 stops=list(t.stops),
                 search_origin=origin,
@@ -208,8 +208,9 @@ class RzdDataAdapter:
                 destination_index=seg.destination_index,
                 debug_steps=seg.debug_steps[:30],
             )
-            out.append(t.model_copy(update={"route_segment": info}))
-        return out
+            return t.model_copy(update={"route_segment": info})
+
+        return list(await asyncio.gather(*(one_train(t) for t in trains)))
 
 
 def _env_truthy_default_on(name: str) -> bool:
