@@ -1360,21 +1360,63 @@ function countBerthsByKind(seats) {
 /**
  * Если РЖД не отдали полные суммы по полкам, дополняем berth_totals числом мест на нашей схеме,
  * чтобы занятость считалась согласованно с раскладкой.
+ * При частичных суммах РЖД свободными остаются только места из berth_available; по остальным
+ * местам вагона считаем, что они проданы (в merge ниже ограничиваем free по фрагменту).
  */
 function mergedCarriageDetailForLayout(train, car, seats) {
   const d = carriageDetailForTab(train, car);
   if (!d) return null;
   const layout = countBerthsByKind(seats);
-  const sum =
+  const layoutSum =
     layout.lower + layout.upper + layout.side_lower + layout.side_upper;
   const tt = d.berth_totals;
   const ttSum = tt
     ? (tt.lower || 0) + (tt.upper || 0) + (tt.side_lower || 0) + (tt.side_upper || 0)
     : 0;
-  if (!tt || ttSum < sum) {
-    return { ...d, berth_totals: layout };
+
+  const expandTotals = !tt || ttSum < layoutSum;
+  let totalsOut = tt;
+  if (expandTotals) {
+    totalsOut = {
+      lower: layout.lower,
+      upper: layout.upper,
+      side_lower: layout.side_lower,
+      side_upper: layout.side_upper,
+    };
   }
-  return d;
+
+  let availOut = d.berth_available;
+  if (expandTotals) {
+    if (d.berth_available) {
+      availOut = berthAvailableMergedForPartialLayout(layout, tt, d.berth_available);
+    } else if (tt && ttSum > 0 && ttSum < layoutSum) {
+      availOut = { lower: 0, upper: 0, side_lower: 0, side_upper: 0 };
+    }
+  }
+
+  return { ...d, berth_totals: totalsOut, berth_available: availOut };
+}
+
+/** При неполном фрагменте РЖД: свободных мест не больше, чем передано в av; по недостающим категориям — 0 (всё продано). */
+function berthAvailableMergedForPartialLayout(layout, ttRzd, avRzd) {
+  const num = (x) => {
+    const n = Number(x);
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+  };
+  const kinds = ["lower", "upper", "side_lower", "side_upper"];
+  const out = { lower: 0, upper: 0, side_lower: 0, side_upper: 0 };
+  for (const k of kinds) {
+    const cap = layout[k] ?? 0;
+    const tFrag = num(ttRzd?.[k]);
+    const freeFrag = num(avRzd?.[k]);
+    if (cap <= 0) continue;
+    if (tFrag <= 0) {
+      out[k] = 0;
+      continue;
+    }
+    out[k] = Math.min(freeFrag, tFrag, cap);
+  }
+  return out;
 }
 
 /** Детерминированная занятость по счётчикам РЖД для вагона; иначе — прежний rng. */
