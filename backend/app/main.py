@@ -45,6 +45,12 @@ deepseek_client = DeepSeekClient()
 rzd_adapter = RzdDataAdapter()
 
 
+# Для логически последовательного диалога поиск запускается только после того,
+# как собраны все обязательные параметры. Иначе ассистент задает уточняющий
+# вопрос и ждет следующую реплику пользователя.
+REQUIRED_DIALOG_FIELDS = ("origin", "destination", "date")
+
+
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     """Healthcheck для VDS, reverse proxy и быстрой ручной проверки."""
@@ -79,12 +85,54 @@ async def dialog(request: DialogRequest) -> DialogResponse:
         current_state.get("origin"),
     )
     current_state.update({key: value for key, value in payload.items() if value is not None})
-    action = "search_tickets" if current_state.get("destination") else "ask_clarification"
+    missing_fields = [field for field in REQUIRED_DIALOG_FIELDS if not current_state.get(field)]
+    if missing_fields:
+        current_state["pending_fields"] = missing_fields
+        action = "ask_clarification"
+        assistant_text = _clarification_text(request.language, missing_fields)
+    else:
+        current_state.pop("pending_fields", None)
+        action = "search_tickets"
+        assistant_text = payload["assistant_text"]
     return DialogResponse(
-        assistant_text=payload["assistant_text"],
+        assistant_text=assistant_text,
         action=action,
         state=current_state,
     )
+
+
+def _clarification_text(language: str, missing_fields: list[str]) -> str:
+    """Формирует короткий уточняющий вопрос вместо преждевременного поиска."""
+
+    missing = set(missing_fields)
+    if language == "en":
+        if missing == {"origin"}:
+            return "Where are we departing from?"
+        if missing == {"destination"}:
+            return "Where would you like to go?"
+        if missing == {"date"}:
+            return "What date should I search for?"
+        if missing == {"origin", "date"}:
+            return "Please clarify the departure city and travel date."
+        if missing == {"destination", "date"}:
+            return "Please clarify the destination city and travel date."
+        if missing == {"origin", "destination"}:
+            return "Please clarify the departure and destination cities."
+        return "Please clarify the departure city, destination, and travel date."
+
+    if missing == {"origin"}:
+        return "Откуда поедем?"
+    if missing == {"destination"}:
+        return "Куда вы хотите поехать?"
+    if missing == {"date"}:
+        return "На какую дату ищем поезд?"
+    if missing == {"origin", "date"}:
+        return "Уточните, пожалуйста, город отправления и дату поездки."
+    if missing == {"destination", "date"}:
+        return "Уточните, пожалуйста, город назначения и дату поездки."
+    if missing == {"origin", "destination"}:
+        return "Уточните, пожалуйста, город отправления и город назначения."
+    return "Уточните, пожалуйста, город отправления, город назначения и дату поездки."
 
 
 @app.post("/api/tickets/search", response_model=TicketSearchResponse)

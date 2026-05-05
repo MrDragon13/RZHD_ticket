@@ -138,13 +138,13 @@ class DeepSeekClient:
         """
 
         normalized = text.lower()
-        destination = "Казань"
+        destination = None
+        if "казан" in normalized or "kazan" in normalized:
+            destination = "Казань" if language == "ru" else "Kazan"
         if "петербург" in normalized or "petersburg" in normalized:
             destination = "Санкт-Петербург"
         if "сочи" in normalized or "sochi" in normalized:
             destination = "Сочи"
-        if "kazan" in normalized:
-            destination = "Kazan"
 
         preferences: list[str] = []
         if any(word in normalized for word in ["спать", "высп", "sleep", "overnight"]):
@@ -163,9 +163,17 @@ class DeepSeekClient:
             arrival_window = {"start": "07:00", "end": "09:00"}
 
         assistant_text = (
-            f"Понял. Ищу подходящие поезда в город {destination}."
+            (
+                f"Понял. Ищу подходящие поезда в город {destination}."
+                if destination
+                else "Уточните, пожалуйста, город назначения и дату поездки."
+            )
             if language == "ru"
-            else f"Understood. I will look for suitable trains to {destination}."
+            else (
+                f"Understood. I will look for suitable trains to {destination}."
+                if destination
+                else "Please clarify the destination city and travel date."
+            )
         )
 
         return {

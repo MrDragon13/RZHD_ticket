@@ -26,6 +26,7 @@ const i18n = {
     newSession: "Новый запрос",
     noSpeech: "Распознавание речи недоступно в этом браузере. Используйте текстовое поле.",
     fallbackError: "Сервер недоступен. Показываю демо-сценарий интерфейса.",
+    clarifyHint: "Я дождусь уточнения и только потом подберу варианты.",
     userRole: "Вы",
     assistantRole: "Путь",
     stages: {
@@ -55,6 +56,7 @@ const i18n = {
     newSession: "New request",
     noSpeech: "Speech recognition is not available in this browser. Use the text field.",
     fallbackError: "Server is unavailable. Showing interface demo scenario.",
+    clarifyHint: "I will wait for clarification before searching options.",
     userRole: "You",
     assistantRole: "Path",
     stages: {
@@ -171,6 +173,9 @@ let selectedTrain = null;
 let demoTicket = null;
 let dialogMessages = [];
 let uiStage = "initial";
+let speechQueue = [];
+let isSpeaking = false;
+let audioContext = null;
 
 const screens = {
   language: document.querySelector("#language-screen"),
@@ -220,7 +225,7 @@ document.querySelector("#chips").addEventListener("click", (event) => {
     return;
   }
   if (action === "repeat-ticket" && demoTicket) {
-    speak(language === "ru" ? "Демо-билет уже готов на экране." : "The demo ticket is already on screen.");
+    enqueueSpeech(language === "ru" ? "Демо-билет уже готов на экране." : "The demo ticket is already on screen.");
     return;
   }
   handleUserText(event.target.textContent);
@@ -293,8 +298,10 @@ async function runDialog(text) {
     assistantSay(response.assistant_text);
     intent = normalizeIntent(state, response.assistant_text);
     renderIntent(intent);
-    if (response.action === "search_tickets" && intent.destination) {
+    if (response.action === "search_tickets" && hasRequiredTripFields(intent)) {
       await searchAndRecommend();
+    } else {
+      setStage("initial");
     }
   } catch (error) {
     console.error(error);
@@ -307,15 +314,21 @@ function normalizeIntent(rawState, assistant_text) {
     intent: rawState.intent || "search_ticket",
     language,
     origin: rawState.origin || (language === "ru" ? "Москва" : "Moscow"),
-    destination: rawState.destination || (language === "ru" ? "Казань" : "Kazan"),
-    date: rawState.date || "2026-05-06",
+    destination: rawState.destination || null,
+    date: rawState.date || null,
     departure_time_window: rawState.departure_time_window || null,
-    arrival_time_window: rawState.arrival_time_window || { start: "07:00", end: "09:00" },
+    arrival_time_window: rawState.arrival_time_window || null,
     preferences: rawState.preferences || ["sleep", "comfort"],
     priority: rawState.priority || "arrival_time",
     transfers: rawState.transfers || "direct_preferred",
     assistant_text,
   };
+}
+
+function hasRequiredTripFields(data) {
+  // Поиск запускается только когда ассистент уже получил все обязательные
+  // параметры. Если он спросил уточнение, интерфейс ждет следующую реплику.
+  return Boolean(data.origin && data.destination && data.date);
 }
 
 async function searchAndRecommend() {
@@ -537,6 +550,7 @@ function renderTicket() {
 }
 
 function startVoiceRecognition() {
+  playOrbTapSound();
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     assistantSay(i18n[language].noSpeech);
@@ -567,7 +581,7 @@ function assistantSay(text, options = {}) {
   if (options.addToHistory !== false) {
     addMessage("assistant", text);
   }
-  speak(text);
+  enqueueSpeech(text);
 }
 
 function setOrbMode(mode) {
@@ -595,16 +609,52 @@ function renderHistory() {
   dialogHistory.scrollTop = dialogHistory.scrollHeight;
 }
 
+function enqueueSpeech(text) {
+  speechQueue.push(text);
+  if (!isSpeaking) {
+    speakNext();
+  }
+}
+
+function speakNext() {
+  if (!speechQueue.length) {
+    isSpeaking = false;
+    if (uiStage === "initial" || uiStage === "checkout") setOrbMode("idle");
+    return;
+  }
+  isSpeaking = true;
+  speak(speechQueue.shift());
+}
+
 function speak(text) {
   if (!("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = language === "ru" ? "ru-RU" : "en-US";
   utterance.rate = 0.95;
   utterance.onend = () => {
-    if (uiStage === "initial" || uiStage === "checkout") setOrbMode("idle");
+    speakNext();
   };
+  utterance.onerror = () => speakNext();
   window.speechSynthesis.speak(utterance);
+}
+
+function playOrbTapSound() {
+  // Короткий мягкий сигнал подтверждает касание сферы, но не мешает речи.
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+  audioContext ||= new AudioContext();
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(620, audioContext.currentTime);
+  oscillator.frequency.exponentialRampToValueAtTime(920, audioContext.currentTime + 0.11);
+  gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.035, audioContext.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.16);
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + 0.17);
 }
 
 async function postJson(path, payload) {
@@ -658,6 +708,9 @@ function resetScenario(announce = true) {
   selectedTrain = null;
   demoTicket = null;
   dialogMessages = [];
+  speechQueue = [];
+  isSpeaking = false;
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   userInput.value = "";
   transcript.textContent = "";
   assistantText.textContent = i18n[language].assistantReady;
