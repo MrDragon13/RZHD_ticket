@@ -603,7 +603,7 @@ class RzdFetcher:
             res = doc.get("result")
             if res in ("RID", "REQUEST_ID"):
                 rid = doc.get("RID") or doc.get("rid")
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.35)
                 continue
             if res == "FAIL":
                 logging.info(

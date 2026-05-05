@@ -66,6 +66,8 @@ class RzdDataAdapter:
 
         enrich = _env_truthy_default_on("RZD_CARRIAGE_ENRICH")
         route_stops_enrich = _env_truthy_default_on("RZD_ROUTE_STOPS_ENRICH")
+        route_stops_max = int(os.getenv("RZD_ROUTE_STOPS_MAX_TRAINS", "12") or "12")
+        route_stops_max = max(1, min(route_stops_max, 40))
         max_conc = int(os.getenv("RZD_CARRIAGE_CONCURRENCY", "4") or "4")
         max_conc = max(1, min(max_conc, 16))
 
@@ -93,6 +95,7 @@ class RzdDataAdapter:
                 for i, t in enumerate(light)
                 if t.available_seats.platzkart + t.available_seats.coupe + t.available_seats.sv > 0
             ]
+            route_idx = eligible_idx[:route_stops_max] if route_stops_enrich else []
 
             carriage_by_index: dict[int, dict] = {}
             basic_stops_by_index: dict[int, list[str]] = {}
@@ -144,8 +147,8 @@ class RzdDataAdapter:
                 for i in eligible_idx:
                     if enrich:
                         tasks.append(carriage_one(i))
-                    if route_stops_enrich:
-                        tasks.append(route_stops_one(i))
+                for i in route_idx:
+                    tasks.append(route_stops_one(i))
 
                 if tasks:
                     await asyncio.gather(*tasks)

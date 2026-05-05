@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Any
 
@@ -129,6 +130,8 @@ async def resolve_route_segment(
     r1 = str(route_terminal_to or "").strip()
     steps.append(f"train_id={train_id} number={train_number} raw_stop_count={n}")
     steps.append(f"route_terminals={r0!r}->{r1!r}")
+    # После basicRoute эвристики обычно достаточно; LLM для сегмента — дорого при N поездах.
+    allow_llm_route = os.getenv("ROUTE_SEGMENT_USE_LLM", "").strip().lower() in ("1", "true", "yes")
 
     def _try_segment_from_stops(
         stop_list: list[str],
@@ -177,7 +180,7 @@ async def resolve_route_segment(
     if n <= 1:
         steps.append("few_or_no_stops_in_payload")
 
-        if deepseek is not None and deepseek.enabled:
+        if allow_llm_route and deepseek is not None and deepseek.enabled:
             try:
                 synth = await _llm_synthesize_route_stops(
                     train_number=train_number,
@@ -211,6 +214,11 @@ async def resolve_route_segment(
     heuristic_hit = _try_segment_from_stops(raw, tag="heuristic")
     if heuristic_hit is not None:
         return heuristic_hit
+
+    if not allow_llm_route:
+        steps.append("skip_llm: ROUTE_SEGMENT_USE_LLM=0 after heuristic_miss")
+        logging.warning("route_segment %s", " | ".join(steps))
+        return RouteSegmentResult(method="failed_no_llm", debug_steps=steps)
 
     steps.append("heuristic_miss: trying DeepSeek index match")
 
@@ -252,7 +260,7 @@ async def resolve_route_segment(
         logging.exception("route_segment LLM failed train_id=%s", train_id)
         steps.append("llm_exception")
 
-    if deepseek is not None and deepseek.enabled:
+    if allow_llm_route and deepseek is not None and deepseek.enabled:
         steps.append("final_attempt: llm_synthesize_stops_after_failed_match")
         try:
             synth2 = await _llm_synthesize_route_stops(
