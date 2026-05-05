@@ -1015,6 +1015,6 @@ function resetScenario(announce = true) {
   setStage("initial");
   renderHistory();
   if (announce) {
-    assistantSay(i18n[language].assistantReady);
+    assistantSay(i18n[language].assistantReady, { addToHistory: false });
   }
 }
