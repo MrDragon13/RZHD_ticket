@@ -164,6 +164,17 @@ class SeatBerthPrices(BaseModel):
     side_upper: int | None = None
 
 
+class RouteSegmentInfo(BaseModel):
+    """Сегмент маршрута пользователя на карте: промежуточные станции и доля линии до прибытия."""
+
+    intermediate_stops: list[str] = Field(default_factory=list)
+    endpoint_fraction: float | None = None
+    method: str = "none"
+    origin_index: int | None = None
+    destination_index: int | None = None
+    debug_steps: list[str] = Field(default_factory=list)
+
+
 class TrainOption(BaseModel):
     """Единый формат поезда для интерфейса, рекомендаций и демо-чекаута."""
 
@@ -222,6 +233,10 @@ class TrainOption(BaseModel):
     carriage_details: list[CarriageDetail] = Field(
         default_factory=list,
         description="Список вагонов из слоя 5764 (номер, тип, пол купе, услуги).",
+    )
+    route_segment: RouteSegmentInfo | None = Field(
+        default=None,
+        description="Промежуточные остановки между станциями запроса по порядку следования поезда (бэкенд).",
     )
 
 

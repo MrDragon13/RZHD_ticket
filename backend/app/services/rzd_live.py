@@ -367,6 +367,15 @@ def train_option_from_aiorzd(
 
     stops = extract_train_stops(content if isinstance(content, dict) else {})
 
+    train_number = str(getattr(train_obj, "number", "") or content.get("number") or "")
+
+    if len(stops) < 2:
+        logging.info(
+            "train_search stops sparse train=%s keys_sample=%s",
+            train_number,
+            sorted(list(content.keys()))[:40] if isinstance(content, dict) else [],
+        )
+
     features: list[str] = []
     brand = content.get("brand")
     if isinstance(brand, str) and brand.strip():
@@ -376,8 +385,6 @@ def train_option_from_aiorzd(
     carrier = content.get("carrier")
     if isinstance(carrier, str) and carrier.strip():
         features.append(re.sub(r"[^\w]+", "_", carrier.strip().lower())[:48])
-
-    train_number = str(getattr(train_obj, "number", "") or content.get("number") or "")
 
     tid = f"rzd-{train_number}-{dep.strftime('%Y%m%d%H%M')}-{index}"
 

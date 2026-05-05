@@ -7,7 +7,8 @@ import os
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 
-from app.models import TicketSearchRequest, TicketSearchResponse, TrainOption
+from app.models import RouteSegmentInfo, TicketSearchRequest, TicketSearchResponse, TrainOption
+from app.services.route_segment import resolve_route_segment
 from app.services.rzd_live import train_option_from_aiorzd
 
 
@@ -15,10 +16,11 @@ from app.services.rzd_live import train_option_from_aiorzd
 # Живой режим (по умолчанию): vendored aiorzd → pass.rzd.ru; выключить: RZD_LIVE_ENABLED=0.
 # При ошибке upstream — откат на demo при RZD_LIVE_FALLBACK=1 (по умолчанию).
 class RzdDataAdapter:
-    def __init__(self) -> None:
+    def __init__(self, *, deepseek_client=None) -> None:
         self._data_file = Path(__file__).resolve().parents[1] / "data" / "demo_trains.json"
         self.live_enabled = _env_truthy_default_on("RZD_LIVE_ENABLED")
         self.live_fallback = os.getenv("RZD_LIVE_FALLBACK", "1").strip().lower() not in ("0", "false", "no")
+        self._deepseek = deepseek_client
 
     async def search(self, request: TicketSearchRequest) -> TicketSearchResponse:
         if self.live_enabled:
@@ -27,11 +29,11 @@ class RzdDataAdapter:
             except Exception:
                 logging.exception("RZD live search failed")
                 if self.live_fallback:
-                    return self._search_demo(request)
+                    return await self._search_demo(request)
                 raise
-        return self._search_demo(request)
+        return await self._search_demo(request)
 
-    def _search_demo(self, request: TicketSearchRequest) -> TicketSearchResponse:
+    async def _search_demo(self, request: TicketSearchRequest) -> TicketSearchResponse:
         trains = self._load_demo_trains()
         normalized_destination = request.destination.lower()
         normalized_origin = (request.origin or "Москва").lower()
@@ -49,7 +51,7 @@ class RzdDataAdapter:
         return TicketSearchResponse(
             source="demo",
             updated_at=datetime.now(timezone.utc).isoformat(),
-            trains=matched,
+            trains=await self._enrich_route_segments(request, matched),
         )
 
     async def _search_live(self, request: TicketSearchRequest) -> TicketSearchResponse:
@@ -114,16 +116,50 @@ class RzdDataAdapter:
             if t.available_seats.platzkart + t.available_seats.coupe + t.available_seats.sv > 0
         ]
 
+        enriched = await self._enrich_route_segments(request, mapped)
+
         return TicketSearchResponse(
             source="live-cache",
             updated_at=datetime.now(timezone.utc).isoformat(),
-            trains=mapped,
+            trains=enriched,
         )
 
     def _load_demo_trains(self) -> list[TrainOption]:
         with self._data_file.open("r", encoding="utf-8") as file:
             payload = json.load(file)
         return [TrainOption(**item) for item in payload["trains"]]
+
+    async def _enrich_route_segments(
+        self,
+        request: TicketSearchRequest,
+        trains: list[TrainOption],
+    ) -> list[TrainOption]:
+        """Добавляет route_segment с промежуточными остановками и логирует шаги."""
+
+        origin = (request.origin or "").strip()
+        destination = (request.destination or "").strip()
+        out: list[TrainOption] = []
+        for t in trains:
+            seg = await resolve_route_segment(
+                stops=list(t.stops),
+                search_origin=origin,
+                search_destination=destination,
+                departure_station=t.departure_station,
+                arrival_station=t.arrival_station,
+                train_number=t.train_number,
+                train_id=t.id,
+                deepseek=self._deepseek,
+            )
+            info = RouteSegmentInfo(
+                intermediate_stops=seg.intermediate_stops,
+                endpoint_fraction=seg.endpoint_fraction,
+                method=seg.method,
+                origin_index=seg.origin_index,
+                destination_index=seg.destination_index,
+                debug_steps=seg.debug_steps[:30],
+            )
+            out.append(t.model_copy(update={"route_segment": info}))
+        return out
 
 
 def _env_truthy_default_on(name: str) -> bool:

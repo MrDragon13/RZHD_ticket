@@ -258,9 +258,14 @@ function stationMatches(stationName, userHint) {
 
 /**
  * Доля длины пути SVG до конечной точки сегмента пользователя на полном маршруте поезда.
- * Индексы по списку остановок РЖД; если не удалось сопоставить — null (рисуем шаблон до конца).
+ * Приоритет: поле route_segment с бэкенда (эвристика + DeepSeek).
  */
 function segmentEndpointFraction(train) {
+  const rf = train?.route_segment?.endpoint_fraction;
+  if (rf != null && Number.isFinite(Number(rf))) {
+    return Number(rf);
+  }
+
   const raw = Array.isArray(train?.stops)
     ? train.stops.map((s) => String(s).trim()).filter(Boolean)
     : [];
@@ -269,8 +274,14 @@ function segmentEndpointFraction(train) {
   if (!userFrom || !userTo) return null;
 
   if (raw.length >= 2) {
-    const iFrom = raw.findIndex((name) => stationMatches(name, userFrom));
-    const iTo = raw.findIndex((name) => stationMatches(name, userTo));
+    let iFrom = raw.findIndex((name) => stationMatches(name, userFrom));
+    let iTo = raw.findIndex((name) => stationMatches(name, userTo));
+    if (iFrom < 0) {
+      iFrom = raw.findIndex((name) => stationMatches(name, train?.departure_station));
+    }
+    if (iTo < 0) {
+      iTo = raw.findIndex((name) => stationMatches(name, train?.arrival_station));
+    }
     if (iFrom >= 0 && iTo >= 0 && iFrom !== iTo) {
       const idxEnd = iFrom < iTo ? iTo : iFrom;
       return (idxEnd + 1) / (raw.length + 1);
@@ -285,10 +296,23 @@ function segmentEndpointFraction(train) {
 }
 
 /**
- * Промежуточные остановки только между станцией отправления и пунктом назначения из запроса
- * (не по всему следованию поезда до терминуса).
+ * Промежуточные остановки между станциями запроса (порядок следования поезда).
+ * Приоритет: route_segment.intermediate_stops с бэкенда.
  */
 function intermediateStopDisplayNames(train) {
+  const rs = train?.route_segment;
+  if (rs && Array.isArray(rs.intermediate_stops) && rs.intermediate_stops.length > 0) {
+    const full = rs.intermediate_stops.map((s) => String(s).trim()).filter(Boolean);
+    const max = 3;
+    if (full.length <= max) return full;
+    const out = [];
+    for (let i = 0; i < max; i += 1) {
+      const idx = Math.round(((i + 0.5) / max) * (full.length - 1));
+      out.push(full[idx]);
+    }
+    return out;
+  }
+
   const raw = Array.isArray(train?.stops)
     ? train.stops.map((s) => String(s).trim()).filter(Boolean)
     : [];
@@ -296,8 +320,14 @@ function intermediateStopDisplayNames(train) {
   const userTo = intent?.destination;
   if (!raw.length || !userFrom || !userTo) return [];
 
-  const iFrom = raw.findIndex((name) => stationMatches(name, userFrom));
-  const iTo = raw.findIndex((name) => stationMatches(name, userTo));
+  let iFrom = raw.findIndex((name) => stationMatches(name, userFrom));
+  let iTo = raw.findIndex((name) => stationMatches(name, userTo));
+  if (iFrom < 0) {
+    iFrom = raw.findIndex((name) => stationMatches(name, train?.departure_station));
+  }
+  if (iTo < 0) {
+    iTo = raw.findIndex((name) => stationMatches(name, train?.arrival_station));
+  }
 
   let segment = [];
   if (iFrom >= 0 && iTo >= 0 && iFrom !== iTo) {
@@ -388,6 +418,19 @@ function mergeRouteVisualForTrain(destinationKey, train) {
   }
 
   const names = intermediateStopDisplayNames(train);
+  try {
+    console.debug("[path route-map]", train?.train_number, {
+      intent_from: intent?.origin,
+      intent_to: intent?.destination,
+      route_segment: train?.route_segment,
+      frac,
+      marker_names: names,
+      stops_len: train?.stops?.length,
+    });
+  } catch {
+    /* ignore */
+  }
+
   const placed = names.length > 0 ? stopMarkersAlongPath(base.line, names, frac) : null;
 
   if (!placed) {

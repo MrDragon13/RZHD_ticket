@@ -67,7 +67,7 @@ async def validation_engineering_log(request: Request, exc: RequestValidationErr
 
 
 deepseek_client = DeepSeekClient()
-rzd_adapter = RzdDataAdapter()
+rzd_adapter = RzdDataAdapter(deepseek_client=deepseek_client)
 
 
 # Для логически последовательного диалога поиск запускается только после того,
