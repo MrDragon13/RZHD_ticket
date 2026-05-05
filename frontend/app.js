@@ -20,7 +20,22 @@ const i18n = {
     fact: "AI Fact",
     options: "Рекомендованные поезда",
     checkout: "Оформить демо-билет",
-    demoFlow: ["Проверка маршрута", "Резервирование демонстрационного места", "Формирование QR-билета", "Готово"],
+    checkoutBusy: "Оформление…",
+    checkoutFinalizing: "Отправка на сервер и получение билета…",
+    checkoutError:
+      "Не удалось выдать демо-билет. Проверьте соединение и нажмите кнопку ещё раз.",
+    demoFlow: ["Проверка маршрута", "Подготовка выбора мест", "Загрузка схемы вагона", "Готово"],
+    seatPickerTitle: "Выбор вагона и мест",
+    seatPickerHint: "Нажмите на свободные места. Можно выбрать несколько.",
+    seatPickerSelected: "Выбрано мест",
+    seatPickerConfirm: "Подтвердить выбор",
+    seatPickerCarriage: "Вагон",
+    berthShort: {
+      lower: "Н",
+      upper: "В",
+      side_lower: "Бн",
+      side_upper: "Бв",
+    },
     demoTicket: "ДЕМО-БИЛЕТ",
     restart: "Начать заново",
     newSession: "Новый запрос",
@@ -34,6 +49,8 @@ const i18n = {
       searching: ["Покажи купе", "А есть быстрее?", "Самый дешевый", "Можно с животными?", "Женское купе"],
       results: ["Почему этот поезд?", "Покажи нижние места", "Есть ресторан?", "Выбрать лучший", "Начать заново"],
       checkout: ["Повтори билет", "Начать заново"],
+      seatPicker: ["Начать заново"],
+      ticket: ["Повтори билет", "Начать заново"],
     },
   },
   en: {
@@ -50,7 +67,21 @@ const i18n = {
     fact: "AI Fact",
     options: "Recommended trains",
     checkout: "Create demo ticket",
-    demoFlow: ["Checking route", "Reserving demo seat", "Generating QR ticket", "Done"],
+    checkoutBusy: "Processing…",
+    checkoutFinalizing: "Sending request and receiving your ticket…",
+    checkoutError: "Could not issue the demo ticket. Check your connection and tap the button again.",
+    demoFlow: ["Checking route", "Preparing seat selection", "Loading car layout", "Done"],
+    seatPickerTitle: "Choose car and seats",
+    seatPickerHint: "Tap available seats. You can select several.",
+    seatPickerSelected: "Seats selected",
+    seatPickerConfirm: "Confirm selection",
+    seatPickerCarriage: "Car",
+    berthShort: {
+      lower: "L",
+      upper: "U",
+      side_lower: "SL",
+      side_upper: "SU",
+    },
     demoTicket: "DEMO TICKET",
     restart: "Start over",
     newSession: "New request",
@@ -64,6 +95,8 @@ const i18n = {
       searching: ["Show coupe", "Any faster?", "Lowest price", "Pets allowed?", "Female compartment"],
       results: ["Why this train?", "Show lower berths", "Restaurant car?", "Choose best", "Start over"],
       checkout: ["Repeat ticket", "Start over"],
+      seatPicker: ["Start over"],
+      ticket: ["Repeat ticket", "Start over"],
     },
   },
 };
@@ -171,6 +204,14 @@ let trains = [];
 let recommendations = [];
 let selectedTrain = null;
 let demoTicket = null;
+let checkoutAnimating = false;
+let issuingTicket = false;
+let demoCarriages = [];
+let activeCarriageIndex = 0;
+/** @type {Map<string, Array<{ id: string, displayNum: string, berth_kind: string, occupied: boolean }>>} */
+let demoSeatLayouts = new Map();
+/** @type {Set<string>} */
+let selectedSeatKeys = new Set();
 let dialogMessages = [];
 let uiStage = "initial";
 let speechQueue = [];
@@ -189,7 +230,10 @@ const intentPanel = document.querySelector("#intent-panel");
 const trainsPanel = document.querySelector("#trains-panel");
 const checkoutPanel = document.querySelector("#checkout-panel");
 const ticketPanel = document.querySelector("#ticket-panel");
+const seatPickerPanel = document.querySelector("#seat-picker-panel");
 const mapContent = document.querySelector("#map-content");
+const checkoutButton = document.querySelector("#checkout-button");
+const confirmSeatsButton = document.querySelector("#confirm-seats-button");
 const orbButton = document.querySelector("#orb-button");
 const routeLine = document.querySelector("#route-line");
 const routePulse = document.querySelector("#route-pulse");
@@ -205,6 +249,8 @@ orbButton.addEventListener("click", startVoiceRecognition);
 orbButton.classList.add("orb-idle");
 document.querySelector("#restart-button").addEventListener("click", () => resetScenario(true));
 newSessionButton.addEventListener("click", () => resetScenario(true));
+checkoutButton.addEventListener("click", () => createTicket());
+confirmSeatsButton.addEventListener("click", () => confirmSeatSelection());
 userInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     handleUserText(userInput.value);
@@ -225,7 +271,12 @@ document.querySelector("#chips").addEventListener("click", (event) => {
     return;
   }
   if (action === "repeat-ticket" && demoTicket) {
-    enqueueSpeech(language === "ru" ? "Демо-билет уже готов на экране." : "The demo ticket is already on screen.");
+    if (uiStage === "ticket") {
+      ticketPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+      enqueueSpeech(language === "ru" ? "Билет на экране слева." : "Your ticket is on the left screen.");
+    } else {
+      enqueueSpeech(language === "ru" ? "Демо-билет уже готов на экране." : "The demo ticket is already on screen.");
+    }
     return;
   }
   handleUserText(event.target.textContent);
@@ -251,6 +302,9 @@ function setLanguage(nextLanguage) {
   document.querySelector("#trains-title").textContent = copy.options;
   document.querySelector("#restart-button").textContent = copy.restart;
   newSessionButton.textContent = copy.newSession;
+  document.querySelector("#seat-picker-title").textContent = copy.seatPickerTitle;
+  document.querySelector("#seat-picker-hint").textContent = copy.seatPickerHint;
+  confirmSeatsButton.textContent = copy.seatPickerConfirm;
   resetScenario(false);
   assistantSay(copy.assistantReady, { addToHistory: true });
 }
@@ -277,7 +331,7 @@ function setStage(nextStage) {
   if (nextStage === "initial") setOrbMode("idle");
   if (nextStage === "searching") setOrbMode("thinking");
   if (nextStage === "results") setOrbMode("speaking");
-  if (nextStage === "checkout") setOrbMode("idle");
+  if (nextStage === "checkout" || nextStage === "seatPicker" || nextStage === "ticket") setOrbMode("idle");
 }
 
 async function handleUserText(text) {
@@ -501,9 +555,10 @@ function renderAmenityBadges(amenities = []) {
 function selectTrain(train) {
   selectedTrain = train;
   checkoutPanel.classList.remove("hidden");
-  const button = document.querySelector("#checkout-button");
-  button.textContent = i18n[language].checkout;
-  button.onclick = createTicket;
+  if (!checkoutAnimating && !issuingTicket) {
+    checkoutButton.textContent = i18n[language].checkout;
+    checkoutButton.disabled = false;
+  }
   const phrase =
     language === "ru"
       ? `Выбран поезд ${train.train_number}. Доступны нижние места: ${train.seat_details?.lower ?? 0}.`
@@ -514,23 +569,207 @@ function selectTrain(train) {
 }
 
 async function createTicket() {
+  if (checkoutAnimating || issuingTicket || !selectedTrain) return;
+  checkoutAnimating = true;
+  checkoutButton.disabled = true;
+  checkoutButton.textContent = i18n[language].checkoutBusy;
   const steps = document.querySelector("#checkout-steps");
   steps.innerHTML = "";
-  for (const step of i18n[language].demoFlow) {
-    const item = document.createElement("div");
-    item.className = "checkout-step";
-    item.textContent = step;
-    steps.append(item);
-    await wait(260);
-    item.classList.add("checkout-step-done");
+  try {
+    for (const step of i18n[language].demoFlow) {
+      const item = document.createElement("div");
+      item.className = "checkout-step";
+      item.textContent = step;
+      steps.append(item);
+      await wait(260);
+      item.classList.add("checkout-step-done");
+    }
+    checkoutPanel.classList.add("hidden");
+    steps.innerHTML = "";
+    buildSeatPickerModel(selectedTrain);
+    showSeatPicker();
+  } finally {
+    checkoutAnimating = false;
+    checkoutButton.disabled = false;
+    checkoutButton.textContent = i18n[language].checkout;
   }
-  demoTicket = await postJson("/api/checkout/demo", { language, train: selectedTrain });
-  renderTicket();
+}
+
+function hashSeed(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function mulberry32(seed) {
+  return function next() {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function buildSeatPickerModel(train) {
+  const layouts = new Map();
+  const rng = mulberry32(hashSeed(train.id || train.train_number || "train"));
+  const cars = [];
+  for (let i = 0; i < 8; i += 1) {
+    cars.push(String(i + 1).padStart(2, "0"));
+  }
+  demoCarriages = cars;
+  activeCarriageIndex = 0;
+  selectedSeatKeys = new Set();
+
+  cars.forEach((car) => {
+    const seats = [];
+    const kinds = ["lower", "upper", "lower", "upper", "side_lower", "side_upper"];
+    for (let n = 1; n <= 18; n += 1) {
+      const berth_kind = kinds[(n + car.charCodeAt(1)) % kinds.length];
+      const occupied = rng() > 0.42;
+      seats.push({
+        id: `${car}-${String(n).padStart(2, "0")}-${berth_kind}`,
+        displayNum: String(n).padStart(2, "0"),
+        berth_kind,
+        occupied,
+      });
+    }
+    layouts.set(car, seats);
+  });
+  demoSeatLayouts = layouts;
+}
+
+function showSeatPicker() {
+  mapContent.classList.add("hidden");
+  ticketPanel.classList.add("hidden");
+  seatPickerPanel.classList.remove("hidden");
+  document.querySelector("#seat-picker-title").textContent = i18n[language].seatPickerTitle;
+  document.querySelector("#seat-picker-hint").textContent = i18n[language].seatPickerHint;
+  confirmSeatsButton.textContent = i18n[language].seatPickerConfirm;
+  renderCarriageTabs();
+  renderSeatGrid();
+  updateSeatPickerChrome();
+  setStage("seatPicker");
+  assistantSay(
+    language === "ru"
+      ? "Выберите вагон и места на схеме. Можно указать несколько мест."
+      : "Choose a car and seats on the layout. Multiple seats are allowed.",
+  );
+  seatPickerPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function renderCarriageTabs() {
+  const host = document.querySelector("#carriage-tabs");
+  host.innerHTML = "";
+  demoCarriages.forEach((car, index) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `carriage-tab ${index === activeCarriageIndex ? "carriage-tab-active" : ""}`;
+    btn.textContent = `${i18n[language].seatPickerCarriage} ${car}`;
+    btn.dataset.carriageIndex = String(index);
+    btn.addEventListener("click", () => {
+      activeCarriageIndex = index;
+      renderCarriageTabs();
+      renderSeatGrid();
+      updateSeatPickerChrome();
+    });
+    host.append(btn);
+  });
+}
+
+function renderSeatGrid() {
+  const grid = document.querySelector("#seat-grid");
+  grid.innerHTML = "";
+  const car = demoCarriages[activeCarriageIndex];
+  const seats = demoSeatLayouts.get(car) || [];
+  seats.forEach((seat) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "seat-cell";
+    btn.dataset.seatId = seat.id;
+    const short = i18n[language].berthShort[seat.berth_kind] || "";
+    btn.innerHTML = `<span class="seat-num">${seat.displayNum}</span><span class="seat-berth">${short}</span>`;
+    if (seat.occupied) {
+      btn.classList.add("seat-occupied");
+      btn.disabled = true;
+    } else if (selectedSeatKeys.has(seat.id)) {
+      btn.classList.add("seat-selected");
+    }
+    btn.addEventListener("click", () => toggleSeatSelection(car, seat));
+    grid.append(btn);
+  });
+}
+
+function toggleSeatSelection(car, seat) {
+  if (seat.occupied) return;
+  const key = seat.id;
+  if (selectedSeatKeys.has(key)) {
+    selectedSeatKeys.delete(key);
+  } else if (selectedSeatKeys.size >= 8) {
+    assistantSay(language === "ru" ? "Не более восьми мест в одном заказе." : "Up to eight seats per order.");
+    return;
+  } else {
+    selectedSeatKeys.add(key);
+  }
+  renderSeatGrid();
+  updateSeatPickerChrome();
+}
+
+function seatPayloadFromSelection() {
+  const selected = [];
+  for (const car of demoCarriages) {
+    const seats = demoSeatLayouts.get(car) || [];
+    seats.forEach((seat) => {
+      if (!selectedSeatKeys.has(seat.id)) return;
+      selected.push({
+        carriage: car,
+        seat_number: seat.displayNum,
+        berth_kind: seat.berth_kind,
+      });
+    });
+  }
+  selected.sort((a, b) => `${a.carriage}-${a.seat_number}`.localeCompare(`${b.carriage}-${b.seat_number}`));
+  return selected;
+}
+
+function updateSeatPickerChrome() {
+  const n = selectedSeatKeys.size;
+  const label = i18n[language].seatPickerSelected;
+  document.querySelector("#seat-picker-count").textContent =
+    language === "ru" ? `${label}: ${n}` : `${label}: ${n}`;
+  confirmSeatsButton.disabled = n === 0 || issuingTicket;
+}
+
+async function confirmSeatSelection() {
+  const seatsPayload = seatPayloadFromSelection();
+  if (!seatsPayload.length || issuingTicket || !selectedTrain) return;
+  issuingTicket = true;
+  confirmSeatsButton.disabled = true;
+  try {
+    demoTicket = await postJson("/api/checkout/demo", {
+      language,
+      train: selectedTrain,
+      selected_seats: seatsPayload,
+    });
+    seatPickerPanel.classList.add("hidden");
+    renderTicket();
+  } catch {
+    assistantSay(i18n[language].checkoutError);
+  } finally {
+    issuingTicket = false;
+    confirmSeatsButton.disabled = selectedSeatKeys.size === 0;
+    updateSeatPickerChrome();
+  }
 }
 
 function renderTicket() {
   mapContent.classList.add("hidden");
+  seatPickerPanel.classList.add("hidden");
   ticketPanel.classList.remove("hidden");
+  setStage("ticket");
   document.querySelector("#ticket-title").textContent = i18n[language].demoTicket;
   const amenities = selectedTrain ? renderAmenityBadges(selectedTrain.amenities) : "";
   document.querySelector("#ticket-body").innerHTML = `
@@ -547,6 +786,7 @@ function renderTicket() {
   `;
   document.querySelector("#qr-payload").textContent = demoTicket.ticket_id;
   assistantSay(language === "ru" ? "Демонстрационный билет готов." : "Your demo ticket is ready.");
+  ticketPanel.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function startVoiceRecognition() {
@@ -619,7 +859,8 @@ function enqueueSpeech(text) {
 function speakNext() {
   if (!speechQueue.length) {
     isSpeaking = false;
-    if (uiStage === "initial" || uiStage === "checkout") setOrbMode("idle");
+    if (uiStage === "initial" || uiStage === "checkout" || uiStage === "seatPicker" || uiStage === "ticket")
+      setOrbMode("idle");
     return;
   }
   isSpeaking = true;
@@ -715,6 +956,12 @@ function resetScenario(announce = true) {
   recommendations = [];
   selectedTrain = null;
   demoTicket = null;
+  checkoutAnimating = false;
+  issuingTicket = false;
+  demoCarriages = [];
+  activeCarriageIndex = 0;
+  demoSeatLayouts = new Map();
+  selectedSeatKeys = new Set();
   dialogMessages = [];
   speechQueue = [];
   isSpeaking = false;
@@ -722,8 +969,11 @@ function resetScenario(announce = true) {
   userInput.value = "";
   transcript.textContent = "";
   assistantText.textContent = i18n[language].assistantReady;
-  [intentPanel, trainsPanel, checkoutPanel, ticketPanel].forEach((panel) => panel.classList.add("hidden"));
+  [intentPanel, trainsPanel, checkoutPanel, seatPickerPanel, ticketPanel].forEach((panel) =>
+    panel.classList.add("hidden"),
+  );
   mapContent.classList.remove("hidden");
+  document.querySelector("#checkout-steps").innerHTML = "";
   document.querySelector("#route-meta").textContent =
     language === "ru" ? "Москва -> Казань" : "Moscow -> Kazan";
   document.querySelector("#route-fact").textContent =

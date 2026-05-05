@@ -84,6 +84,23 @@
             </article>
           </div>
 
+          <section id="seat-picker-panel" class="seat-picker-panel hidden">
+            <div class="seat-picker glass-panel">
+              <header class="seat-picker-header">
+                <div>
+                  <h2 id="seat-picker-title">Выбор вагона и мест</h2>
+                  <p id="seat-picker-hint" class="seat-picker-sub"></p>
+                </div>
+                <p id="seat-picker-count" class="seat-picker-count"></p>
+              </header>
+              <div id="carriage-tabs" class="carriage-tabs" role="tablist"></div>
+              <div id="seat-grid" class="seat-grid" role="group"></div>
+              <div class="seat-picker-actions">
+                <button id="confirm-seats-button" type="button" class="primary-button" disabled>Подтвердить</button>
+              </div>
+            </div>
+          </section>
+
           <section id="ticket-panel" class="ticket-panel hidden">
             <div class="ticket">
               <h2 id="ticket-title">ДЕМО-БИЛЕТ</h2>
