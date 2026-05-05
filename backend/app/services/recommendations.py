@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .deepseek_client import DeepSeekClient
-from ..models import Recommendation, RecommendRequest, RecommendResponse, TrainOption
+from ..models import Recommendation, RecommendRequest, RecommendResponse, TrainOption, TripIntent
 
 
 def _min_price(train: TrainOption) -> int:
@@ -90,6 +90,44 @@ def _score_train(train: TrainOption, request: RecommendRequest) -> tuple[float, 
     return score, deduplicated_badges
 
 
+def _heuristic_wants_llm_rank(intent: TripIntent, last_message: str | None) -> bool:
+    """Эвристика: нестандартный запрос без явного флага от модели понимания."""
+
+    if intent.rank_with_llm:
+        return True
+    text = (last_message or "").strip().lower()
+    if len(text) < 12:
+        return False
+    hints = (
+        "животн",
+        "питомц",
+        "собак",
+        "кошк",
+        "провоз",
+        "коляск",
+        "инвалид",
+        "медицин",
+        "аллерг",
+        "беремен",
+        "младенц",
+        "малыш",
+        "грудн",
+        "пандус",
+        "сопровожд",
+        "групп",
+        "корпорат",
+        "pets",
+        "animal",
+        "wheelchair",
+        "medical",
+        "baby",
+        "infant",
+        "allergy",
+        "group booking",
+    )
+    return any(h in text for h in hints)
+
+
 async def recommend_trains(
     request: RecommendRequest,
     deepseek_client: DeepSeekClient,
@@ -102,6 +140,27 @@ async def recommend_trains(
         ranked.append((train, score, badges))
 
     ranked.sort(key=lambda item: item[1], reverse=True)
+
+    use_llm_order = deepseek_client.enabled and (
+        request.intent.rank_with_llm or _heuristic_wants_llm_rank(request.intent, request.last_user_message)
+    )
+    llm_ids = None
+    if use_llm_order and len(request.trains) > 1:
+        llm_ids = await deepseek_client.rank_train_order(
+            request.language,
+            request.intent,
+            request.trains,
+            request.last_user_message,
+        )
+
+    if llm_ids:
+        by_id = {t.id: (t, sc, bd) for t, sc, bd in ranked}
+        reordered: list[tuple[TrainOption, float, list[str]]] = []
+        for tid in llm_ids:
+            if tid in by_id:
+                reordered.append(by_id[tid])
+        ranked = reordered if len(reordered) == len(ranked) else ranked
+
     recommendations = [
         Recommendation(
             train_id=train.id,

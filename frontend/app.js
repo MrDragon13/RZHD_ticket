@@ -228,6 +228,8 @@ let speechQueue = [];
 let isSpeaking = false;
 let audioContext = null;
 let textInputPanelOpen = false;
+let lastDialogUserText = "";
+let lastSelectedTrainId = null;
 
 const screens = {
   language: document.querySelector("#language-screen"),
@@ -291,6 +293,8 @@ function updateTextInputToggleLabels() {
   textInputToggle.textContent = textInputPanelOpen ? copy.textInputHide : copy.textInputReveal;
   textInputToggle.setAttribute("aria-label", textInputPanelOpen ? copy.textInputAriaHide : copy.textInputAriaShow);
 }
+
+updateTextInputToggleLabels();
 
 // Чипы меняются в зависимости от стадии сценария: старт, поиск, результаты,
 // оформление. Неактуальные подсказки исчезают, чтобы экран не выглядел шумным.
@@ -373,6 +377,7 @@ function setStage(nextStage) {
 async function handleUserText(text) {
   const cleanText = text.trim();
   if (!cleanText) return;
+  lastDialogUserText = cleanText;
   // Очищаем поле только после фиксации текста в истории: пользователь видит,
   // что именно распознал микрофон или что он отправил вручную.
   transcript.textContent = cleanText;
@@ -411,6 +416,7 @@ function normalizeIntent(rawState, assistant_text) {
     preferences: rawState.preferences || ["sleep", "comfort"],
     priority: rawState.priority || "arrival_time",
     transfers: rawState.transfers || "direct_preferred",
+    rank_with_llm: Boolean(rawState.rank_with_llm),
     assistant_text,
   };
 }
@@ -441,7 +447,12 @@ async function searchAndRecommend() {
   ]);
   trains = ticketResponse.trains;
   renderRoute(factResponse.fact);
-  const recommendResponse = await postJson("/api/recommend", { language, intent, trains });
+  const recommendResponse = await postJson("/api/recommend", {
+    language,
+    intent,
+    trains,
+    last_user_message: lastDialogUserText || null,
+  });
   recommendations = recommendResponse.recommendations;
   assistantSay(recommendResponse.assistant_text);
   renderTrains();
@@ -595,11 +606,15 @@ function selectTrain(train) {
     checkoutButton.textContent = i18n[language].checkout;
     checkoutButton.disabled = false;
   }
-  const phrase =
-    language === "ru"
-      ? `Выбран поезд ${train.train_number}. Доступны нижние места: ${train.seat_details?.lower ?? 0}.`
-      : `Train ${train.train_number} selected. Lower berths available: ${train.seat_details?.lower ?? 0}.`;
-  assistantSay(phrase);
+  const sameAsBefore = lastSelectedTrainId === train.id;
+  lastSelectedTrainId = train.id;
+  if (!sameAsBefore) {
+    const phrase =
+      language === "ru"
+        ? `Выбран поезд ${train.train_number}. Доступны нижние места: ${train.seat_details?.lower ?? 0}.`
+        : `Train ${train.train_number} selected. Lower berths available: ${train.seat_details?.lower ?? 0}.`;
+    assistantSay(phrase);
+  }
   setStage("checkout");
   checkoutPanel.scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -1025,6 +1040,8 @@ function resetScenario(announce = true) {
   activeCarriageIndex = 0;
   demoSeatLayouts = new Map();
   selectedSeatKeys = new Set();
+  lastSelectedTrainId = null;
+  lastDialogUserText = "";
   dialogMessages = [];
   speechQueue = [];
   isSpeaking = false;

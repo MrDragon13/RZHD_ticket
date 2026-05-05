@@ -121,6 +121,7 @@ class DeepSeekClient:
                     "priority": "arrival_time|price|speed|comfort|null",
                     "transfers": "direct_preferred|null",
                     "assistant_text": "short phrase in selected language",
+                    "rank_with_llm": "boolean — true если запрос не сводится к обычным тегам preferences/priority (например поезд с животными, медицинское сопровождение, необычное время, сложные условия). Иначе false.",
                 },
             },
             ensure_ascii=False,
@@ -188,6 +189,7 @@ class DeepSeekClient:
             "priority": "price" if "cheap" in preferences else ("speed" if "speed" in preferences else "arrival_time"),
             "transfers": "direct_preferred",
             "assistant_text": assistant_text,
+            "rank_with_llm": False,
         }
 
     async def explain_recommendation(
@@ -225,6 +227,63 @@ class DeepSeekClient:
             return await self.chat_text(system_prompt, user_prompt)
         except Exception:
             return fallback_text
+
+    async def rank_train_order(
+        self,
+        language: str,
+        intent: TripIntent,
+        trains: list[TrainOption],
+        user_hint: str | None,
+    ) -> list[str] | None:
+        """Возвращает упорядоченный список id поездов от лучшего к худшему.
+
+        Используется только для нестандартных запросов. При ошибке — None.
+        """
+
+        if not self.enabled or not trains:
+            return None
+
+        compact = [
+            {
+                "id": t.id,
+                "train_number": t.train_number,
+                "departure_time": t.departure_time,
+                "arrival_time": t.arrival_time,
+                "duration_minutes": t.duration_minutes,
+                "features": t.features,
+                "amenities": t.amenities,
+                "prices": t.prices.model_dump(),
+            }
+            for t in trains
+        ]
+        system_prompt = (
+            "Ты эксперт по подбору поездов для терминала РЖД «Путь». "
+            "Пользовательский запрос может быть нестандартным (животные, здоровье, время, комфорт и т.д.). "
+            "Упорядочь ТОЛЬКО переданные поезда по уместности под запрос. "
+            "Не добавляй поезда. Не выдумывай цены и расписание — используй только поля из списка. "
+            "Верни строго JSON без markdown: {\"ordered_train_ids\": [\"id1\", \"id2\", ...]} — все id из входного списка, каждый ровно один раз."
+        )
+        user_prompt = json.dumps(
+            {
+                "language": language,
+                "user_intent": intent.model_dump(),
+                "last_user_message": user_hint,
+                "trains": compact,
+            },
+            ensure_ascii=False,
+        )
+        try:
+            data = await self.chat_json(system_prompt, user_prompt)
+            ordered = data.get("ordered_train_ids")
+            if not isinstance(ordered, list):
+                return None
+            valid_ids = {t.id for t in trains}
+            picked = [str(x) for x in ordered if str(x) in valid_ids]
+            if len(picked) != len(trains) or set(picked) != valid_ids:
+                return None
+            return picked
+        except Exception:
+            return None
 
     async def generate_fun_fact(self, language: str, origin: str | None, destination: str) -> tuple[str, str]:
         """Возвращает короткий факт о маршруте через LLM или локальный fallback."""

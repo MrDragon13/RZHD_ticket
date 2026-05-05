@@ -40,6 +40,7 @@ class TripIntent(BaseModel):
     priority: str | None = None
     transfers: str | None = None
     assistant_text: str
+    rank_with_llm: bool = False
 
 
 class DialogRequest(BaseModel):
@@ -132,6 +133,7 @@ class RecommendRequest(BaseModel):
     language: Language
     intent: TripIntent
     trains: list[TrainOption]
+    last_user_message: str | None = None
 
 
 class Recommendation(BaseModel):
