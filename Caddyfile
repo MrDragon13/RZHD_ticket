@@ -1,0 +1,5 @@
+176.109.100.199.sslip.io {
+    # Caddy автоматически получает и обновляет TLS-сертификат Let's Encrypt.
+    # HTTPS нужен для Chrome: без secure context браузер блокирует микрофон.
+    reverse_proxy frontend:80
+}

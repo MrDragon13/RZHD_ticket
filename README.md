@@ -122,14 +122,14 @@ DEEPSEEK_TIMEOUT_SECONDS=20
 docker compose up --build
 ```
 
-После запуска:
+После запуска без домена:
 
 - frontend: <http://localhost>
 - backend API через frontend nginx: <http://localhost/api/health>
 - backend API: <http://localhost:8000>
 - документация API: <http://localhost:8000/docs>
 
-Для VDS обычно достаточно открыть порт `80` для интерфейса. Frontend-контейнер проксирует `/api/*` в backend-контейнер, поэтому браузеру не нужен прямой доступ к порту `8000`.
+Для VDS с голосовым вводом нужен HTTPS, иначе Chrome блокирует микрофон. В compose добавлен Caddy: он слушает `80/443`, выпускает сертификат для домена `176.109.100.199.sslip.io` и проксирует запросы во frontend-контейнер. Frontend-контейнер проксирует `/api/*` в backend-контейнер, поэтому браузеру не нужен прямой доступ к порту `8000`.
 
 ## Локальный запуск backend без Docker
 
