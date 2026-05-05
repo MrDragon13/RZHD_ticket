@@ -31,11 +31,12 @@ const i18n = {
     demoFlow: ["Проверка маршрута", "Подготовка выбора мест", "Загрузка схемы вагона", "Готово"],
     seatPickerTitle: "Выбор вагона и мест",
     seatPickerHint:
-      "Места сгруппированы по купе: в кубике четыре места (два ряда по паре нижний/верхний). В СВ — купе из двух мест в ряд. Число мест на вагон соответствует типичной вместимости. Можно выбрать несколько.",
+      "Плацкарт: 9 открытых купе (1–36) и боковые места у окна (37–54). В купе снизу нечётные, сверху чётные. Можно выбрать несколько мест.",
     seatPickerSelected: "Выбрано мест",
     seatPickerTotal: "Сумма",
     seatPickerConfirm: "Подтвердить выбор",
-    seatPickerCarriage: "Вагон",
+    seatPickerZoneOpen: "Открытая часть вагона (места 1–36)",
+    seatPickerZoneSide: "Боковые места у окна (места 37–54)",
     selectedTrainHeading: "Выбранный поезд",
     carClassPlatzkart: "Плацкарт",
     carClassCoupe: "Купе",
@@ -95,11 +96,12 @@ const i18n = {
     demoFlow: ["Checking route", "Preparing seat selection", "Loading car layout", "Done"],
     seatPickerTitle: "Choose car and seats",
     seatPickerHint:
-      "Seats are grouped into compartments: each cube is four berths (two columns of lower/upper). SV compartments show two berths side by side. Car capacity follows typical layouts. Multiple seats allowed.",
+      "Platzkart: nine open bays (1–36) and side berths by the window (37–54). Odd lower, even upper in each bay. Multiple seats allowed.",
     seatPickerSelected: "Seats selected",
     seatPickerTotal: "Total",
     seatPickerConfirm: "Confirm selection",
-    seatPickerCarriage: "Car",
+    seatPickerZoneOpen: "Open section (seats 1–36)",
+    seatPickerZoneSide: "Side berths by the window (seats 37–54)",
     selectedTrainHeading: "Selected train",
     carClassPlatzkart: "Platzkart",
     carClassCoupe: "Coupe",
@@ -1038,6 +1040,64 @@ function compartmentCountForCapacity(capacity) {
   return fc + (r === 2 || r === 3 ? 1 : 0);
 }
 
+/** Классическая схема плацкарта 54 места: 9×4 в открытой части (1–36), боковые у окна (37–54). */
+function buildPlatzkart54Seats(car, rng) {
+  const seats = [];
+  for (let comp = 0; comp < 9; comp += 1) {
+    const base = comp * 8 + 1;
+    for (let pairSlot = 0; pairSlot < 2; pairSlot += 1) {
+      const lowerNum = base + pairSlot * 2;
+      const upperNum = lowerNum + 1;
+      seats.push({
+        id: `${car}-${String(lowerNum).padStart(2, "0")}-lower`,
+        displayNum: String(lowerNum).padStart(2, "0"),
+        berth_kind: "lower",
+        compartmentIndex: comp,
+        pairIndex: pairSlot,
+        deckIndex: 0,
+        zone: "open",
+        occupied: rng() > 0.42,
+      });
+      seats.push({
+        id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
+        displayNum: String(upperNum).padStart(2, "0"),
+        berth_kind: "upper",
+        compartmentIndex: comp,
+        pairIndex: pairSlot,
+        deckIndex: 0,
+        zone: "open",
+        occupied: rng() > 0.42,
+      });
+    }
+  }
+  for (let i = 0; i < 9; i += 1) {
+    const compIdx = 9 + i;
+    const upperNum = 38 + i * 2;
+    const lowerNum = 37 + i * 2;
+    seats.push({
+      id: `${car}-${String(upperNum).padStart(2, "0")}-side_upper`,
+      displayNum: String(upperNum).padStart(2, "0"),
+      berth_kind: "side_upper",
+      compartmentIndex: compIdx,
+      pairIndex: 0,
+      deckIndex: 0,
+      zone: "side",
+      occupied: rng() > 0.42,
+    });
+    seats.push({
+      id: `${car}-${String(lowerNum).padStart(2, "0")}-side_lower`,
+      displayNum: String(lowerNum).padStart(2, "0"),
+      berth_kind: "side_lower",
+      compartmentIndex: compIdx,
+      pairIndex: 0,
+      deckIndex: 0,
+      zone: "side",
+      occupied: rng() > 0.42,
+    });
+  }
+  return seats;
+}
+
 function buildSeatPickerModel(train) {
   const layouts = new Map();
   const rng = mulberry32(hashSeed(train.id || train.train_number || "train"));
@@ -1098,6 +1158,12 @@ function buildSeatPickerModel(train) {
       return;
     }
 
+    if (cls === "platzkart" && capacity === 54) {
+      seats = attachSeatPrices(train, car, cls, buildPlatzkart54Seats(car, rng));
+      layouts.set(car, seats);
+      return;
+    }
+
     const span = buildBerthSeatSpan(car, capacity, 1, 0, rng, 0);
     seats = attachSeatPrices(train, car, cls, span.seats);
     layouts.set(car, seats);
@@ -1108,7 +1174,11 @@ function buildSeatPickerModel(train) {
 function createSeatButton(car, seat) {
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = `seat-cell ${seat.berth_kind === "upper" ? "seat-cell-upper" : "seat-cell-lower"}`;
+  let vertClass = "seat-cell-lower";
+  if (seat.berth_kind === "upper") vertClass = "seat-cell-upper";
+  else if (seat.berth_kind === "side_upper") vertClass = "seat-cell-side-upper";
+  else if (seat.berth_kind === "side_lower") vertClass = "seat-cell-side-lower";
+  btn.className = `seat-cell ${vertClass}`;
   btn.dataset.seatId = seat.id;
   const short = i18n[language].berthShort[seat.berth_kind] || "";
   btn.innerHTML = `<span class="seat-num">${seat.displayNum}</span><span class="seat-berth">${short}</span>`;
@@ -1257,6 +1327,61 @@ function renderSeatGrid() {
   });
   const cls = carriageClassKey(car);
   const compIndices = [...byCompartment.keys()].sort((a, b) => a - b);
+  const isPlatzkartClassic =
+    cls === "platzkart" && seats.some((s) => s.zone === "open") && seats.some((s) => s.zone === "side");
+  if (isPlatzkartClassic) {
+    const openSeats = seats.filter((s) => s.zone === "open");
+    const sideSeats = seats.filter((s) => s.zone === "side");
+    const openByComp = new Map();
+    openSeats.forEach((seat) => {
+      const ci = seat.compartmentIndex ?? 0;
+      if (!openByComp.has(ci)) openByComp.set(ci, []);
+      openByComp.get(ci).push(seat);
+    });
+    const secOpen = document.createElement("div");
+    secOpen.className = "platz-zone platz-zone--open";
+    const lo = document.createElement("p");
+    lo.className = "platz-zone-label";
+    lo.textContent = i18n[language].seatPickerZoneOpen;
+    secOpen.append(lo);
+    const openFlex = document.createElement("div");
+    openFlex.className = "car-platz-open-cubes";
+    for (let compIdx = 0; compIdx < 9; compIdx += 1) {
+      appendStandardCoupeCube(openFlex, car, openByComp.get(compIdx) || []);
+    }
+    secOpen.append(openFlex);
+    grid.append(secOpen);
+
+    const secSide = document.createElement("div");
+    secSide.className = "platz-zone platz-zone--side";
+    const ls = document.createElement("p");
+    ls.className = "platz-zone-label";
+    ls.textContent = i18n[language].seatPickerZoneSide;
+    secSide.append(ls);
+    const bySideComp = new Map();
+    sideSeats.forEach((seat) => {
+      const ci = seat.compartmentIndex ?? 9;
+      if (!bySideComp.has(ci)) bySideComp.set(ci, []);
+      bySideComp.get(ci).push(seat);
+    });
+    for (let compIdx = 9; compIdx <= 17; compIdx += 1) {
+      const pair = bySideComp.get(compIdx) || [];
+      const upper = pair.find((s) => s.berth_kind === "side_upper");
+      const lower = pair.find((s) => s.berth_kind === "side_lower");
+      const row = document.createElement("div");
+      row.className = "car-side-bay-row";
+      const colU = document.createElement("div");
+      colU.className = "car-side-col car-side-col--upper";
+      const colL = document.createElement("div");
+      colL.className = "car-side-col car-side-col--lower";
+      if (upper) colU.append(createSeatButton(car, upper));
+      if (lower) colL.append(createSeatButton(car, lower));
+      row.append(colU, colL);
+      secSide.append(row);
+    }
+    grid.append(secSide);
+    return;
+  }
   const isDoubleCoupe = cls === "coupe" && selectedTrain?.coupe_double_deck;
   if (isDoubleCoupe) {
     const d0 = compIndices.filter((i) => (byCompartment.get(i) || []).some((s) => s.deckIndex === 0));

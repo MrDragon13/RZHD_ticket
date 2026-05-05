@@ -1310,6 +1310,63 @@ button {
   height: 6px;
 }
 
+.platz-zone {
+  flex: 1 1 100%;
+  margin-bottom: 14px;
+}
+
+.platz-zone-label {
+  flex: 1 1 100%;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(0, 255, 156, 0.88);
+  text-align: center;
+}
+
+.car-platz-open-cubes {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow-x: auto;
+  width: 100%;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+}
+
+.car-platz-open-cubes::-webkit-scrollbar {
+  height: 6px;
+}
+
+.platz-zone--side .car-side-bay-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.car-side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 76px;
+}
+
+.seat-cell-side-upper {
+  order: 1;
+}
+
+.seat-cell-side-lower {
+  order: 2;
+}
+
 .compartment-cube {
   display: flex;
   flex-wrap: nowrap;
