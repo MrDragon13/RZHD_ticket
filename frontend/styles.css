@@ -219,9 +219,73 @@ button {
 }
 
 .terminal-screen {
+  display: grid;
+  grid-template-rows: 1fr;
+  gap: 0;
+  min-height: 0;
+}
+
+.main-workspace {
+  display: grid;
   grid-template-columns: 1.12fr 0.88fr;
   gap: 22px;
   min-height: 0;
+}
+
+.checkout-workspace {
+  display: none;
+  grid-template-columns: 1.12fr 0.88fr;
+  gap: 22px;
+  min-height: 0;
+}
+
+.checkout-workspace:not(.hidden) {
+  display: grid;
+}
+
+.seat-picker-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.seat-picker-column .seat-picker-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.seat-picker-column .seat-picker {
+  min-height: 100%;
+}
+
+.checkout-side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.checkout-map-host {
+  flex: 1;
+  min-height: 280px;
+  border-radius: 24px;
+  border: 1px solid rgba(0, 229, 255, 0.16);
+  overflow: hidden;
+  background: rgba(5, 12, 28, 0.5);
+}
+
+.checkout-map-host .map-content {
+  height: 100%;
+  min-height: 320px;
+}
+
+.checkout-map-host .route-map {
+  min-height: 280px;
+  height: calc(100% - 94px);
 }
 
 .map-panel,
@@ -239,14 +303,6 @@ button {
   position: relative;
   overflow: hidden;
   padding: 26px;
-}
-
-.map-panel-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 
 .checkout-train-summary {
@@ -346,20 +402,6 @@ button {
   color: var(--green);
   font-weight: 800;
   font-size: 14px;
-}
-
-.map-panel-stack .map-content {
-  flex: 1;
-  min-height: 280px;
-}
-
-.map-panel-stack .route-map {
-  min-height: 260px;
-  height: auto;
-}
-
-.seat-picker-panel {
-  flex-shrink: 0;
 }
 
 .map-content {
@@ -1006,6 +1048,11 @@ button {
   color: var(--green);
 }
 
+.seat-picker-column .glass-panel {
+  width: 100%;
+  max-width: none;
+}
+
 .glass-panel {
   width: min(860px, 100%);
   padding: 24px 26px 28px;
@@ -1197,7 +1244,17 @@ button {
   }
 
   .terminal-screen {
+    display: block;
+  }
+
+  .main-workspace,
+  .checkout-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .checkout-workspace:not(.hidden) {
+    display: flex;
+    flex-direction: column;
   }
 
   .chips,

@@ -36,133 +36,141 @@
       </section>
 
       <section id="terminal-screen" class="screen terminal-screen hidden">
-        <section id="route-panel" class="map-panel map-panel-stack">
-          <section id="checkout-train-summary" class="checkout-train-summary hidden" aria-hidden="true">
-            <p id="checkout-train-summary-label" class="checkout-train-summary-label"></p>
-            <div id="checkout-train-summary-body" class="checkout-train-summary-body"></div>
-          </section>
-          <div id="map-content" class="map-content">
-            <div class="map-title">
-              <div>
-                <span id="route-title">Маршрут</span>
-                <h2 id="route-meta">Москва → Казань</h2>
-              </div>
-              <span id="route-state">Живая схема маршрута</span>
-            </div>
-            <svg class="route-map" viewBox="0 0 900 520" role="img" aria-label="Неоновая карта маршрута">
-              <defs>
-                <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="#00e5ff" />
-                  <stop offset="55%" stop-color="#8a2be2" />
-                  <stop offset="100%" stop-color="#00ff9c" />
-                </linearGradient>
-                <filter id="glow">
-                  <feGaussianBlur stdDeviation="5" result="coloredBlur" />
-                  <feMerge>
-                    <feMergeNode in="coloredBlur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-              </defs>
-              <path class="map-landmass" d="M58 340 C118 245 214 178 328 158 C438 139 544 104 650 75 C766 44 842 83 866 164 C891 246 802 318 714 335 C623 353 548 438 430 456 C318 473 235 417 151 411 C82 407 30 389 58 340Z" />
-              <path class="map-region-line" d="M120 410 C210 340 276 270 338 166" />
-              <path class="map-region-line" d="M330 452 C420 355 498 250 650 76" />
-              <path class="map-region-line" d="M178 214 C300 250 438 230 602 168" />
-              <path class="rail-background" d="M70 380 C220 320 340 380 510 280 S720 130 840 190" />
-              <path id="route-line" class="route-line" d="M125 350 C260 255 390 280 535 210 S700 155 790 115" fill="none" stroke="url(#routeGradient)" stroke-width="8" stroke-linecap="round" filter="url(#glow)" />
-              <circle id="origin-dot" class="city-dot" cx="125" cy="350" r="14" fill="#00e5ff" />
-              <circle id="stop-dot-a" class="stop-dot" cx="278" cy="276" r="8" />
-              <circle id="stop-dot-b" class="stop-dot" cx="535" cy="210" r="8" />
-              <circle id="stop-dot-c" class="stop-dot" cx="665" cy="158" r="8" />
-              <circle id="route-pulse" class="city-dot pulse" cx="790" cy="115" r="24" fill="rgba(0,255,156,.32)" />
-              <circle id="destination-dot" class="city-dot" cx="790" cy="115" r="16" fill="#00ff9c" />
-              <text id="origin-label" x="82" y="386" fill="#eef8ff" font-size="24">Москва</text>
-              <text id="destination-label" x="730" y="95" fill="#eef8ff" font-size="24">Казань</text>
-              <text id="stop-label-a" class="stop-label" x="278" y="262">Муром</text>
-              <text id="stop-label-b" class="stop-label" x="535" y="196">Канаш</text>
-              <text id="stop-label-c" class="stop-label" x="665" y="144">Зеленый Дол</text>
-            </svg>
-            <article class="fact-card">
-              <strong id="fact-title">AI Fact</strong>
-              <p id="route-fact">Факт о маршруте появится после поиска билетов.</p>
-            </article>
-          </div>
-
-          <section id="seat-picker-panel" class="seat-picker-panel hidden">
-            <div class="seat-picker glass-panel">
-              <header class="seat-picker-header">
+        <div id="main-workspace" class="main-workspace">
+          <section id="route-panel" class="map-panel">
+            <div id="map-content" class="map-content">
+              <div class="map-title">
                 <div>
-                  <h2 id="seat-picker-title">Выбор вагона и мест</h2>
-                  <p id="seat-picker-hint" class="seat-picker-sub"></p>
+                  <span id="route-title">Маршрут</span>
+                  <h2 id="route-meta">Москва → Казань</h2>
                 </div>
-                <p id="seat-picker-count" class="seat-picker-count"></p>
-              </header>
-              <div id="carriage-tabs" class="carriage-tabs" role="tablist"></div>
-              <div id="seat-grid" class="seat-grid" role="group"></div>
-              <div class="seat-picker-actions">
-                <button id="confirm-seats-button" type="button" class="primary-button" disabled>Подтвердить</button>
+                <span id="route-state">Живая схема маршрута</span>
+              </div>
+              <svg class="route-map" viewBox="0 0 900 520" role="img" aria-label="Неоновая карта маршрута">
+                <defs>
+                  <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#00e5ff" />
+                    <stop offset="55%" stop-color="#8a2be2" />
+                    <stop offset="100%" stop-color="#00ff9c" />
+                  </linearGradient>
+                  <filter id="glow">
+                    <feGaussianBlur stdDeviation="5" result="coloredBlur" />
+                    <feMerge>
+                      <feMergeNode in="coloredBlur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                <path class="map-landmass" d="M58 340 C118 245 214 178 328 158 C438 139 544 104 650 75 C766 44 842 83 866 164 C891 246 802 318 714 335 C623 353 548 438 430 456 C318 473 235 417 151 411 C82 407 30 389 58 340Z" />
+                <path class="map-region-line" d="M120 410 C210 340 276 270 338 166" />
+                <path class="map-region-line" d="M330 452 C420 355 498 250 650 76" />
+                <path class="map-region-line" d="M178 214 C300 250 438 230 602 168" />
+                <path class="rail-background" d="M70 380 C220 320 340 380 510 280 S720 130 840 190" />
+                <path id="route-line" class="route-line" d="M125 350 C260 255 390 280 535 210 S700 155 790 115" fill="none" stroke="url(#routeGradient)" stroke-width="8" stroke-linecap="round" filter="url(#glow)" />
+                <circle id="origin-dot" class="city-dot" cx="125" cy="350" r="14" fill="#00e5ff" />
+                <circle id="stop-dot-a" class="stop-dot" cx="278" cy="276" r="8" />
+                <circle id="stop-dot-b" class="stop-dot" cx="535" cy="210" r="8" />
+                <circle id="stop-dot-c" class="stop-dot" cx="665" cy="158" r="8" />
+                <circle id="route-pulse" class="city-dot pulse" cx="790" cy="115" r="24" fill="rgba(0,255,156,.32)" />
+                <circle id="destination-dot" class="city-dot" cx="790" cy="115" r="16" fill="#00ff9c" />
+                <text id="origin-label" x="82" y="386" fill="#eef8ff" font-size="24">Москва</text>
+                <text id="destination-label" x="730" y="95" fill="#eef8ff" font-size="24">Казань</text>
+                <text id="stop-label-a" class="stop-label" x="278" y="262">Муром</text>
+                <text id="stop-label-b" class="stop-label" x="535" y="196">Канаш</text>
+                <text id="stop-label-c" class="stop-label" x="665" y="144">Зеленый Дол</text>
+              </svg>
+              <article class="fact-card">
+                <strong id="fact-title">AI Fact</strong>
+                <p id="route-fact">Факт о маршруте появится после поиска билетов.</p>
+              </article>
+            </div>
+
+            <section id="ticket-panel" class="ticket-panel hidden">
+              <div class="ticket">
+                <h2 id="ticket-title">ДЕМО-БИЛЕТ</h2>
+                <div id="ticket-body" class="ticket-details"></div>
+                <div id="qr-payload" class="qr">QR</div>
+                <button id="restart-button" class="ghost-button">Начать заново</button>
+              </div>
+            </section>
+          </section>
+
+          <aside class="control-panel">
+            <div class="assistant-core">
+              <button id="orb-button" class="orb" aria-label="Запустить голосовой ввод"></button>
+              <div class="assistant-text">
+                <h2 id="listen-label">Слушать</h2>
+                <p id="assistant-text">Добро пожаловать. Куда направимся?</p>
+                <p id="start-prompt" class="orb-hint">Коснитесь сферы и скажите, куда вы хотите поехать</p>
               </div>
             </div>
-          </section>
 
-          <section id="ticket-panel" class="ticket-panel hidden">
-            <div class="ticket">
-              <h2 id="ticket-title">ДЕМО-БИЛЕТ</h2>
-              <div id="ticket-body" class="ticket-details"></div>
-              <div id="qr-payload" class="qr">QR</div>
-              <button id="restart-button" class="ghost-button">Начать заново</button>
+            <section class="history-panel">
+              <p class="brand-subtitle" id="history-title">История диалога</p>
+              <div id="dialog-history" class="dialog-history"></div>
+            </section>
+
+            <button
+              type="button"
+              id="text-input-toggle"
+              class="text-input-toggle"
+              aria-expanded="false"
+              aria-controls="text-input-panel"
+            ></button>
+            <div id="text-input-panel" class="text-input-panel hidden">
+              <div class="input-row">
+                <input id="user-input" autocomplete="off" placeholder="Например: хочу приехать в Казань к началу рабочего дня 6 мая" />
+                <button id="send-button" class="primary-button">Отправить</button>
+              </div>
             </div>
+
+            <div id="chips" class="chips"></div>
+            <p id="transcript" class="brand-subtitle"></p>
+
+            <section id="intent-panel" class="hidden">
+              <h2 id="intent-title">Я понял запрос</h2>
+              <div id="intent-grid" class="intent-grid"></div>
+            </section>
+
+            <section id="trains-panel" class="hidden">
+              <h2 id="trains-title">Рекомендованные поезда</h2>
+              <div id="trains-list" class="train-list"></div>
+            </section>
+
+            <section id="checkout-panel" class="hidden">
+              <button id="checkout-button" type="button" class="primary-button">Оформить демо-билет</button>
+              <div id="checkout-steps"></div>
+            </section>
+          </aside>
+        </div>
+
+        <div id="checkout-workspace" class="checkout-workspace hidden">
+          <section id="seat-picker-column" class="map-panel seat-picker-column">
+            <section id="seat-picker-panel" class="seat-picker-panel hidden">
+              <div class="seat-picker glass-panel">
+                <header class="seat-picker-header">
+                  <div>
+                    <h2 id="seat-picker-title">Выбор вагона и мест</h2>
+                    <p id="seat-picker-hint" class="seat-picker-sub"></p>
+                  </div>
+                  <p id="seat-picker-count" class="seat-picker-count"></p>
+                </header>
+                <div id="carriage-tabs" class="carriage-tabs" role="tablist"></div>
+                <div id="seat-grid" class="seat-grid" role="group"></div>
+                <div class="seat-picker-actions">
+                  <button id="confirm-seats-button" type="button" class="primary-button" disabled>Подтвердить</button>
+                </div>
+              </div>
+            </section>
           </section>
-        </section>
-
-        <aside class="control-panel">
-          <div class="assistant-core">
-            <button id="orb-button" class="orb" aria-label="Запустить голосовой ввод"></button>
-            <div class="assistant-text">
-              <h2 id="listen-label">Слушать</h2>
-              <p id="assistant-text">Добро пожаловать. Куда направимся?</p>
-              <p id="start-prompt" class="orb-hint">Коснитесь сферы и скажите, куда вы хотите поехать</p>
-            </div>
-          </div>
-
-          <section class="history-panel">
-            <p class="brand-subtitle" id="history-title">История диалога</p>
-            <div id="dialog-history" class="dialog-history"></div>
-          </section>
-
-          <button
-            type="button"
-            id="text-input-toggle"
-            class="text-input-toggle"
-            aria-expanded="false"
-            aria-controls="text-input-panel"
-          ></button>
-          <div id="text-input-panel" class="text-input-panel hidden">
-            <div class="input-row">
-              <input id="user-input" autocomplete="off" placeholder="Например: хочу приехать в Казань к началу рабочего дня 6 мая" />
-              <button id="send-button" class="primary-button">Отправить</button>
-            </div>
-          </div>
-
-          <div id="chips" class="chips"></div>
-          <p id="transcript" class="brand-subtitle"></p>
-
-          <section id="intent-panel" class="hidden">
-            <h2 id="intent-title">Я понял запрос</h2>
-            <div id="intent-grid" class="intent-grid"></div>
-          </section>
-
-          <section id="trains-panel" class="hidden">
-            <h2 id="trains-title">Рекомендованные поезда</h2>
-            <div id="trains-list" class="train-list"></div>
-          </section>
-
-          <section id="checkout-panel" class="hidden">
-            <button id="checkout-button" type="button" class="primary-button">Оформить демо-билет</button>
-            <div id="checkout-steps"></div>
-          </section>
-        </aside>
-
+          <aside id="checkout-side-panel" class="map-panel checkout-side-stack">
+            <section id="checkout-train-summary" class="checkout-train-summary hidden" aria-hidden="true">
+              <p id="checkout-train-summary-label" class="checkout-train-summary-label"></p>
+              <div id="checkout-train-summary-body" class="checkout-train-summary-body"></div>
+            </section>
+            <div id="checkout-map-host" class="checkout-map-host"></div>
+          </aside>
+        </div>
       </section>
     </main>
     <script src="./app.js"></script>

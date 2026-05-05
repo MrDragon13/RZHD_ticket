@@ -247,6 +247,10 @@ const checkoutPanel = document.querySelector("#checkout-panel");
 const ticketPanel = document.querySelector("#ticket-panel");
 const seatPickerPanel = document.querySelector("#seat-picker-panel");
 const mapContent = document.querySelector("#map-content");
+const mainWorkspace = document.querySelector("#main-workspace");
+const checkoutWorkspace = document.querySelector("#checkout-workspace");
+const checkoutMapHost = document.querySelector("#checkout-map-host");
+const routePanel = document.querySelector("#route-panel");
 const checkoutTrainSummary = document.querySelector("#checkout-train-summary");
 const checkoutTrainSummaryBody = document.querySelector("#checkout-train-summary-body");
 const checkoutTrainSummaryLabel = document.querySelector("#checkout-train-summary-label");
@@ -761,8 +765,29 @@ function hideCheckoutTrainSummary() {
   checkoutTrainSummary.setAttribute("aria-hidden", "true");
 }
 
+function enterCheckoutWorkspaceMode() {
+  if (!checkoutWorkspace || !mainWorkspace || !checkoutMapHost || !mapContent || !routePanel) return;
+  mainWorkspace.classList.add("hidden");
+  checkoutWorkspace.classList.remove("hidden");
+  if (mapContent.parentElement !== checkoutMapHost) {
+    checkoutMapHost.append(mapContent);
+  }
+}
+
+function exitCheckoutWorkspaceMode() {
+  if (!checkoutWorkspace || !mainWorkspace || !mapContent || !routePanel) return;
+  seatPickerPanel.classList.add("hidden");
+  hideCheckoutTrainSummary();
+  checkoutWorkspace.classList.add("hidden");
+  mainWorkspace.classList.remove("hidden");
+  if (mapContent.parentElement !== routePanel) {
+    routePanel.insertBefore(mapContent, ticketPanel);
+  }
+}
+
 function showSeatPicker() {
   ticketPanel.classList.add("hidden");
+  enterCheckoutWorkspaceMode();
   if (selectedTrain) renderCheckoutTrainSummary(selectedTrain);
   seatPickerPanel.classList.remove("hidden");
   document.querySelector("#seat-picker-title").textContent = i18n[language].seatPickerTitle;
@@ -777,7 +802,7 @@ function showSeatPicker() {
       ? "Выберите вагон и места на схеме. Можно указать несколько мест."
       : "Choose a car and seats on the layout. Multiple seats are allowed.",
   );
-  document.querySelector("#route-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.querySelector("#checkout-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderCarriageTabs() {
@@ -903,7 +928,7 @@ async function confirmSeatSelection() {
 }
 
 function renderTicket() {
-  hideCheckoutTrainSummary();
+  exitCheckoutWorkspaceMode();
   seatPickerPanel.classList.add("hidden");
   mapContent.classList.add("hidden");
   ticketPanel.classList.remove("hidden");
@@ -1113,6 +1138,7 @@ function resetScenario(announce = true) {
     panel.classList.add("hidden"),
   );
   hideCheckoutTrainSummary();
+  exitCheckoutWorkspaceMode();
   mapContent.classList.remove("hidden");
   document.querySelector("#checkout-steps").innerHTML = "";
   document.querySelector("#route-meta").textContent =
