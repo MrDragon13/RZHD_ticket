@@ -110,6 +110,29 @@ def _classify_car_dict(row: dict) -> str | None:
     return None
 
 
+def estimate_seat_details_from_totals(platz: int, coupe: int, sv: int) -> SeatDetails:
+    """Оценка разбивки по полкам для карточки поезда (агрегаты РЖД без построчной схемы).
+
+    Плацкарт: типичное соотношение основных и боковых полок (~1/3 + 1/3 + 1/6 + 1/6).
+    Купе и СВ: только нижние/верхние пары мест.
+    """
+
+    lower = upper = side_lower = side_upper = 0
+    if platz > 0:
+        lower = platz // 3
+        upper = platz // 3
+        rem = platz - lower - upper
+        side_lower = rem // 2
+        side_upper = rem - side_lower
+    if coupe > 0:
+        lower += (coupe + 1) // 2
+        upper += coupe // 2
+    if sv > 0:
+        lower += (sv + 1) // 2
+        upper += sv // 2
+    return SeatDetails(lower=lower, upper=upper, side_lower=side_lower, side_upper=side_upper)
+
+
 def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails, PriceInfo]:
     """Суммирует строки cars[] из ответа РЖД по типам вагонов."""
 
@@ -117,8 +140,6 @@ def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails
     min_platz: int | None = None
     min_coupe: int | None = None
     min_sv: int | None = None
-
-    lower = upper = side_lower = side_upper = 0
 
     for row in cars:
         free = _parse_free_seats(row)
@@ -148,14 +169,11 @@ def aggregate_cars_to_inventory(cars: list[dict]) -> tuple[SeatInfo, SeatDetails
     if unknown:
         platz += unknown
 
-    # Грубая оценка полок для плацкарта.
-    if platz and coupe == 0 and sv == 0:
-        lower = int(platz * 0.45)
-        upper = platz - lower
+    details = estimate_seat_details_from_totals(platz, coupe, sv)
 
     return (
         SeatInfo(platzkart=platz, coupe=coupe, sv=sv),
-        SeatDetails(lower=lower, upper=upper, side_lower=side_lower, side_upper=side_upper),
+        details,
         PriceInfo(platzkart=min_platz, coupe=min_coupe, sv=min_sv),
     )
 
@@ -167,8 +185,6 @@ def aggregate_from_aiorzd_places(places: list) -> tuple[SeatInfo, SeatDetails, P
     min_platz: int | None = None
     min_coupe: int | None = None
     min_sv: int | None = None
-
-    lower = upper = side_lower = side_upper = 0
 
     for place in places:
         label = getattr(place, "type", None) or ""
@@ -201,13 +217,11 @@ def aggregate_from_aiorzd_places(places: list) -> tuple[SeatInfo, SeatDetails, P
     if unknown:
         platz += unknown
 
-    if platz and coupe == 0 and sv == 0:
-        lower = int(platz * 0.45)
-        upper = platz - lower
+    details = estimate_seat_details_from_totals(platz, coupe, sv)
 
     return (
         SeatInfo(platzkart=platz, coupe=coupe, sv=sv),
-        SeatDetails(lower=lower, upper=upper, side_lower=side_lower, side_upper=side_upper),
+        details,
         PriceInfo(platzkart=min_platz, coupe=min_coupe, sv=min_sv),
     )
 
