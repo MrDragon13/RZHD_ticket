@@ -442,7 +442,17 @@ def extract_train_stops(content: dict) -> list[str]:
                 )
 
     if len(names) < 2:
-        for alt_key in ("routeStops", "stopSchedule", "stationsList", "schedule"):
+        for alt_key in (
+            "routeStops",
+            "stopSchedule",
+            "stationsList",
+            "schedule",
+            "stationList",
+            "stations",
+            "routeStation",
+            "routeSchedule",
+            "lstStation",
+        ):
             nested = content.get(alt_key)
             if not isinstance(nested, list):
                 continue
@@ -457,38 +467,4 @@ def extract_train_stops(content: dict) -> list[str]:
                         or item.get("title")
                     )
 
-    if len(names) < 2:
-        add(content.get("route0"))
-        add(content.get("route1"))
-
     return names[:80]
-
-
-def merge_stops_with_search_route(stops: list[str], origin_hint: str | None, dest_hint: str | None) -> list[str]:
-    """Добавляет станции из запроса пользователя к следованию поезда для корректного сегмента на карте."""
-
-    o = str(origin_hint or "").strip()
-    d = str(dest_hint or "").strip()
-    if not o or not d:
-        return stops
-    out = list(stops)
-    seen = {_norm(x) for x in out}
-
-    def inject_first(target: str) -> None:
-        key = _norm(target)
-        if not key or key in seen:
-            return
-        seen.add(key)
-        out.insert(0, target)
-
-    def inject_last(target: str) -> None:
-        key = _norm(target)
-        if not key or key in seen:
-            return
-        seen.add(key)
-        out.append(target)
-
-    inject_first(o)
-    inject_last(d)
-
-    return out[:80]

@@ -300,13 +300,28 @@ function intermediateStopDisplayNames(train) {
   const iTo = raw.findIndex((name) => stationMatches(name, userTo));
 
   let segment = [];
-  if (iFrom >= 0 && iTo >= 0) {
-    if (iFrom < iTo) segment = raw.slice(iFrom + 1, iTo);
-    else if (iTo < iFrom) segment = raw.slice(iTo + 1, iFrom);
+  if (iFrom >= 0 && iTo >= 0 && iFrom !== iTo) {
+    const lo = Math.min(iFrom, iTo);
+    const hi = Math.max(iFrom, iTo);
+    segment = raw.slice(lo + 1, hi);
+    if (iFrom > iTo) {
+      segment = segment.slice().reverse();
+    }
   }
 
   if (!segment.length && stationMatches(train?.departure_station, userFrom) && stationMatches(train?.arrival_station, userTo)) {
-    segment = raw.slice(1, -1);
+    const ia = raw.findIndex((name) => stationMatches(name, train.departure_station));
+    const ib = raw.findIndex((name) => stationMatches(name, train.arrival_station));
+    if (ia >= 0 && ib >= 0 && ia !== ib) {
+      const lo = Math.min(ia, ib);
+      const hi = Math.max(ia, ib);
+      segment = raw.slice(lo + 1, hi);
+      if (ia > ib) {
+        segment = segment.slice().reverse();
+      }
+    } else {
+      segment = raw.slice(1, -1);
+    }
   }
 
   const max = 3;
