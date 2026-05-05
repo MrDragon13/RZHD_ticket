@@ -225,8 +225,16 @@ function renderRoute(factText) {
 // Подписи на демо-карте меняются под выбранный маршрут, даже если геометрия
 // линии остается условной и презентационной.
 function updateRouteLabels() {
-  document.querySelector("#origin-label").textContent = intent.origin || (language === "ru" ? "Москва" : "Moscow");
-  document.querySelector("#destination-label").textContent = intent.destination || (language === "ru" ? "Казань" : "Kazan");
+  // Подписи могут отсутствовать, если карту упростят в следующей версии макета.
+  // Поэтому обновляем их безопасно и не ломаем весь сценарий поиска билетов.
+  const originLabel = document.querySelector("#origin-label");
+  const destinationLabel = document.querySelector("#destination-label");
+  if (originLabel) {
+    originLabel.textContent = intent.origin || (language === "ru" ? "Москва" : "Moscow");
+  }
+  if (destinationLabel) {
+    destinationLabel.textContent = intent.destination || (language === "ru" ? "Казань" : "Kazan");
+  }
 }
 
 // Карточки поездов намеренно крупные: вся карточка является touch-зоной выбора.
