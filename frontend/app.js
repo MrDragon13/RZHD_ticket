@@ -36,6 +36,9 @@ const i18n = {
     seatPickerConfirm: "Подтвердить выбор",
     seatPickerCarriage: "Вагон",
     selectedTrainHeading: "Выбранный поезд",
+    carClassPlatzkart: "Плацкарт",
+    carClassCoupe: "Купе",
+    carClassSV: "СВ",
     berthShort: {
       lower: "Н",
       upper: "В",
@@ -88,6 +91,9 @@ const i18n = {
     seatPickerConfirm: "Confirm selection",
     seatPickerCarriage: "Car",
     selectedTrainHeading: "Selected train",
+    carClassPlatzkart: "Platzkart",
+    carClassCoupe: "Coupe",
+    carClassSV: "SV",
     berthShort: {
       lower: "L",
       upper: "U",
@@ -220,6 +226,31 @@ let checkoutAnimating = false;
 let issuingTicket = false;
 let demoCarriages = [];
 let activeCarriageIndex = 0;
+/** @type {Map<string, "platzkart" | "coupe" | "sv">} */
+let demoCarriageClassByCar = new Map();
+
+function carriageClassKey(car) {
+  return demoCarriageClassByCar.get(car) || "platzkart";
+}
+
+function carriageClassLabel(car) {
+  const key = carriageClassKey(car);
+  if (key === "sv") return i18n[language].carClassSV;
+  if (key === "coupe") return i18n[language].carClassCoupe;
+  return i18n[language].carClassPlatzkart;
+}
+
+function demoCarClassForCarCode(carCode, train) {
+  const n = parseInt(carCode, 10) || 1;
+  const hasSv = Boolean(train?.prices?.sv);
+  const hasCoupe = Boolean(train?.prices?.coupe);
+  const hasPlatz = Boolean(train?.prices?.platzkart);
+  if (hasSv && n === 3) return "sv";
+  if (hasCoupe && n % 2 === 1) return "coupe";
+  if (hasPlatz) return "platzkart";
+  if (hasCoupe) return "coupe";
+  return "platzkart";
+}
 /** @type {Map<string, Array<{ id: string, displayNum: string, berth_kind: string, occupied: boolean }>>} */
 let demoSeatLayouts = new Map();
 /** @type {Set<string>} */
@@ -702,6 +733,10 @@ function buildSeatPickerModel(train) {
     cars.push(String(i + 1).padStart(2, "0"));
   }
   demoCarriages = cars;
+  demoCarriageClassByCar = new Map();
+  cars.forEach((car) => {
+    demoCarriageClassByCar.set(car, demoCarClassForCarCode(car, train));
+  });
   activeCarriageIndex = 0;
   selectedSeatKeys = new Set();
 
@@ -812,8 +847,8 @@ function renderCarriageTabs() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `carriage-tab ${index === activeCarriageIndex ? "carriage-tab-active" : ""}`;
-    btn.textContent = `${i18n[language].seatPickerCarriage} ${car}`;
     btn.dataset.carriageIndex = String(index);
+    btn.innerHTML = `<span class="carriage-tab-num">${i18n[language].seatPickerCarriage} ${car}</span><span class="carriage-tab-class">${escapeHtml(carriageClassLabel(car))}</span>`;
     btn.addEventListener("click", () => {
       activeCarriageIndex = index;
       renderCarriageTabs();
@@ -828,6 +863,10 @@ function renderSeatGrid() {
   const grid = document.querySelector("#seat-grid");
   grid.innerHTML = "";
   const car = demoCarriages[activeCarriageIndex];
+  const classLine = document.createElement("p");
+  classLine.className = "seat-grid-class-line";
+  classLine.textContent = `${carriageClassLabel(car)} · ${i18n[language].seatPickerCarriage} ${car}`;
+  grid.append(classLine);
   const seats = demoSeatLayouts.get(car) || [];
   const byPair = new Map();
   seats.forEach((seat) => {
@@ -1124,6 +1163,7 @@ function resetScenario(announce = true) {
   demoCarriages = [];
   activeCarriageIndex = 0;
   demoSeatLayouts = new Map();
+  demoCarriageClassByCar = new Map();
   selectedSeatKeys = new Set();
   lastSelectedTrainId = null;
   lastDialogUserText = "";
