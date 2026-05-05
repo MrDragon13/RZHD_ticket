@@ -60,6 +60,11 @@ const i18n = {
     newSession: "Новый запрос",
     noSpeech: "Распознавание речи недоступно в этом браузере. Используйте текстовое поле.",
     fallbackError: "Сервер недоступен. Показываю демо-сценарий интерфейса.",
+    searchTicketError:
+      "Не удалось загрузить поезда с сайта РЖД. Проверьте соединение или попробуйте позже.",
+    searchRecommendFallback:
+      "Поезда загружены по данным РЖД; голосовое пояснение временно недоступно.",
+    routeFactUnavailable: "Факт о маршруте временно недоступен.",
     clarifyHint: "Я дождусь уточнения и только потом подберу варианты.",
     userRole: "Вы",
     assistantRole: "Путь",
@@ -125,6 +130,11 @@ const i18n = {
     newSession: "New request",
     noSpeech: "Speech recognition is not available in this browser. Use the text field.",
     fallbackError: "Server is unavailable. Showing interface demo scenario.",
+    searchTicketError:
+      "Could not load trains from RZD. Check your connection or try again later.",
+    searchRecommendFallback:
+      "Trains loaded from RZD; spoken explanation is temporarily unavailable.",
+    routeFactUnavailable: "Route fact is temporarily unavailable.",
     clarifyHint: "I will wait for clarification before searching options.",
     userRole: "You",
     assistantRole: "Path",
@@ -629,27 +639,69 @@ async function searchAndRecommend() {
     departure_time_window: intent.departure_time_window,
     preferences: intent.preferences,
   };
-  const [ticketResponse, factResponse] = await Promise.all([
-    postJson("/api/tickets/search", searchRequest),
-    postJson("/api/fun-fact", {
-      language,
-      origin: intent.origin,
-      destination: intent.destination,
-    }),
-  ]);
+
+  let ticketResponse;
+  try {
+    ticketResponse = await postJson("/api/tickets/search", searchRequest);
+  } catch (error) {
+    console.error("tickets/search failed", error);
+    trains = [];
+    recommendations = [];
+    assistantSay(i18n[language].searchTicketError);
+    setStage("initial");
+    return;
+  }
+
   trains = ticketResponse.trains.filter((t) => {
     const s = t.available_seats || {};
     return (s.platzkart || 0) + (s.coupe || 0) + (s.sv || 0) > 0;
   });
-  renderRoute(factResponse.fact);
-  const recommendResponse = await postJson("/api/recommend", {
-    language,
-    intent,
-    trains,
-    last_user_message: lastDialogUserText || null,
-  });
-  recommendations = recommendResponse.recommendations;
-  assistantSay(recommendResponse.assistant_text);
+
+  let factText = "";
+  try {
+    const factResponse = await postJson("/api/fun-fact", {
+      language,
+      origin: intent.origin,
+      destination: intent.destination,
+    });
+    factText = factResponse.fact;
+  } catch (error) {
+    console.error("fun-fact failed", error);
+    factText = i18n[language].routeFactUnavailable;
+  }
+  renderRoute(factText);
+
+  if (!trains.length) {
+    recommendations = [];
+    assistantSay(
+      language === "ru"
+        ? "По этому направлению на выбранную дату нет поездов со свободными местами. Попробуйте другую дату или маршрут."
+        : "No trains with available seats for this route and date. Try another date or route.",
+    );
+    renderTrains();
+    setStage("results");
+    return;
+  }
+
+  try {
+    const recommendResponse = await postJson("/api/recommend", {
+      language,
+      intent,
+      trains,
+      last_user_message: lastDialogUserText || null,
+    });
+    recommendations = recommendResponse.recommendations;
+    assistantSay(recommendResponse.assistant_text);
+  } catch (error) {
+    console.error("recommend failed", error);
+    recommendations = trains.map((t) => ({
+      train_id: t.id,
+      score: 0,
+      badges: [],
+      explanation: "",
+    }));
+    assistantSay(i18n[language].searchRecommendFallback);
+  }
   renderTrains();
   setStage("results");
 }

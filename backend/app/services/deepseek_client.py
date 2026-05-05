@@ -286,7 +286,9 @@ class DeepSeekClient:
             {
                 "language": language,
                 "user_intent": intent.model_dump(),
-                "recommended_train": train.model_dump(),
+                "recommended_train": train.model_dump(
+                    exclude={"carriage_details", "carriage_notes", "stops"},
+                ),
                 "fallback_explanation": fallback_text,
                 "task": "Скажи 1-2 предложения для голосового ассистента.",
             },
