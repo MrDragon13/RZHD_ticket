@@ -908,10 +908,26 @@ button {
 }
 
 #seat-grid.seat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
   margin-bottom: 18px;
+}
+
+.seat-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 76px;
+}
+
+.seat-cell-upper {
+  order: 1;
+}
+
+.seat-cell-lower {
+  order: 2;
 }
 
 .seat-cell {

@@ -26,7 +26,8 @@ const i18n = {
       "Не удалось выдать демо-билет. Проверьте соединение и нажмите кнопку ещё раз.",
     demoFlow: ["Проверка маршрута", "Подготовка выбора мест", "Загрузка схемы вагона", "Готово"],
     seatPickerTitle: "Выбор вагона и мест",
-    seatPickerHint: "Нажмите на свободные места. Можно выбрать несколько.",
+    seatPickerHint:
+      "Как в плацкарте: в каждой колонке снизу нечётное место, над ним чётное. Можно выбрать несколько.",
     seatPickerSelected: "Выбрано мест",
     seatPickerConfirm: "Подтвердить выбор",
     seatPickerCarriage: "Вагон",
@@ -72,7 +73,8 @@ const i18n = {
     checkoutError: "Could not issue the demo ticket. Check your connection and tap the button again.",
     demoFlow: ["Checking route", "Preparing seat selection", "Loading car layout", "Done"],
     seatPickerTitle: "Choose car and seats",
-    seatPickerHint: "Tap available seats. You can select several.",
+    seatPickerHint:
+      "Like in a typical carriage: odd seat below, even seat above in each column. Multiple seats allowed.",
     seatPickerSelected: "Seats selected",
     seatPickerConfirm: "Confirm selection",
     seatPickerCarriage: "Car",
@@ -624,17 +626,26 @@ function buildSeatPickerModel(train) {
   activeCarriageIndex = 0;
   selectedSeatKeys = new Set();
 
+  const PAIRS = 9;
+
   cars.forEach((car) => {
     const seats = [];
-    const kinds = ["lower", "upper", "lower", "upper", "side_lower", "side_upper"];
-    for (let n = 1; n <= 18; n += 1) {
-      const berth_kind = kinds[(n + car.charCodeAt(1)) % kinds.length];
-      const occupied = rng() > 0.42;
+    for (let pairIdx = 0; pairIdx < PAIRS; pairIdx += 1) {
+      const lowerNum = pairIdx * 2 + 1;
+      const upperNum = pairIdx * 2 + 2;
       seats.push({
-        id: `${car}-${String(n).padStart(2, "0")}-${berth_kind}`,
-        displayNum: String(n).padStart(2, "0"),
-        berth_kind,
-        occupied,
+        id: `${car}-${String(lowerNum).padStart(2, "0")}-lower`,
+        displayNum: String(lowerNum).padStart(2, "0"),
+        berth_kind: "lower",
+        pairIndex: pairIdx,
+        occupied: rng() > 0.42,
+      });
+      seats.push({
+        id: `${car}-${String(upperNum).padStart(2, "0")}-upper`,
+        displayNum: String(upperNum).padStart(2, "0"),
+        berth_kind: "upper",
+        pairIndex: pairIdx,
+        occupied: rng() > 0.42,
       });
     }
     layouts.set(car, seats);
@@ -685,21 +696,39 @@ function renderSeatGrid() {
   grid.innerHTML = "";
   const car = demoCarriages[activeCarriageIndex];
   const seats = demoSeatLayouts.get(car) || [];
+  const byPair = new Map();
   seats.forEach((seat) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "seat-cell";
-    btn.dataset.seatId = seat.id;
-    const short = i18n[language].berthShort[seat.berth_kind] || "";
-    btn.innerHTML = `<span class="seat-num">${seat.displayNum}</span><span class="seat-berth">${short}</span>`;
-    if (seat.occupied) {
-      btn.classList.add("seat-occupied");
-      btn.disabled = true;
-    } else if (selectedSeatKeys.has(seat.id)) {
-      btn.classList.add("seat-selected");
-    }
-    btn.addEventListener("click", () => toggleSeatSelection(car, seat));
-    grid.append(btn);
+    const pi = seat.pairIndex ?? 0;
+    if (!byPair.has(pi)) byPair.set(pi, {});
+    const slot = byPair.get(pi);
+    if (seat.berth_kind === "upper") slot.upper = seat;
+    else slot.lower = seat;
+  });
+  const pairIndices = [...byPair.keys()].sort((a, b) => a - b);
+  pairIndices.forEach((pairIdx) => {
+    const slot = byPair.get(pairIdx);
+    const col = document.createElement("div");
+    col.className = "seat-column";
+    const upper = slot.upper;
+    const lower = slot.lower;
+    [upper, lower].forEach((seat) => {
+      if (!seat) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `seat-cell ${seat.berth_kind === "upper" ? "seat-cell-upper" : "seat-cell-lower"}`;
+      btn.dataset.seatId = seat.id;
+      const short = i18n[language].berthShort[seat.berth_kind] || "";
+      btn.innerHTML = `<span class="seat-num">${seat.displayNum}</span><span class="seat-berth">${short}</span>`;
+      if (seat.occupied) {
+        btn.classList.add("seat-occupied");
+        btn.disabled = true;
+      } else if (selectedSeatKeys.has(seat.id)) {
+        btn.classList.add("seat-selected");
+      }
+      btn.addEventListener("click", () => toggleSeatSelection(car, seat));
+      col.append(btn);
+    });
+    grid.append(col);
   });
 }
 
