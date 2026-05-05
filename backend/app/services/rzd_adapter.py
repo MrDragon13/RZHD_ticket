@@ -73,9 +73,30 @@ class RzdDataAdapter:
             trains_iter = await fetcher.trains(origin, destination, TimeRange(day_start, day_end))
             trains_list = list(trains_iter)
 
+            # Слой 5827 уже даёт места в cars[] — можно отсеять поезда без мест до тяжёлых запросов.
+            light: list[TrainOption] = []
+            for index, train_obj in enumerate(trains_list):
+                light.append(
+                    train_option_from_aiorzd(
+                        train_obj,
+                        index,
+                        origin_hint=origin,
+                        dest_hint=destination,
+                        language=request.language,
+                        carriage_payload=None,
+                        basic_route_stops=None,
+                    ),
+                )
+
+            eligible_idx = [
+                i
+                for i, t in enumerate(light)
+                if t.available_seats.platzkart + t.available_seats.coupe + t.available_seats.sv > 0
+            ]
+
             carriage_by_index: dict[int, dict] = {}
             basic_stops_by_index: dict[int, list[str]] = {}
-            if trains_list:
+            if trains_list and eligible_idx:
                 src_code = await fetcher.get_city_code(origin)
                 dst_code = await fetcher.get_city_code(destination)
 
@@ -84,7 +105,8 @@ class RzdDataAdapter:
                 # Параллельный шторм к pass.rzd.ru провоцирует Captcha → паузы 120 с в aiorzd.
                 sem_r = asyncio.Semaphore(1)
 
-                async def carriage_one(idx: int, t) -> None:
+                async def carriage_one(idx: int) -> None:
+                    t = trains_list[idx]
                     num = str(getattr(t, "number", "") or (t.content or {}).get("number") or "")
                     if not num:
                         return
@@ -100,9 +122,10 @@ class RzdDataAdapter:
                         if isinstance(raw, dict) and raw.get("result") == "OK":
                             carriage_by_index[idx] = raw
 
-                async def route_stops_one(idx: int, t) -> None:
+                async def route_stops_one(idx: int) -> None:
                     if not route_stops_enrich:
                         return
+                    t = trains_list[idx]
                     content = t.content or {}
                     num = str(getattr(t, "number", "") or content.get("number") or "")
                     dep_date = str(content.get("date0") or "").strip()
@@ -118,19 +141,20 @@ class RzdDataAdapter:
                             basic_stops_by_index[idx] = route_names
 
                 tasks = []
-                for i, tr in enumerate(trains_list):
+                for i in eligible_idx:
                     if enrich:
-                        tasks.append(carriage_one(i, tr))
-                    tasks.append(route_stops_one(i, tr))
+                        tasks.append(carriage_one(i))
+                    if route_stops_enrich:
+                        tasks.append(route_stops_one(i))
 
                 if tasks:
                     await asyncio.gather(*tasks)
 
         mapped: list[TrainOption] = []
-        for index, train_obj in enumerate(trains_list):
+        for index in eligible_idx:
             mapped.append(
                 train_option_from_aiorzd(
-                    train_obj,
+                    trains_list[index],
                     index,
                     origin_hint=origin,
                     dest_hint=destination,
@@ -139,12 +163,6 @@ class RzdDataAdapter:
                     basic_route_stops=basic_stops_by_index.get(index),
                 ),
             )
-
-        mapped = [
-            t
-            for t in mapped
-            if t.available_seats.platzkart + t.available_seats.coupe + t.available_seats.sv > 0
-        ]
 
         enriched = await self._enrich_route_segments(request, mapped)
 
