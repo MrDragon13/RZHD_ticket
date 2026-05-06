@@ -174,7 +174,7 @@ const i18n = {
     sessionUserLabel: "Пассажир",
     sessionLogout: "Выход",
     idleLogoutWarning:
-      "Нет действий около двух минут — если не коснётесь экрана, через несколько секунд произойдёт выход и возврат к выбору языка.",
+      "Нет действий около двух минут — если не коснётесь экрана в течение примерно десяти секунд, произойдёт выход и возврат к выбору языка.",
     ticketPassenger: "Пассажир",
     ticketPassengerDoc: "Документ",
     ticketPassengerPhone: "Телефон",
@@ -294,7 +294,7 @@ const i18n = {
     sessionUserLabel: "Passenger",
     sessionLogout: "Sign out",
     idleLogoutWarning:
-      "No activity for about two minutes — unless you touch the screen, you will be signed out and returned to the language screen shortly.",
+      "No activity for about two minutes — unless you touch the screen within about ten seconds, you will be signed out and returned to the language screen.",
     ticketPassenger: "Passenger",
     ticketPassengerDoc: "ID",
     ticketPassengerPhone: "Phone",
@@ -1571,7 +1571,7 @@ let lastSelectedTrainId = null;
 
 /** Уведомление за GLOBAL_IDLE_WARN_BEFORE_MS до возврата на экран языка */
 const GLOBAL_IDLE_MS = 120_000;
-const GLOBAL_IDLE_WARN_BEFORE_MS = 5000;
+const GLOBAL_IDLE_WARN_BEFORE_MS = 10_000;
 
 /** Должны быть объявлены до первого вызова startLanguageScreenAmbient() (иначе TDZ). */
 let languageAmbientTimer = null;
