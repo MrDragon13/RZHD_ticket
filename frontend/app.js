@@ -801,11 +801,10 @@ function berthTotalsSum(detail) {
  */
 function berthTotalsLookLikeWholeCarriage(cls, sum, detail) {
   if (sum < 4) return false;
-  const tt = detail?.berth_totals;
-  const side = tt ? (tt.side_lower || 0) + (tt.side_upper || 0) : 0;
   if (cls === "platzkart") {
-    if (side >= 8) return true;
-    return sum >= 36;
+    // Только сумма по всем полкам в типичном диапазоне вагона; не полагаемся на «боковые»
+    // отдельно — РЖД может отдать фрагмент купе (8 мест) с ненулевыми side_*.
+    return sum >= 36 && sum <= 81;
   }
   if (cls === "coupe") {
     return sum >= 16;
@@ -2015,7 +2014,7 @@ function buildSeatPickerModel(train) {
       return;
     }
 
-    if (cls === "platzkart" && capacity === 54) {
+    if (cls === "platzkart") {
       seats = attachSeatPrices(train, car, cls, buildPlatzkart54Seats(car));
       finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng);
       layouts.set(car, seats);
