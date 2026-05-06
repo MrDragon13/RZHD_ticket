@@ -1665,11 +1665,67 @@ async function handleUserText(text) {
   }
   if (uiInteractionLocked) return;
   lastDialogUserText = cleanText;
-  // Очищаем поле только после фиксации текста в истории: пользователь видит,
-  // что именно распознал микрофон или что он отправил вручную.
   transcript.textContent = cleanText;
+
+  if (await tryVoiceCheckoutConfirmation(cleanText)) {
+    addMessage("user", cleanText);
+    return;
+  }
+
   addMessage("user", cleanText);
   await runDialog(cleanText);
+}
+
+/** Голосовое подтверждение оформления демо-билета для рекомендованного / выбранного поезда. */
+function matchesVoiceCheckoutIntent(text) {
+  const t = text.trim();
+  const lower = t.toLowerCase();
+
+  if (uiStage === "checkout") {
+    if (language === "ru") {
+      if (/^(да|давай|ок|окей|ага|угу|конечно|верно|ну\s+да)\.?$/i.test(t)) return true;
+      if (/^подтверждаю\.?$/i.test(t)) return true;
+    } else if (/^(yes|yeah|ok|okay|sure|go ahead|confirm)\.?$/i.test(t)) return true;
+  }
+
+  if (language === "ru") {
+    if (/\bоформ(ляй|ить)\s+(демо[\s-]*)?билет/i.test(lower)) return true;
+    if (/\bоформ(ление)\s+билет/i.test(lower)) return true;
+    if (/подтверждаю.{0,40}(билет|оформ|демо|поезд)/i.test(lower)) return true;
+    if (/(устраивает|подходит).{0,40}(оформ|берём|берем|давай|билет)/i.test(lower)) return true;
+    if (/^(да|ок)[,\s]+(оформ|берём|берем|бери|давай)/i.test(lower)) return true;
+    if (/рекомендованн.{0,24}(устраивает|подходит|ок|норм)/i.test(lower)) return true;
+    if (/\bберу\b.{0,48}\bпоезд/i.test(lower)) return true;
+    if (/\bхочу\b.{0,32}\b(билет|оформ)/i.test(lower)) return true;
+    return false;
+  }
+
+  if (/\bissue\b.{0,24}\b(demo\s*)?ticket\b/i.test(lower)) return true;
+  if (/\bbook\b.{0,24}\b(the\s*)?ticket\b/i.test(lower)) return true;
+  if (/go ahead.{0,32}(with\s*)?(the\s*)?(booking|ticket)/i.test(lower)) return true;
+  if (/confirm.{0,24}(ticket|booking|purchase)/i.test(lower)) return true;
+  return false;
+}
+
+async function tryVoiceCheckoutConfirmation(text) {
+  if (!matchesVoiceCheckoutIntent(text)) return false;
+  if (checkoutAnimating || issuingTicket) return false;
+
+  if (uiStage === "results" && trains.length > 0) {
+    const id = getTrainHighlightId();
+    const train = id ? trains.find((x) => x.id === id) : null;
+    if (!train) return false;
+    await selectTrain(train, { suppressSelectionSpeech: true });
+    await createTicket();
+    return true;
+  }
+
+  if (uiStage === "checkout" && selectedTrain) {
+    await createTicket();
+    return true;
+  }
+
+  return false;
 }
 
 async function runDialog(text) {
@@ -2488,7 +2544,8 @@ function renderAmenityBadges(amenities = []) {
     .join("");
 }
 
-async function selectTrain(train) {
+async function selectTrain(train, options = {}) {
+  const suppressSelectionSpeech = Boolean(options.suppressSelectionSpeech);
   stopAssistantSpeech();
   selectedTrain = train;
   checkoutPanel.classList.remove("hidden");
@@ -2498,7 +2555,7 @@ async function selectTrain(train) {
   }
   const sameAsBefore = lastSelectedTrainId === train.id;
   lastSelectedTrainId = train.id;
-  if (!sameAsBefore) {
+  if (!sameAsBefore && !suppressSelectionSpeech) {
     const phrase =
       language === "ru"
         ? `Выбран поезд ${train.train_number}. Доступны нижние места: ${train.seat_details?.lower ?? 0}.`
