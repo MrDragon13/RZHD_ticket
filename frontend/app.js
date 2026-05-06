@@ -100,6 +100,7 @@ const i18n = {
       side_upper: "Бв",
     },
     demoTicket: "ДЕМО-БИЛЕТ",
+    ticketThanks: "Спасибо, что разделили путь вместе с нами.",
     restart: "Начать заново",
     newSession: "Новый запрос",
     noSpeech: "Распознавание речи недоступно в этом браузере. Используйте текстовое поле.",
@@ -175,6 +176,7 @@ const i18n = {
       side_upper: "SU",
     },
     demoTicket: "DEMO TICKET",
+    ticketThanks: "Thank you for sharing the journey with us.",
     restart: "Start over",
     newSession: "New request",
     noSpeech: "Speech recognition is not available in this browser. Use the text field.",
@@ -2505,6 +2507,51 @@ async function confirmSeatSelection() {
   }
 }
 
+function buildDemoTicketQrPayload() {
+  const copy = i18n[language];
+  const d = demoTicket;
+  if (!d) return "";
+  const ru = language === "ru";
+  const core = [
+    copy.demoTicket,
+    `${ru ? "Маршрут" : "Route"}: ${d.route}`,
+    `${ru ? "Поезд" : "Train"}: ${d.train_number}`,
+    `${ru ? "Отправление" : "Departure"}: ${d.departure}`,
+    `${ru ? "Прибытие" : "Arrival"}: ${d.arrival}`,
+    `${ru ? "Вагон" : "Car"}: ${d.car}`,
+    `${ru ? "Место" : "Seat"}: ${d.seat}`,
+    `${ru ? "Полка" : "Berth"}: ${d.berth_type}`,
+    d.travel_class,
+    `${ru ? "Идентификатор" : "Ticket ID"}: ${d.ticket_id}`,
+    d.disclaimer,
+  ].join("\n");
+  return `${core}\n\n${copy.ticketThanks}`;
+}
+
+function renderTicketQrCanvas(payloadText) {
+  const wrap = document.querySelector("#ticket-qr-wrap");
+  const thanksEl = document.querySelector("#ticket-thanks");
+  if (!wrap || !thanksEl) return;
+  wrap.innerHTML = "";
+  thanksEl.textContent = i18n[language].ticketThanks;
+  if (typeof window.QRCode === "undefined") {
+    wrap.textContent = payloadText.slice(0, 480);
+    return;
+  }
+  try {
+    new window.QRCode(wrap, {
+      text: payloadText,
+      width: 220,
+      height: 220,
+      colorDark: "#071018",
+      colorLight: "#ffffff",
+      correctLevel: window.QRCode.CorrectLevel.M,
+    });
+  } catch {
+    wrap.textContent = payloadText.slice(0, 480);
+  }
+}
+
 function renderTicket() {
   exitCheckoutWorkspaceMode();
   seatPickerPanel.classList.add("hidden");
@@ -2525,7 +2572,7 @@ function renderTicket() {
     <div class="amenity-row">${amenities}</div>
     <small>${demoTicket.disclaimer}</small>
   `;
-  document.querySelector("#qr-payload").textContent = demoTicket.ticket_id;
+  renderTicketQrCanvas(buildDemoTicketQrPayload());
   assistantSay(language === "ru" ? "Демонстрационный билет готов." : "Your demo ticket is ready.");
   ticketPanel.scrollIntoView({ behavior: "smooth", block: "center" });
 }

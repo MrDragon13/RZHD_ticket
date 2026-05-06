@@ -1479,15 +1479,30 @@ button {
 
 .ticket-panel {
   min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 28px 24px 36px;
+  overflow-y: auto;
+}
+
+.ticket-panel-center {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
 }
 
 .ticket {
-  width: min(820px, 100%);
-  padding: 32px;
+  width: min(520px, 100%);
+  margin: 0 auto;
+  padding: 32px 28px 36px;
   border: 1px dashed var(--green);
   border-radius: 32px;
   background: linear-gradient(145deg, rgba(0, 255, 156, 0.12), rgba(0, 229, 255, 0.07));
   box-shadow: 0 0 50px rgba(0, 255, 156, 0.14);
+  text-align: center;
 }
 
 .ticket h2 {
@@ -1497,23 +1512,59 @@ button {
 
 .ticket-details {
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
 }
 
-.qr {
-  display: grid;
-  place-items: center;
-  width: 150px;
-  height: 150px;
-  margin-top: 16px;
-  border: 10px solid var(--text);
-  color: var(--text);
-  font-size: 12px;
+.ticket-details strong {
+  font-size: clamp(17px, 2.4vw, 21px);
+  line-height: 1.35;
+}
+
+.ticket-details span {
+  display: block;
+  width: 100%;
+}
+
+.ticket-details small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.ticket .amenity-row {
+  justify-content: center;
+}
+
+.ticket-qr-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 22px;
+  min-height: 224px;
+}
+
+.ticket-qr-wrap canvas,
+.ticket-qr-wrap img {
+  border-radius: 14px;
+  border: 3px solid rgba(0, 255, 156, 0.45);
+  box-shadow: 0 0 28px rgba(0, 229, 255, 0.22);
+}
+
+.ticket-thanks {
+  margin: 18px auto 0;
+  max-width: 28em;
   text-align: center;
-  background:
-    linear-gradient(90deg, black 50%, white 50%) 0 0 / 24px 24px,
-    linear-gradient(black 50%, white 50%) 0 0 / 24px 24px;
-  mix-blend-mode: screen;
+  font-size: clamp(15px, 2.2vw, 18px);
+  font-weight: 600;
+  color: var(--cyan);
+  line-height: 1.5;
+}
+
+.ticket .ghost-button {
+  margin-top: 24px;
 }
 
 .disclaimer {
