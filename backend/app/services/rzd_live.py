@@ -382,6 +382,9 @@ def train_option_from_aiorzd(
 
     route0 = str(content.get("route0") or origin_hint or "").strip()
     route1 = str(content.get("route1") or dest_hint or "").strip()
+    # Станции именно для выбранного направления поиска (5827), не терминусы всего поезда.
+    station0 = str(content.get("station0") or "").strip()
+    station1 = str(content.get("station1") or "").strip()
 
     distance_raw = content.get("distance") or content.get("routeDistanceKm") or content.get("routeDistance")
     try:
@@ -428,8 +431,8 @@ def train_option_from_aiorzd(
         train_number=train_number,
         origin=origin_hint or route0 or "—",
         destination=dest_hint or route1 or "—",
-        departure_station=route0 or origin_hint or "—",
-        arrival_station=route1 or dest_hint or "—",
+        departure_station=station0 or origin_hint or route0 or "—",
+        arrival_station=station1 or dest_hint or route1 or "—",
         departure_time=dep.strftime("%H:%M"),
         arrival_time=arr.strftime("%H:%M"),
         duration_minutes=dur_min,

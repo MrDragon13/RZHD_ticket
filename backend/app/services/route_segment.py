@@ -148,12 +148,15 @@ async def resolve_route_segment(
         d_ = search_destination.strip()
         i0 = next((i for i, name in enumerate(lst) if station_matches(name, o_)), -1)
         i1 = next((i for i, name in enumerate(lst) if station_matches(name, d_)), -1)
-        if i0 < 0:
+        # departure_station/arrival_station в TrainOption часто совпадают с терминусами поезда
+        # (route0/route1), а не с пунктами пассажира — подставлять их только если они согласованы
+        # с городами из запроса, иначе получится сегмент «от начала до конца всего маршрута».
+        if i0 < 0 and departure_station.strip() and station_matches(departure_station, o_):
             i0 = next(
                 (i for i, name in enumerate(lst) if station_matches(name, departure_station)),
                 -1,
             )
-        if i1 < 0:
+        if i1 < 0 and arrival_station.strip() and station_matches(arrival_station, d_):
             i1 = next(
                 (i for i, name in enumerate(lst) if station_matches(name, arrival_station)),
                 -1,

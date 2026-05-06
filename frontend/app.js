@@ -213,8 +213,33 @@ const routeVisuals = {
 };
 
 /** Максимум промежуточных точек на SVG-карте маршрута (пары circle + text в index.html). */
-const ROUTE_MAP_MAX_INTERMEDIATE_STOPS = 7;
+const ROUTE_MAP_MAX_INTERMEDIATE_STOPS = 5;
 
+/**
+ * Равномерно выбирает до maxCount названий из упорядоченного сегмента (не подряд с начала):
+ * доли 1/(k+1), 2/(k+1), … k/(k+1) по индексам списка.
+ */
+function sampleIntermediateStopsEvenly(segmentStops, maxCount) {
+  const arr = segmentStops.map((s) => String(s).trim()).filter(Boolean);
+  const k = Math.min(Math.max(1, maxCount), arr.length);
+  if (!arr.length) return [];
+  if (arr.length <= k) return arr.slice();
+  const picked = new Set();
+  const out = [];
+  for (let i = 0; i < k; i += 1) {
+    const t = (i + 1) / (k + 1);
+    let idx = Math.round(t * (arr.length - 1));
+    idx = Math.max(0, Math.min(arr.length - 1, idx));
+    let guard = 0;
+    while (picked.has(idx) && guard < arr.length) {
+      idx = (idx + 1) % arr.length;
+      guard += 1;
+    }
+    picked.add(idx);
+    out.push(arr[idx]);
+  }
+  return out;
+}
 /** Нормализация названия станции для сравнения с полями intent / поезда. */
 function normalizeStationName(name) {
   return String(name || "")
@@ -279,10 +304,10 @@ function segmentEndpointFraction(train) {
   if (raw.length >= 2) {
     let iFrom = raw.findIndex((name) => stationMatches(name, userFrom));
     let iTo = raw.findIndex((name) => stationMatches(name, userTo));
-    if (iFrom < 0) {
+    if (iFrom < 0 && stationMatches(train?.departure_station, userFrom)) {
       iFrom = raw.findIndex((name) => stationMatches(name, train?.departure_station));
     }
-    if (iTo < 0) {
+    if (iTo < 0 && stationMatches(train?.arrival_station, userTo)) {
       iTo = raw.findIndex((name) => stationMatches(name, train?.arrival_station));
     }
     if (iFrom >= 0 && iTo >= 0 && iFrom !== iTo) {
@@ -306,14 +331,7 @@ function intermediateStopDisplayNames(train) {
   const rs = train?.route_segment;
   if (rs && Array.isArray(rs.intermediate_stops) && rs.intermediate_stops.length > 0) {
     const full = rs.intermediate_stops.map((s) => String(s).trim()).filter(Boolean);
-    const max = ROUTE_MAP_MAX_INTERMEDIATE_STOPS;
-    if (full.length <= max) return full;
-    const out = [];
-    for (let i = 0; i < max; i += 1) {
-      const idx = Math.round(((i + 0.5) / max) * (full.length - 1));
-      out.push(full[idx]);
-    }
-    return out;
+    return sampleIntermediateStopsEvenly(full, ROUTE_MAP_MAX_INTERMEDIATE_STOPS);
   }
 
   const raw = Array.isArray(train?.stops)
@@ -325,10 +343,10 @@ function intermediateStopDisplayNames(train) {
 
   let iFrom = raw.findIndex((name) => stationMatches(name, userFrom));
   let iTo = raw.findIndex((name) => stationMatches(name, userTo));
-  if (iFrom < 0) {
+  if (iFrom < 0 && stationMatches(train?.departure_station, userFrom)) {
     iFrom = raw.findIndex((name) => stationMatches(name, train?.departure_station));
   }
-  if (iTo < 0) {
+  if (iTo < 0 && stationMatches(train?.arrival_station, userTo)) {
     iTo = raw.findIndex((name) => stationMatches(name, train?.arrival_station));
   }
 
@@ -342,7 +360,11 @@ function intermediateStopDisplayNames(train) {
     }
   }
 
-  if (!segment.length && stationMatches(train?.departure_station, userFrom) && stationMatches(train?.arrival_station, userTo)) {
+  if (
+    !segment.length &&
+    stationMatches(train?.departure_station, userFrom) &&
+    stationMatches(train?.arrival_station, userTo)
+  ) {
     const ia = raw.findIndex((name) => stationMatches(name, train.departure_station));
     const ib = raw.findIndex((name) => stationMatches(name, train.arrival_station));
     if (ia >= 0 && ib >= 0 && ia !== ib) {
@@ -352,19 +374,10 @@ function intermediateStopDisplayNames(train) {
       if (ia > ib) {
         segment = segment.slice().reverse();
       }
-    } else {
-      segment = raw.slice(1, -1);
     }
   }
 
-  const max = ROUTE_MAP_MAX_INTERMEDIATE_STOPS;
-  if (segment.length <= max) return segment;
-  const out = [];
-  for (let i = 0; i < max; i += 1) {
-    const idx = Math.round(((i + 0.5) / max) * (segment.length - 1));
-    out.push(segment[idx]);
-  }
-  return out;
+  return sampleIntermediateStopsEvenly(segment, ROUTE_MAP_MAX_INTERMEDIATE_STOPS);
 }
 
 /**
