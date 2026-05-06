@@ -21,13 +21,11 @@ ENV PIPER_BINARY=/usr/local/bin/piper
 ENV PIPER_VOICE_RU=/models/piper/ru_RU-irina-low.onnx
 ENV PIPER_VOICE_EN=/models/piper/en_US-lessac-low.onnx
 
-RUN wget -q https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_linux_x86_64.tar.gz -O /tmp/piper.tgz && \
+RUN wget -q https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_amd64.tar.gz -O /tmp/piper.tgz && \
     tar -xzf /tmp/piper.tgz -C /tmp && \
-    if [ -x /tmp/piper/piper ]; then mv /tmp/piper/piper /usr/local/bin/piper; \
-    elif [ -x /tmp/piper ]; then mv /tmp/piper /usr/local/bin/piper; \
-    else mv "$(find /tmp -maxdepth 3 -type f -name piper -executable | head -1)" /usr/local/bin/piper; fi && \
-    chmod +x /usr/local/bin/piper && \
-    rm -rf /tmp/piper /tmp/piper.tgz
+    P="$(find /tmp -type f -name piper -executable 2>/dev/null | head -1)" && \
+    test -n "$P" && mv "$P" /usr/local/bin/piper && chmod +x /usr/local/bin/piper && \
+    rm -f /tmp/piper.tgz && rm -rf /tmp/piper
 
 RUN mkdir -p /models/piper && \
     wget -q "https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/low/ru_RU-irina-low.onnx" -O /models/piper/ru_RU-irina-low.onnx && \
