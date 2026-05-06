@@ -102,6 +102,19 @@ class DialogResponse(BaseModel):
     state: dict = Field(default_factory=dict)
 
 
+class SupportChatRequest(BaseModel):
+    """Демо-чат с имитацией техподдержки: текущая реплика и короткая история для контекста LLM."""
+
+    language: Language
+    message: str = Field(..., max_length=2000)
+    conversation: list[DialogTurn] = Field(default_factory=list)
+
+
+class SupportChatResponse(BaseModel):
+    reply: str
+    source: Literal["llm", "fallback"]
+
+
 class CheckoutVoiceIntentRequest(BaseModel):
     """Реплика на экране списка поездов или перед оформлением — нужно ли трактовать как согласие на демо-билет."""
 

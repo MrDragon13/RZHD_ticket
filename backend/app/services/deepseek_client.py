@@ -782,3 +782,84 @@ class DeepSeekClient:
             return await self.chat_text(system_prompt, user_prompt), "llm"
         except Exception:
             return fallback, "fallback"
+
+    async def generate_support_reply(
+        self,
+        language: str,
+        message: str,
+        *,
+        prior_messages: list[tuple[str, str]] | None = None,
+    ) -> tuple[str, str]:
+        """Имитация ответа оператора техподдержки киоска (демо, не реальная линия РЖД)."""
+
+        raw = (message or "").strip()
+        if language == "en":
+            fallback = (
+                "This is a demo terminal: wire up DeepSeek on the server for smarter support-style replies. "
+                "For tickets, use the voice sphere or the Text field, then pick a train and seats in the list."
+            )
+        else:
+            fallback = (
+                "Это демонстрационный киоск: для ответов в стиле поддержки подключите DeepSeek на сервере. "
+                "Билеты ищите через сферу или поле «Текст», затем выберите поезд и места в списке."
+            )
+
+        if not raw:
+            return fallback, "fallback"
+
+        if not self.enabled:
+            return fallback, "fallback"
+
+        prior_messages = prior_messages or []
+        hist_lines: list[str] = []
+        for role, text in prior_messages[-12:]:
+            t = str(text or "").strip()
+            if not t:
+                continue
+            if language == "en":
+                label = "Passenger" if role == "user" else "Agent"
+            else:
+                label = "Пассажир" if role == "user" else "Оператор"
+            hist_lines.append(f"{label}: {t[:1800]}")
+        history_block = "\n".join(hist_lines)
+
+        if language == "en":
+            system_prompt = (
+                "You are a simulated technical support agent for an RZD-style ticket kiosk demo. "
+                "This is NOT real Russian Railways support. Reply in English only. "
+                "Be concise (2–5 short sentences), polite, and practical. "
+                "Explain UI flow when useful: voice via the glowing sphere, typed text, train list, seat map. "
+                "Never claim you issued a real ticket, processed a payment, or opened a real support ticket. "
+                "For refunds/law/accounts, say it is a prototype and point to official RZD channels in real life."
+            )
+        else:
+            system_prompt = (
+                "Ты виртуальный оператор техподдержки для демо-киоска продажи билетов в стиле РЖД. "
+                "Это НЕ настоящая линия поддержки РЖД. Отвечай только по-русски. "
+                "Кратко (2–5 коротких предложений), вежливо, по делу. "
+                "По запросу подскажи шаги интерфейса: голос — сфера, текст — кнопка «Текст», поезда — список, места — схема вагона. "
+                "Не утверждай, что оформил настоящий билет, провёл оплату или открыл обращение в реальной службе. "
+                "По возвратам и юридическим вопросам: это учебный прототип, в жизни — только официальные каналы РЖД."
+            )
+
+        if language == "en":
+            user_blob = f"Previous chat:\n{history_block}\n\nNew message:\n{raw}" if history_block else f"New message:\n{raw}"
+        else:
+            user_blob = f"История:\n{history_block}\n\nНовое сообщение:\n{raw}" if history_block else f"Новое сообщение:\n{raw}"
+
+        try:
+            timeout = float(os.getenv("DEEPSEEK_SUPPORT_TIMEOUT_SECONDS", "45"))
+            timeout = max(8.0, min(timeout, 90.0))
+            text = await self.chat_text(
+                system_prompt,
+                user_blob,
+                temperature=0.45,
+                timeout_seconds=timeout,
+            )
+            text = (text or "").strip()
+            if not text:
+                return fallback, "fallback"
+            return text[:3600], "llm"
+        except Exception:
+            logging.exception("generate_support_reply failed")
+            return fallback, "fallback"
