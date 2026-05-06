@@ -163,7 +163,6 @@ const i18n = {
     authSubtitle:
       "Укажите номер телефона для подтверждения — это демонстрация, данные не сохраняются на сервере.",
     authPhoneLabel: "Мобильный телефон",
-    authPhoneHint: "Формат: +7 (___) ___-__-__",
     authPhoneKeyboardAria: "Цифры номера телефона",
     authClear: "Очистить",
     authContinue: "Продолжить",
@@ -286,7 +285,6 @@ const i18n = {
     authSubtitle:
       "Enter your mobile phone number to continue — this is a demo; nothing is stored on the server.",
     authPhoneLabel: "Mobile phone",
-    authPhoneHint: "Format: +7 (___) ___-__-__",
     authPhoneKeyboardAria: "Phone number keypad",
     authClear: "Clear",
     authContinue: "Continue",
@@ -1849,8 +1847,6 @@ function applyAuthScreenI18n() {
   if (authPanelSubtitle) authPanelSubtitle.textContent = copy.authSubtitle;
   const phoneLab = document.querySelector("#auth-phone-label");
   if (phoneLab) phoneLab.textContent = copy.authPhoneLabel;
-  const authPhoneHintEl = document.querySelector("#auth-phone-hint");
-  if (authPhoneHintEl) authPhoneHintEl.textContent = copy.authPhoneHint;
   if (authVkeyboardPhone) authVkeyboardPhone.setAttribute("aria-label", copy.authPhoneKeyboardAria);
   const authOtpLabelEl = document.querySelector("#auth-otp-label");
   if (authOtpLabelEl) authOtpLabelEl.textContent = copy.authOtpLabel;
