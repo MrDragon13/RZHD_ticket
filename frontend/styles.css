@@ -281,6 +281,20 @@ button {
 .checkout-map-host .map-content {
   height: 100%;
   min-height: 320px;
+  padding: 14px 18px 12px;
+  box-sizing: border-box;
+}
+
+.checkout-map-host .map-title {
+  margin-bottom: 12px;
+  padding-left: 4px;
+  padding-right: 8px;
+  align-items: flex-start;
+}
+
+.checkout-map-host #route-state {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .checkout-map-host .route-map {
@@ -1383,6 +1397,45 @@ button {
   box-shadow: inset 0 0 24px rgba(0, 229, 255, 0.04);
 }
 
+.compartment-cube--female {
+  border-color: rgba(255, 120, 168, 0.55);
+  background: rgba(255, 105, 160, 0.14);
+  box-shadow: inset 0 0 28px rgba(255, 105, 160, 0.12);
+}
+
+.compartment-cube--male {
+  border-color: rgba(120, 190, 255, 0.5);
+  background: rgba(90, 170, 255, 0.1);
+  box-shadow: inset 0 0 28px rgba(90, 170, 255, 0.08);
+}
+
+.compartment-cube--mixed {
+  border-color: rgba(186, 140, 255, 0.45);
+  background: rgba(160, 120, 255, 0.09);
+}
+
+.compartment-cube--children {
+  border-color: rgba(255, 210, 120, 0.45);
+  background: rgba(255, 200, 90, 0.08);
+}
+
+.compartment-cube--family {
+  border-color: rgba(120, 255, 200, 0.4);
+  background: rgba(80, 220, 170, 0.09);
+}
+
+.seat-grid-kind-hint {
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 140, 190, 0.28);
+  background: rgba(255, 105, 160, 0.07);
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 224, 236, 0.92);
+}
+
 .compartment-cube--sv {
   flex-direction: row;
   flex-wrap: wrap;
@@ -1547,7 +1600,8 @@ button {
 }
 
 .ticket-qr-wrap canvas,
-.ticket-qr-wrap img {
+.ticket-qr-wrap img,
+.ticket-qr-wrap table {
   border-radius: 14px;
   border: 3px solid rgba(0, 255, 156, 0.45);
   box-shadow: 0 0 28px rgba(0, 229, 255, 0.22);

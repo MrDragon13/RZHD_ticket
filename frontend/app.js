@@ -81,6 +81,14 @@ const i18n = {
     seatPickerCarriage: "Вагон",
     seatPickerZoneOpen: "Открытая часть вагона (места 1–36)",
     seatPickerZoneSide: "Боковые места у окна (места 37–54)",
+    seatPickerKindFemale:
+      "По данным РЖД весь выбранный вагон — женское купе; блоки мест подсвечены розовым.",
+    seatPickerKindMale:
+      "По данным РЖД весь вагон — мужское купе; блоки мест подсвечены голубым.",
+    seatPickerKindMixed:
+      "По данным РЖД вагон со смешанным купе; блоки мест слегка подсвечены.",
+    seatPickerKindChildren: "По данным РЖД детское купе в этом вагоне.",
+    seatPickerKindFamily: "По данным РЖД семейное купе в этом вагоне.",
     selectedTrainHeading: "Выбранный поезд",
     carClassPlatzkart: "Плацкарт",
     carClassCoupe: "Купе",
@@ -157,6 +165,12 @@ const i18n = {
     seatPickerCarriage: "Car",
     seatPickerZoneOpen: "Open section (seats 1–36)",
     seatPickerZoneSide: "Side berths by the window (seats 37–54)",
+    seatPickerKindFemale:
+      "RZD lists this whole car as a female compartment; seat blocks are tinted pink.",
+    seatPickerKindMale: "RZD lists this whole car as a male compartment; seat blocks are tinted blue.",
+    seatPickerKindMixed: "RZD lists mixed compartments in this car (light tint on blocks).",
+    seatPickerKindChildren: "RZD indicates children compartments in this car.",
+    seatPickerKindFamily: "RZD indicates family compartments in this car.",
     selectedTrainHeading: "Selected train",
     carClassPlatzkart: "Platzkart",
     carClassCoupe: "Coupe",
@@ -931,6 +945,38 @@ function compartmentKindLabel(kind) {
       return copy.compartmentFamily;
     default:
       return copy.compartmentUnknown || "";
+  }
+}
+
+/** Класс для подсветки купе на схеме: РЖД отдаёт пол сегмента на уровне вагона, не отдельного купе. */
+function compartmentCubeToneClass(train, car) {
+  const det = train && car ? carriageDetailForTab(train, car) : null;
+  const k = det?.compartment_kind;
+  if (k === "female") return "compartment-cube--female";
+  if (k === "male") return "compartment-cube--male";
+  if (k === "mixed") return "compartment-cube--mixed";
+  if (k === "children") return "compartment-cube--children";
+  if (k === "family") return "compartment-cube--family";
+  return "";
+}
+
+function seatPickerCompartmentKindHint(train, car) {
+  const det = train && car ? carriageDetailForTab(train, car) : null;
+  if (!det) return "";
+  const copy = i18n[language];
+  switch (det.compartment_kind) {
+    case "female":
+      return copy.seatPickerKindFemale;
+    case "male":
+      return copy.seatPickerKindMale;
+    case "mixed":
+      return copy.seatPickerKindMixed;
+    case "children":
+      return copy.seatPickerKindChildren;
+    case "family":
+      return copy.seatPickerKindFamily;
+    default:
+      return "";
   }
 }
 
@@ -2315,7 +2361,7 @@ function renderCarriageTabs() {
   });
 }
 
-function appendStandardCoupeCube(grid, car, compSeats) {
+function appendStandardCoupeCube(grid, car, compSeats, cubeExtraClass = "") {
   const byPair = new Map();
   compSeats.forEach((seat) => {
     const pi = seat.pairIndex ?? 0;
@@ -2326,7 +2372,7 @@ function appendStandardCoupeCube(grid, car, compSeats) {
   });
   const pairIndices = [...byPair.keys()].sort((a, b) => a - b);
   const cube = document.createElement("div");
-  cube.className = "compartment-cube";
+  cube.className = ["compartment-cube", cubeExtraClass].filter(Boolean).join(" ");
   pairIndices.forEach((pairIdx) => {
     const slot = byPair.get(pairIdx);
     const col = document.createElement("div");
@@ -2349,6 +2395,13 @@ function renderSeatGrid() {
   classLine.className = "seat-grid-class-line";
   classLine.textContent = `${carriageClassLabel(car)} · ${i18n[language].seatPickerCarriage} ${car}`;
   grid.append(classLine);
+  const kindHintText = seatPickerCompartmentKindHint(selectedTrain, car);
+  if (kindHintText) {
+    const hint = document.createElement("p");
+    hint.className = "seat-grid-kind-hint";
+    hint.textContent = kindHintText;
+    grid.append(hint);
+  }
   const seats = demoSeatLayouts.get(car) || [];
   const byCompartment = new Map();
   seats.forEach((seat) => {
@@ -2357,6 +2410,7 @@ function renderSeatGrid() {
     byCompartment.get(ci).push(seat);
   });
   const cls = carriageClassKey(car);
+  const toneCls = compartmentCubeToneClass(selectedTrain, car);
   const compIndices = [...byCompartment.keys()].sort((a, b) => a - b);
   const isPlatzkartClassic =
     cls === "platzkart" && seats.some((s) => s.zone === "open") && seats.some((s) => s.zone === "side");
@@ -2378,7 +2432,7 @@ function renderSeatGrid() {
     const openFlex = document.createElement("div");
     openFlex.className = "car-platz-open-cubes";
     for (let compIdx = 0; compIdx < 9; compIdx += 1) {
-      appendStandardCoupeCube(openFlex, car, openByComp.get(compIdx) || []);
+      appendStandardCoupeCube(openFlex, car, openByComp.get(compIdx) || [], toneCls);
     }
     secOpen.append(openFlex);
     grid.append(secOpen);
@@ -2427,7 +2481,7 @@ function renderSeatGrid() {
       const flex0 = document.createElement("div");
       flex0.className = "car-deck-cubes";
       d0.forEach((compIdx) => {
-        appendStandardCoupeCube(flex0, car, byCompartment.get(compIdx) || []);
+        appendStandardCoupeCube(flex0, car, byCompartment.get(compIdx) || [], toneCls);
       });
       row0.append(flex0);
       grid.append(row0);
@@ -2442,7 +2496,7 @@ function renderSeatGrid() {
       const flex1 = document.createElement("div");
       flex1.className = "car-deck-cubes";
       d1.forEach((compIdx) => {
-        appendStandardCoupeCube(flex1, car, byCompartment.get(compIdx) || []);
+        appendStandardCoupeCube(flex1, car, byCompartment.get(compIdx) || [], toneCls);
       });
       row1.append(flex1);
       grid.append(row1);
@@ -2453,7 +2507,7 @@ function renderSeatGrid() {
     const compSeats = byCompartment.get(compIdx) || [];
     if (cls === "sv") {
       const cube = document.createElement("div");
-      cube.className = "compartment-cube compartment-cube--sv";
+      cube.className = ["compartment-cube", "compartment-cube--sv", toneCls].filter(Boolean).join(" ");
       [...compSeats]
         .sort((a, b) => parseInt(a.displayNum, 10) - parseInt(b.displayNum, 10))
         .forEach((seat) => {
@@ -2462,7 +2516,7 @@ function renderSeatGrid() {
       grid.append(cube);
       return;
     }
-    appendStandardCoupeCube(grid, car, compSeats);
+    appendStandardCoupeCube(grid, car, compSeats, toneCls);
   });
 }
 
@@ -2560,21 +2614,44 @@ function renderTicketQrCanvas(payloadText) {
   if (!wrap || !thanksEl) return;
   wrap.innerHTML = "";
   thanksEl.textContent = i18n[language].ticketThanks;
-  if (typeof window.QRCode === "undefined") {
+  const QR = window.QRCode;
+  if (typeof QR === "undefined") {
     wrap.textContent = payloadText.slice(0, 480);
     return;
   }
-  try {
-    new window.QRCode(wrap, {
-      text: payloadText,
+  const drawQr = (text) => {
+    wrap.innerHTML = "";
+    const qr = new QR(wrap, {
       width: 220,
       height: 220,
       colorDark: "#071018",
       colorLight: "#ffffff",
-      correctLevel: window.QRCode.CorrectLevel.M,
+      correctLevel: QR.CorrectLevel.L,
     });
+    qr.makeCode(text);
+    return wrap.querySelector("canvas, img, table");
+  };
+  try {
+    if (!drawQr(payloadText)) throw new Error("qr_empty");
   } catch {
-    wrap.textContent = payloadText.slice(0, 480);
+    try {
+      if (!drawQr(payloadText.slice(0, 1200))) throw new Error("qr_empty");
+    } catch {
+      try {
+        if (!drawQr(payloadText.slice(0, 400))) throw new Error("qr_empty");
+      } catch {
+        wrap.textContent = payloadText.slice(0, 480);
+      }
+    }
+  }
+  const canvas = wrap.querySelector("canvas");
+  const img = wrap.querySelector("img");
+  if (canvas) {
+    canvas.setAttribute("aria-hidden", "true");
+    wrap.setAttribute("aria-hidden", "false");
+  } else if (img) {
+    img.alt = "";
+    wrap.setAttribute("aria-hidden", "false");
   }
 }
 
