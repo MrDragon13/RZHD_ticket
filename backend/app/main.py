@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
+from calendar import month_name
+from datetime import date, datetime
 
 _level_name = os.getenv("LOG_LEVEL", "INFO").strip().upper()
 _level = getattr(logging, _level_name, logging.INFO)
@@ -81,6 +83,58 @@ rzd_adapter = RzdDataAdapter(deepseek_client=deepseek_client)
 # как собраны все обязательные параметры. Иначе ассистент задает уточняющий
 # вопрос и ждет следующую реплику пользователя.
 REQUIRED_DIALOG_FIELDS = ("origin", "destination", "date")
+
+_RU_MONTHS_GENITIVE = (
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+)
+
+
+def _parse_travel_date_string(raw: str | None) -> date | None:
+    """Разбирает дату из полей диалога / TripIntent (ISO или d.m.Y)."""
+
+    if not raw or not str(raw).strip():
+        return None
+    s = str(raw).strip()
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        try:
+            return datetime.strptime(s[:10], "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    for fmt in ("%d.%m.%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _format_date_for_assistant_speech(raw: str | None, language: str) -> str:
+    """Человекочитаемая дата для голосовой реплики (не ISO)."""
+
+    d = _parse_travel_date_string(raw)
+    if d is None:
+        return (raw or "").strip()
+    today = date.today()
+    if language == "en":
+        label = f"{month_name[d.month]} {d.day}"
+        if d.year != today.year:
+            label = f"{label}, {d.year}"
+        return label
+    label = f"{d.day} {_RU_MONTHS_GENITIVE[d.month - 1]}"
+    if d.year != today.year:
+        label = f"{label} {d.year}"
+    return label
 
 
 @app.get("/api/health", response_model=HealthResponse)
@@ -172,10 +226,10 @@ def _ready_to_search_text(language: str, state: dict) -> str:
 
     origin = state.get("origin")
     destination = state.get("destination")
-    date = state.get("date")
+    date_spoken = _format_date_for_assistant_speech(state.get("date"), language)
     if language == "en":
-        return f"Thank you. I have the route: {origin} to {destination}, {date}. Searching suitable trains."
-    return f"Спасибо. Маршрут собран: {origin} -> {destination}, {date}. Подбираю подходящие поезда."
+        return f"Thank you. I have the route: {origin} to {destination}, {date_spoken}. Searching suitable trains."
+    return f"Спасибо. Маршрут собран: {origin} -> {destination}, {date_spoken}. Подбираю подходящие поезда."
 
 
 @app.post("/api/tickets/search", response_model=TicketSearchResponse)
