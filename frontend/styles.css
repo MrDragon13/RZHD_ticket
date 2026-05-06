@@ -395,10 +395,24 @@ button {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   gap: 20px;
   height: 100vh;
   padding: 28px;
+}
+
+/* Область выбора языка и основного терминала — одна ячейка сетки (перекрывающиеся экраны) */
+.screen-stage {
+  display: grid;
+  grid-template-rows: 1fr;
+  min-height: 0;
+  align-self: stretch;
+}
+
+.screen-stage > .language-screen,
+.screen-stage > .terminal-screen {
+  grid-area: 1 / 1;
+  align-self: stretch;
 }
 
 .topbar {
@@ -528,6 +542,91 @@ body.ui-interaction-locked #user-input {
 
 .hidden {
   display: none !important;
+}
+
+/* --- Переходы между экранами и режимами оформления (opacity + transform) --- */
+:root {
+  --motion-screen-ms: 320ms;
+  --motion-workspace-ms: 280ms;
+  --motion-panel-ms: 260ms;
+}
+
+.language-screen,
+.terminal-screen {
+  transition:
+    opacity var(--motion-screen-ms) cubic-bezier(0.33, 1, 0.68, 1),
+    transform var(--motion-screen-ms) cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.language-screen.screen-motion-leave-out-up,
+.terminal-screen.screen-motion-leave-out-down {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.language-screen.screen-motion-leave-out-up {
+  transform: translateY(-22px);
+}
+
+.terminal-screen.screen-motion-leave-out-down {
+  transform: translateY(22px);
+}
+
+.terminal-screen.screen-motion-enter-from-below {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
+.language-screen.screen-motion-enter-from-above {
+  opacity: 0;
+  transform: translateY(-28px);
+}
+
+.main-workspace,
+.checkout-workspace {
+  transition:
+    opacity var(--motion-workspace-ms) cubic-bezier(0.33, 1, 0.68, 1),
+    transform var(--motion-workspace-ms) cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.main-workspace.workspace-motion-leave {
+  opacity: 0;
+  transform: scale(0.987) translateY(14px);
+  pointer-events: none;
+}
+
+.checkout-workspace.workspace-motion-enter {
+  opacity: 0;
+  transform: translateY(18px);
+}
+
+.seat-picker-panel {
+  transition:
+    opacity var(--motion-panel-ms) ease,
+    transform var(--motion-panel-ms) ease;
+}
+
+.seat-picker-panel.seat-picker-motion-enter {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-screen-ms: 0.01ms;
+    --motion-workspace-ms: 0.01ms;
+    --motion-panel-ms: 0.01ms;
+  }
+
+  .language-screen,
+  .terminal-screen,
+  .main-workspace,
+  .checkout-workspace,
+  .seat-picker-panel {
+    transition: none !important;
+    transform: none !important;
+    will-change: auto;
+  }
 }
 
 .language-screen {

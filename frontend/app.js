@@ -1643,8 +1643,83 @@ const backendHealthBanner = document.querySelector("#backend-health-banner");
 /** Блокировка двойных отправок диалога / поиска */
 let uiInteractionLocked = false;
 
+const SCREEN_MOTION_MS = 340;
+const WORKSPACE_MOTION_MS = 300;
+
+function prefersReducedMotion() {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
+
+function waitTransitionEnd(el, fallbackMs) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timeoutId);
+      resolve();
+    };
+    const timeoutId = setTimeout(finish, fallbackMs);
+    el.addEventListener(
+      "transitionend",
+      (ev) => {
+        if (ev.target === el) finish();
+      },
+      { once: true },
+    );
+  });
+}
+
+async function transitionLanguageToTerminal() {
+  const lang = screens.language;
+  const term = screens.terminal;
+  if (!lang || !term) return;
+  if (prefersReducedMotion()) {
+    lang.classList.add("hidden");
+    term.classList.remove("hidden");
+    return;
+  }
+  lang.classList.add("screen-motion-leave-out-up");
+  await waitTransitionEnd(lang, SCREEN_MOTION_MS + 140);
+  lang.classList.add("hidden");
+  lang.classList.remove("screen-motion-leave-out-up");
+  term.classList.remove("hidden");
+  term.classList.add("screen-motion-enter-from-below");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      term.classList.remove("screen-motion-enter-from-below");
+    });
+  });
+}
+
+async function transitionTerminalToLanguage() {
+  const lang = screens.language;
+  const term = screens.terminal;
+  if (!lang || !term) return;
+  if (prefersReducedMotion()) {
+    term.classList.add("hidden");
+    lang.classList.remove("hidden");
+    return;
+  }
+  term.classList.add("screen-motion-leave-out-down");
+  await waitTransitionEnd(term, SCREEN_MOTION_MS + 140);
+  term.classList.add("hidden");
+  term.classList.remove("screen-motion-leave-out-down");
+  lang.classList.remove("hidden");
+  lang.classList.add("screen-motion-enter-from-above");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      lang.classList.remove("screen-motion-enter-from-above");
+    });
+  });
+}
+
 document.querySelectorAll("[data-language]").forEach((button) => {
-  button.addEventListener("click", () => setLanguage(button.dataset.language));
+  button.addEventListener("click", () => void setLanguage(button.dataset.language));
 });
 const sendBtn = document.querySelector("#send-button");
 if (sendBtn && userInput) {
@@ -1734,15 +1809,14 @@ function clearTicketReturnToLanguageTimer() {
   }
 }
 
-function returnToLanguageIdleScreen() {
+async function returnToLanguageIdleScreen() {
   clearTicketReturnToLanguageTimer();
   stopAssistantSpeech();
   resetScenario(false);
-  screens.terminal?.classList.add("hidden");
-  screens.language?.classList.remove("hidden");
   newSessionButton?.classList.add("hidden");
   textInputToggle?.classList.add("hidden");
   setTextInputPanelOpen(false);
+  await transitionTerminalToLanguage();
   try {
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch {
@@ -1755,14 +1829,10 @@ function returnToLanguageIdleScreen() {
   }
 }
 
-function setLanguage(nextLanguage) {
+async function setLanguage(nextLanguage) {
   stopLanguageScreenAmbient();
   language = nextLanguage;
   const copy = i18n[language];
-  screens.language?.classList.add("hidden");
-  screens.terminal?.classList.remove("hidden");
-  newSessionButton?.classList.remove("hidden");
-  textInputToggle?.classList.remove("hidden");
   if (languageBadge) languageBadge.textContent = language.toUpperCase();
   document.querySelector("#terminal-title").textContent = copy.title;
   document.querySelector("#start-prompt").textContent = copy.startPrompt;
@@ -1779,6 +1849,9 @@ function setLanguage(nextLanguage) {
   document.querySelector("#seat-picker-title").textContent = copy.seatPickerTitle;
   document.querySelector("#seat-picker-hint").textContent = copy.seatPickerHint;
   if (confirmSeatsButton) confirmSeatsButton.textContent = copy.seatPickerConfirm;
+  await transitionLanguageToTerminal();
+  newSessionButton?.classList.remove("hidden");
+  textInputToggle?.classList.remove("hidden");
   resetScenario(false);
   updateTextInputToggleLabels();
   refreshThemeToggleLabels();
@@ -2818,7 +2891,7 @@ async function createTicket() {
       selectedTrain = t;
     }
     buildSeatPickerModel(selectedTrain);
-    showSeatPicker();
+    await showSeatPicker();
   } finally {
     checkoutAnimating = false;
     checkoutButton.disabled = false;
@@ -3351,13 +3424,24 @@ function hideCheckoutTrainSummary() {
   checkoutTrainSummary.setAttribute("aria-hidden", "true");
 }
 
-function enterCheckoutWorkspaceMode() {
+async function enterCheckoutWorkspaceMode() {
   if (!checkoutWorkspace || !mainWorkspace || !checkoutMapHost || !mapContent || !routePanel) return;
-  mainWorkspace.classList.add("hidden");
-  checkoutWorkspace.classList.remove("hidden");
-  if (mapContent.parentElement !== checkoutMapHost) {
-    checkoutMapHost.append(mapContent);
+  if (prefersReducedMotion()) {
+    mainWorkspace.classList.add("hidden");
+    checkoutWorkspace.classList.remove("hidden");
+    if (mapContent.parentElement !== checkoutMapHost) checkoutMapHost.append(mapContent);
+    return;
   }
+  mainWorkspace.classList.add("workspace-motion-leave");
+  await waitTransitionEnd(mainWorkspace, WORKSPACE_MOTION_MS + 130);
+  mainWorkspace.classList.add("hidden");
+  mainWorkspace.classList.remove("workspace-motion-leave");
+  if (mapContent.parentElement !== checkoutMapHost) checkoutMapHost.append(mapContent);
+  checkoutWorkspace.classList.remove("hidden");
+  checkoutWorkspace.classList.add("workspace-motion-enter");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => checkoutWorkspace.classList.remove("workspace-motion-enter"));
+  });
 }
 
 function exitCheckoutWorkspaceMode() {
@@ -3372,11 +3456,17 @@ function exitCheckoutWorkspaceMode() {
   }
 }
 
-function showSeatPicker() {
+async function showSeatPicker() {
   ticketPanel.classList.add("hidden");
-  enterCheckoutWorkspaceMode();
+  await enterCheckoutWorkspaceMode();
   if (selectedTrain) renderCheckoutTrainSummary(selectedTrain);
   seatPickerPanel.classList.remove("hidden");
+  if (!prefersReducedMotion()) {
+    seatPickerPanel.classList.add("seat-picker-motion-enter");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => seatPickerPanel.classList.remove("seat-picker-motion-enter"));
+    });
+  }
   document.querySelector("#seat-picker-title").textContent = i18n[language].seatPickerTitle;
   document.querySelector("#seat-picker-hint").textContent = i18n[language].seatPickerHint;
   confirmSeatsButton.textContent = i18n[language].seatPickerConfirm;
