@@ -384,7 +384,8 @@ class DeepSeekClient:
             "Если передан prior_dialog, учитывай контекст: при уточняющих вопросах по уже известному маршруту "
             "(еда в поезде, скорость, удобство, дополнительные услуги) заполняй assistant_text ответом именно на этот вопрос, "
             "без повторного полного подтверждения маршрута, если это уже звучало у ассистента. "
-            "preferences заполняй короткими английскими тегами: sleep, comfort, cheap, speed, direct, child, luggage. "
+            "preferences заполняй короткими английскими тегами: sleep, comfort, cheap, speed, direct, child, luggage; "
+            "если пользователь явно просит услуги вагона — добавляй отдельно: restaurant, air_conditioning, pets, wifi, media. "
             "Временные окна: departure_time_window — когда пассажир хочет УЕХАТЬ/ОТПРАВИТЬСЯ "
             "(рус.: уехать, выехать, отправление, сесть на поезд; англ.: leave, depart, morning outbound). "
             "arrival_time_window — когда хочет ПРИЕХАТЬ/ПРИБЫТЬ "
@@ -466,6 +467,18 @@ class DeepSeekClient:
             preferences.append("comfort")
         if any(word in normalized for word in ["без перес", "direct", "nonstop"]):
             preferences.append("direct")
+        if any(w in normalized for w in ("ресторан", "restaurant", "вагон-ресторан", "buffet")):
+            preferences.append("restaurant")
+        if any(w in normalized for w in ("кондицион", "air conditioning", "climate control")):
+            preferences.append("air_conditioning")
+        if any(w in normalized for w in ("животн", "питомц", "pet", "pets", "собак", "кошк")):
+            preferences.append("pets")
+        if any(w in normalized for w in ("wi-fi", "wifi", "беспровод")):
+            preferences.append("wifi")
+        if any(w in normalized for w in ("медиа", "телевиз", "entertainment", "медиасистем")):
+            preferences.append("media")
+
+        preferences = list(dict.fromkeys(preferences))
 
         departure_window = None
         arrival_window = None
@@ -556,7 +569,24 @@ class DeepSeekClient:
             ),
             "transfers": "direct_preferred",
             "assistant_text": assistant_text,
-            "rank_with_llm": False,
+            "rank_with_llm": any(
+                x in normalized
+                for x in (
+                    "животн",
+                    "питомц",
+                    "медицин",
+                    "инвалид",
+                    "коляск",
+                    "pets",
+                    "wheelchair",
+                    "restaurant",
+                    "кондицион",
+                    "ресторан",
+                    "wi-fi",
+                    "wifi",
+                    "медиа",
+                )
+            ),
         }
 
     async def explain_recommendation(

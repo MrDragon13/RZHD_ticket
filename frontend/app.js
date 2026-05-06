@@ -1759,6 +1759,8 @@ async function searchAndRecommendBody() {
     arrival_time_window: intent.arrival_time_window,
     departure_time_window: intent.departure_time_window,
     preferences: intent.preferences,
+    last_user_message: lastDialogUserText || null,
+    rank_with_llm: Boolean(intent.rank_with_llm),
   };
 
   let ticketResponse;

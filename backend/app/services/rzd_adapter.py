@@ -25,6 +25,11 @@ from app.services.rzd_live import (
     apply_carriage_layer_payload,
     train_option_from_aiorzd,
 )
+from app.services.wagon_search_hints import (
+    extract_wagon_constraints,
+    filter_trains_by_wagon_constraints,
+    needs_carriage_layer_for_search,
+)
 
 
 def _dep_date_dmY_from_train_id(train_id: str) -> str:
@@ -199,10 +204,12 @@ class RzdDataAdapter:
         if not matched:
             matched = trains
 
+        enriched_demo = await self._enrich_route_segments(request, matched, perf_sid=None)
+        enriched_demo = self._apply_wagon_constraint_filter(request, enriched_demo, sid=None)
         return TicketSearchResponse(
             source="demo",
             updated_at=datetime.now(timezone.utc).isoformat(),
-            trains=await self._enrich_route_segments(request, matched, perf_sid=None),
+            trains=enriched_demo,
         )
 
     async def _search_live(self, request: TicketSearchRequest) -> TicketSearchResponse:
@@ -216,7 +223,19 @@ class RzdDataAdapter:
         day_start = datetime.combine(travel_date, time.min)
         day_end = datetime.combine(travel_date, time(23, 59, 59))
 
-        enrich = _env_explicit_on("RZD_CARRIAGE_ENRICH")
+        enrich = _env_explicit_on("RZD_CARRIAGE_ENRICH") or needs_carriage_layer_for_search(
+            request.preferences,
+            request.last_user_message,
+            request.rank_with_llm,
+        )
+        if enrich and not _env_explicit_on("RZD_CARRIAGE_ENRICH"):
+            wc = extract_wagon_constraints(request.preferences, request.last_user_message)
+            logging.info(
+                "RZD perf sid=%s auto_carriage_enrich=1 constraints=%s rank_with_llm=%s",
+                sid,
+                sorted(wc),
+                request.rank_with_llm,
+            )
         route_stops_on_search = _env_explicit_on("RZD_ROUTE_STOPS_ON_SEARCH")
         route_stops_max = int(os.getenv("RZD_ROUTE_STOPS_MAX_TRAINS", "15") or "15")
         route_stops_max = max(1, min(route_stops_max, 40))
@@ -427,6 +446,7 @@ class RzdDataAdapter:
 
         t_seg0 = time_monotonic.monotonic()
         enriched = await self._enrich_route_segments(request, mapped, perf_sid=sid)
+        enriched = self._apply_wagon_constraint_filter(request, enriched, sid=sid)
         logging.info(
             "RZD perf sid=%s phase=search_done mapped=%s enrich_route_segments_wall=%.3fs total_wall=%.3fs",
             sid,
@@ -440,6 +460,29 @@ class RzdDataAdapter:
             updated_at=datetime.now(timezone.utc).isoformat(),
             trains=enriched,
         )
+
+    def _apply_wagon_constraint_filter(
+        self,
+        request: TicketSearchRequest,
+        trains: list[TrainOption],
+        *,
+        sid: str | None,
+    ) -> list[TrainOption]:
+        """Сужает список по услугам вагона, если слой 5764 дал текстовые признаки."""
+
+        constraints = extract_wagon_constraints(request.preferences, request.last_user_message)
+        if not constraints:
+            return trains
+        filtered = filter_trains_by_wagon_constraints(trains, constraints)
+        if len(filtered) < len(trains):
+            logging.info(
+                "RZD wagon_constraint_filter sid=%s %s -> %s tags=%s",
+                sid or "-",
+                len(trains),
+                len(filtered),
+                sorted(constraints),
+            )
+        return filtered
 
     def _load_demo_trains(self) -> list[TrainOption]:
         with self._data_file.open("r", encoding="utf-8") as file:

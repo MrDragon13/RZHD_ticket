@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .deepseek_client import DeepSeekClient
+from .wagon_search_hints import extract_wagon_constraints, train_satisfies_all_wagon_tags
 from ..models import Recommendation, RecommendRequest, RecommendResponse, TrainOption, TripIntent
 
 
@@ -101,6 +102,14 @@ def _score_train(train: TrainOption, request: RecommendRequest) -> tuple[float, 
         if 0 <= difference <= 600:
             score += 12
             badges.append("Купе почти как плацкарт" if request.language == "ru" else "Coupe close to platzkart")
+
+    wagon_constraints = extract_wagon_constraints(request.intent.preferences, request.last_user_message)
+    if wagon_constraints and train.carriage_details:
+        if train_satisfies_all_wagon_tags(train, wagon_constraints):
+            score += 26.0
+            badges.append(
+                "Совпадает с услугами в запросе" if request.language == "ru" else "Matches requested onboard services"
+            )
 
     # Убираем дубли, сохраняя порядок появления бейджей.
     deduplicated_badges = list(dict.fromkeys(badges))

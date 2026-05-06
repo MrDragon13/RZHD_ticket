@@ -112,6 +112,14 @@ class TicketSearchRequest(BaseModel):
     arrival_time_window: TimeWindow | None = None
     departure_time_window: TimeWindow | None = None
     preferences: list[str] = Field(default_factory=list)
+    last_user_message: str | None = Field(
+        default=None,
+        description="Последняя реплика пользователя — для эвристик услуг вагона без повторного вызова LLM.",
+    )
+    rank_with_llm: bool = Field(
+        default=False,
+        description="Если True, запрос нестандартный — подтягиваем расширенные данные по вагонам для ранжирования.",
+    )
 
     @field_validator("departure_time_window", "arrival_time_window", mode="before")
     @classmethod
