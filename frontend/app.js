@@ -2761,11 +2761,12 @@ function enterCheckoutWorkspaceMode() {
 function exitCheckoutWorkspaceMode() {
   if (!checkoutWorkspace || !mainWorkspace || !mapContent || !routePanel) return;
   seatPickerPanel.classList.add("hidden");
+  ticketPanel.classList.add("hidden");
   hideCheckoutTrainSummary();
   checkoutWorkspace.classList.add("hidden");
   mainWorkspace.classList.remove("hidden");
   if (mapContent.parentElement !== routePanel) {
-    routePanel.insertBefore(mapContent, ticketPanel);
+    routePanel.prepend(mapContent);
   }
 }
 
@@ -3177,9 +3178,8 @@ function renderTicketQrCanvas(payloadText) {
 }
 
 function renderTicket() {
-  exitCheckoutWorkspaceMode();
   seatPickerPanel.classList.add("hidden");
-  mapContent.classList.add("hidden");
+  mapContent.classList.remove("hidden");
   ticketPanel.classList.remove("hidden");
   setStage("ticket");
   document.querySelector("#ticket-title").textContent = i18n[language].demoTicket;
@@ -3198,7 +3198,7 @@ function renderTicket() {
   `;
   renderTicketQrCanvas(buildDemoTicketQrPayload());
   assistantSay(language === "ru" ? "Демонстрационный билет готов." : "Your demo ticket is ready.");
-  ticketPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+  document.querySelector("#checkout-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function stopAssistantSpeech() {

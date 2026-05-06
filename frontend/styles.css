@@ -327,6 +327,17 @@ button {
   overflow-y: auto;
 }
 
+.seat-picker-column > .ticket-panel--checkout {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  backdrop-filter: none;
+}
+
 .seat-picker-column .seat-picker {
   min-height: 100%;
 }
