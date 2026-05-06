@@ -3730,7 +3730,13 @@ function enqueueSpeech(text) {
 function speakNext() {
   if (!speechQueue.length) {
     isSpeaking = false;
-    if (uiStage === "initial" || uiStage === "checkout" || uiStage === "seatPicker" || uiStage === "ticket")
+    if (
+      uiStage === "initial" ||
+      uiStage === "results" ||
+      uiStage === "checkout" ||
+      uiStage === "seatPicker" ||
+      uiStage === "ticket"
+    )
       setOrbMode("idle");
     return;
   }
@@ -3739,7 +3745,10 @@ function speakNext() {
 }
 
 function speak(text) {
-  if (!("speechSynthesis" in window)) return;
+  if (!("speechSynthesis" in window)) {
+    speakNext();
+    return;
+  }
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = language === "ru" ? "ru-RU" : "en-US";
   utterance.rate = 0.95;
