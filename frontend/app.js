@@ -770,6 +770,22 @@ let activeCarriageIndex = 0;
 /** @type {Map<string, "platzkart" | "coupe" | "sv">} */
 let demoCarriageClassByCar = new Map();
 
+/**
+ * Данные РЖД (слой 5764 и поиск): задуманы как полный вагон и полки; на практике ответ часто
+ * неполный. Концепция: пока счётчики выглядят как целый вагон — они в приоритете; иначе схема
+ * строится по эталонной раскладке класса, а фрагмент свободных мест применяется только в его
+ * пределах (остальное на схеме — занято). Пороги согласованы с backend `aggregate_from_carriages_payload`.
+ * Подробно: docs/RZD_LAYOUT_POLICY.md
+ */
+const RZD_TRUST_BERTH_TOTALS_PLATZ_MIN = 36;
+const RZD_TRUST_BERTH_TOTALS_PLATZ_MAX = 81;
+const RZD_TRUST_BERTH_TOTALS_COUPE_MIN = 16;
+const RZD_TRUST_BERTH_TOTALS_SV_MIN = 12;
+const RZD_TRUST_TRAIN_CAP_PLATZ_MIN = 36;
+const RZD_TRUST_TRAIN_CAP_COUPE_MIN = 16;
+const RZD_TRUST_TRAIN_CAP_SV_MIN = 12;
+const RZD_TRUST_TRAIN_CAP_DOUBLE_COUPE_MIN = 16;
+
 function carriageClassKey(car) {
   return demoCarriageClassByCar.get(car) || "platzkart";
 }
@@ -858,27 +874,27 @@ function berthTotalsSum(detail) {
 }
 
 /**
- * РЖД иногда отдаёт сумму только по части купе (например 8 мест = два отсека),
- * из‑за чего строилась нереалистичная «мини-схема». Для целого вагона берём сумму
- * только если она похожа на полную вместимость класса.
+ * Доверять ли сумме berth_totals из РЖД как описанию **целого** вагона (для подстановки вместимости).
+ * Ниже порога считаем ответ фрагментом и используем эталонную вместимость класса.
  */
 function berthTotalsLookLikeWholeCarriage(cls, sum, detail) {
   if (sum < 4) return false;
   if (cls === "platzkart") {
-    // Только сумма по всем полкам в типичном диапазоне вагона; не полагаемся на «боковые»
-    // отдельно — РЖД может отдать фрагмент купе (8 мест) с ненулевыми side_*.
-    return sum >= 36 && sum <= 81;
+    return sum >= RZD_TRUST_BERTH_TOTALS_PLATZ_MIN && sum <= RZD_TRUST_BERTH_TOTALS_PLATZ_MAX;
   }
   if (cls === "coupe") {
-    return sum >= 16;
+    return sum >= RZD_TRUST_BERTH_TOTALS_COUPE_MIN;
   }
   if (cls === "sv") {
-    return sum >= 12;
+    return sum >= RZD_TRUST_BERTH_TOTALS_SV_MIN;
   }
   return sum >= 4;
 }
 
-/** Вместимость вагона для схемы: приоритет сумме berth_totals из РЖД. */
+/**
+ * Вместимость для отрисовки: если суммы полок РЖД выглядят целостно — используем их;
+ * иначе эталон по классу (`fallbackCapacity` из `carriageCapacityForClass`).
+ */
 function carriageCapacityFromRzd(train, carCode, cls, fallbackCapacity) {
   const det = carriageDetailForTab(train, carCode);
   const sum = berthTotalsSum(det);
@@ -1775,26 +1791,30 @@ function selectedSeatsOrderTotalRub() {
   return sum;
 }
 
-/** Типичная вместимость одного вагона для демо-схемы (данные с бэкенда или запасные значения). */
+/**
+ * Эталонная вместимость для схемы + метаданные поезда с РЖД: доверяем числу мест только если оно
+ * выше порога «не фрагмент» (см. docs/RZD_LAYOUT_POLICY.md); иначе типичные значения класса.
+ */
 function carriageCapacityForClass(train, cls) {
   const t = train || {};
   if (cls === "sv") {
     const n = Number(t.sv_carriage_seats);
-    if (Number.isFinite(n) && n >= 2) return Math.min(Math.max(Math.round(n), 2), 24);
+    if (Number.isFinite(n) && n >= RZD_TRUST_TRAIN_CAP_SV_MIN) return Math.min(Math.max(Math.round(n), 2), 24);
     return 18;
   }
   if (cls === "coupe") {
     if (t.coupe_double_deck) {
       const n = Number(t.coupe_double_deck_seats);
-      if (Number.isFinite(n) && n >= 4) return Math.min(Math.max(Math.round(n), 4), 72);
+      if (Number.isFinite(n) && n >= RZD_TRUST_TRAIN_CAP_DOUBLE_COUPE_MIN)
+        return Math.min(Math.max(Math.round(n), 4), 72);
       return 64;
     }
     const n = Number(t.coupe_carriage_seats);
-    if (Number.isFinite(n) && n >= 4) return Math.min(Math.max(Math.round(n), 4), 40);
+    if (Number.isFinite(n) && n >= RZD_TRUST_TRAIN_CAP_COUPE_MIN) return Math.min(Math.max(Math.round(n), 4), 40);
     return 36;
   }
   const n = Number(t.platzkart_carriage_seats);
-  if (Number.isFinite(n) && n >= 4) return Math.min(Math.max(Math.round(n), 4), 72);
+  if (Number.isFinite(n) && n >= RZD_TRUST_TRAIN_CAP_PLATZ_MIN) return Math.min(Math.max(Math.round(n), 4), 72);
   return 54;
 }
 
@@ -1921,10 +1941,9 @@ function countBerthsByKind(seats) {
 }
 
 /**
- * Если РЖД не отдали полные суммы по полкам, дополняем berth_totals числом мест на нашей схеме,
- * чтобы занятость считалась согласованно с раскладкой.
- * При частичных суммах РЖД свободными остаются только места из berth_available; по остальным
- * местам вагона считаем, что они проданы (в merge ниже ограничиваем free по фрагменту).
+ * Сшивка счётчиков РЖД с полной схемой мест: при неполных суммах полок расширяем totals до раскладки,
+ * свободные места только в пределах явного фрагмента РЖД — остальные на схеме считаем занятыми.
+ * Политика: docs/RZD_LAYOUT_POLICY.md
  */
 function mergedCarriageDetailForLayout(train, car, seats) {
   const d = carriageDetailForTab(train, car);
@@ -1982,14 +2001,21 @@ function berthAvailableMergedForPartialLayout(layout, ttRzd, avRzd) {
   return out;
 }
 
-/** Детерминированная занятость по счётчикам РЖД для вагона; иначе — прежний rng. */
-function finalizeSeatOccupancy(seats, detail, rng) {
+/** Детерминированная занятость: приоритет счётчикам РЖД; иначе демо-RNG только без слоя 5764. */
+function finalizeSeatOccupancy(seats, detail, rng, train) {
   if (
     detail &&
     detail.berth_available &&
     detail.berth_totals &&
     applyOccupancyFromRzd(detail, seats)
   ) {
+    return;
+  }
+  const hasCarriageLayer = Array.isArray(train?.carriage_details) && train.carriage_details.length > 0;
+  if (hasCarriageLayer) {
+    seats.forEach((s) => {
+      s.occupied = true;
+    });
     return;
   }
   seats.forEach((s) => {
@@ -2145,7 +2171,7 @@ function buildSeatPickerModel(train) {
         seatNum += 1;
       }
       seats = attachSeatPrices(train, car, cls, seats);
-      finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng);
+      finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng, train);
       layouts.set(car, seats);
       return;
     }
@@ -2156,21 +2182,21 @@ function buildSeatPickerModel(train) {
       const off = compartmentCountForCapacity(perDeck);
       const d2 = buildBerthSeatSpan(car, perDeck, d1.nextNum, 1, off);
       seats = attachSeatPrices(train, car, cls, [...d1.seats, ...d2.seats]);
-      finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng);
+      finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng, train);
       layouts.set(car, seats);
       return;
     }
 
     if (cls === "platzkart") {
       seats = attachSeatPrices(train, car, cls, buildPlatzkart54Seats(car));
-      finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng);
+      finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng, train);
       layouts.set(car, seats);
       return;
     }
 
     const span = buildBerthSeatSpan(car, capacity, 1, 0, 0);
     seats = attachSeatPrices(train, car, cls, span.seats);
-    finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng);
+    finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng, train);
     layouts.set(car, seats);
   });
   demoSeatLayouts = layouts;

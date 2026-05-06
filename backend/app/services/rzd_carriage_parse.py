@@ -1,4 +1,7 @@
-"""Разбор JSON слоя вагонов РЖД (pass.rzd.ru) и вложенных seats в строках поиска."""
+"""Разбор JSON слоя вагонов РЖД (pass.rzd.ru) и вложенных seats в строках поиска.
+
+Политика доверия к capacity и агрегации max вместимости: docs/RZD_LAYOUT_POLICY.md
+"""
 
 from __future__ import annotations
 
@@ -357,15 +360,16 @@ def aggregate_from_carriages_payload(payload: dict) -> tuple[SeatDetails, SeatIn
 
         if cat == "platzkart":
             platz += car_free
-            if cap:
+            # Пороги согласованы с frontend RZD_TRUST_* (docs/RZD_LAYOUT_POLICY.md): не max из фрагмента.
+            if cap and cap >= 36:
                 max_platz = cap if max_platz is None else max(max_platz, cap)
         elif cat == "coupe":
             coupe += car_free
-            if cap:
+            if cap and cap >= 16:
                 max_coupe = cap if max_coupe is None else max(max_coupe, cap)
         elif cat == "sv":
             sv += car_free
-            if cap:
+            if cap and cap >= 12:
                 max_sv = cap if max_sv is None else max(max_sv, cap)
         elif car_free:
             platz += car_free
