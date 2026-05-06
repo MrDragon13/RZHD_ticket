@@ -362,7 +362,10 @@ def aggregate_from_carriages_payload(payload: dict) -> tuple[SeatDetails, SeatIn
         elif cat == "coupe":
             coupe += car_free
             if cap:
-                max_coupe = cap if max_coupe is None else max(max_coupe, cap)
+                # РЖД нередко отдаёт только фрагмент списка мест (например 8 = два купе по 4);
+                # это не полная вместимость вагона — не поднимаем max_coupe такими значениями.
+                if cap >= 16:
+                    max_coupe = cap if max_coupe is None else max(max_coupe, cap)
         elif cat == "sv":
             sv += car_free
             if cap:

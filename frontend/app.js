@@ -1786,11 +1786,15 @@ function carriageCapacityForClass(train, cls) {
   if (cls === "coupe") {
     if (t.coupe_double_deck) {
       const n = Number(t.coupe_double_deck_seats);
-      if (Number.isFinite(n) && n >= 4) return Math.min(Math.max(Math.round(n), 4), 72);
+      // Фрагменты слоя 5764 (< 16 мест) не отражают целый вагон — как для одноэтажного купе.
+      if (Number.isFinite(n) && n >= 16) return Math.min(Math.max(Math.round(n), 4), 72);
       return 64;
     }
     const n = Number(t.coupe_carriage_seats);
-    if (Number.isFinite(n) && n >= 4) return Math.min(Math.max(Math.round(n), 4), 40);
+    if (Number.isFinite(n) && n >= 4) {
+      if (n < 16) return 36;
+      return Math.min(Math.max(Math.round(n), 4), 40);
+    }
     return 36;
   }
   const n = Number(t.platzkart_carriage_seats);
