@@ -32,6 +32,13 @@
             </button>
           </div>
           <div id="language-badge" class="status-pill">RU</div>
+          <button
+            type="button"
+            id="text-input-toggle"
+            class="text-input-toggle topbar-text-toggle hidden"
+            aria-expanded="false"
+            aria-controls="text-input-panel"
+          ></button>
         </div>
       </header>
 
@@ -234,13 +241,6 @@
                 <div id="dialog-history" class="dialog-history"></div>
               </section>
 
-              <button
-                type="button"
-                id="text-input-toggle"
-                class="text-input-toggle"
-                aria-expanded="false"
-                aria-controls="text-input-panel"
-              ></button>
               <div id="text-input-panel" class="text-input-panel hidden">
                 <div class="input-row">
                   <input id="user-input" autocomplete="off" placeholder="Например: хочу приехать в Казань к началу рабочего дня 6 мая" />

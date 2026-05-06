@@ -1600,6 +1600,8 @@ let lastSelectedTrainId = null;
 /** Должны быть объявлены до первого вызова startLanguageScreenAmbient() (иначе TDZ). */
 let languageAmbientTimer = null;
 let languageAmbientAbort = null;
+/** Таймер возврата на экран выбора языка после показа демо-билета */
+let ticketReturnToLanguageTimer = null;
 
 const screens = {
   language: document.querySelector("#language-screen"),
@@ -1726,6 +1728,34 @@ document.querySelector("#chips")?.addEventListener("click", (event) => {
   handleUserText(event.target.textContent);
 });
 
+function clearTicketReturnToLanguageTimer() {
+  if (ticketReturnToLanguageTimer) {
+    clearTimeout(ticketReturnToLanguageTimer);
+    ticketReturnToLanguageTimer = null;
+  }
+}
+
+function returnToLanguageIdleScreen() {
+  clearTicketReturnToLanguageTimer();
+  stopAssistantSpeech();
+  resetScenario(false);
+  screens.terminal?.classList.add("hidden");
+  screens.language?.classList.remove("hidden");
+  newSessionButton?.classList.add("hidden");
+  textInputToggle?.classList.add("hidden");
+  setTextInputPanelOpen(false);
+  try {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch {
+    window.scrollTo(0, 0);
+  }
+  try {
+    startLanguageScreenAmbient();
+  } catch (err) {
+    console.error("[language-ambient return]", err);
+  }
+}
+
 function setLanguage(nextLanguage) {
   stopLanguageScreenAmbient();
   language = nextLanguage;
@@ -1733,6 +1763,7 @@ function setLanguage(nextLanguage) {
   screens.language?.classList.add("hidden");
   screens.terminal?.classList.remove("hidden");
   newSessionButton?.classList.remove("hidden");
+  textInputToggle?.classList.remove("hidden");
   if (languageBadge) languageBadge.textContent = language.toUpperCase();
   document.querySelector("#terminal-title").textContent = copy.title;
   document.querySelector("#start-prompt").textContent = copy.startPrompt;
@@ -2043,13 +2074,45 @@ async function searchAndRecommendBody() {
   lastSuccessfulSearchKey = routeFingerprint(intent);
 }
 
+function timeWindowSpanMinutes(win) {
+  if (!win?.start || !win?.end) return NaN;
+  const parse = (raw) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(raw).trim());
+    if (!m) return NaN;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  };
+  let a = parse(win.start);
+  let b = parse(win.end);
+  if (Number.isNaN(a) || Number.isNaN(b)) return NaN;
+  if (b <= a) b += 24 * 60;
+  return b - a;
+}
+
+/**
+ * Показываем окна «Отправление / Прибытие» только если в данных есть осмысленное
+ * ограничение по времени (не плейсхолдер «весь день» от модели).
+ */
+function isMeaningfulTimeConstraint(win) {
+  if (!win || win.start == null || win.end == null) return false;
+  const s = String(win.start).trim();
+  const e = String(win.end).trim();
+  if (!s || !e) return false;
+  const span = timeWindowSpanMinutes(win);
+  if (Number.isNaN(span) || span <= 0) return false;
+  const fullDayStarts = new Set(["00:00", "0:00"]);
+  const fullDayEnds = new Set(["23:59", "24:00", "23:30"]);
+  if (fullDayStarts.has(s) && fullDayEnds.has(e)) return false;
+  if (span >= 21 * 60 + 30) return false;
+  return true;
+}
+
 function renderIntent(data) {
   if (!intentPanel) return;
   intentPanel.classList.remove("hidden");
   const depWin = data.departure_time_window;
   const arrWin = data.arrival_time_window;
-  const showDepartureWindow = Boolean(depWin && depWin.start && depWin.end);
-  const showArrivalWindow = Boolean(arrWin && arrWin.start && arrWin.end);
+  const showDepartureWindow = isMeaningfulTimeConstraint(depWin);
+  const showArrivalWindow = isMeaningfulTimeConstraint(arrWin);
 
   const cards = [
     `<div class="glass-card"><span>${language === "ru" ? "Откуда" : "From"}</span><strong>${data.origin || "-"}</strong></div>`,
@@ -3728,6 +3791,7 @@ function renderTicketQrCanvas(payloadText) {
 }
 
 function renderTicket() {
+  clearTicketReturnToLanguageTimer();
   seatPickerPanel.classList.add("hidden");
   mapContent.classList.remove("hidden");
   ticketPanel.classList.remove("hidden");
@@ -3755,6 +3819,10 @@ function renderTicket() {
   renderTicketQrCanvas(buildDemoTicketQrPayload());
   assistantSay(language === "ru" ? "Демонстрационный билет готов." : "Your demo ticket is ready.");
   document.querySelector("#checkout-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  ticketReturnToLanguageTimer = setTimeout(() => {
+    ticketReturnToLanguageTimer = null;
+    returnToLanguageIdleScreen();
+  }, 60_000);
 }
 
 function stopAssistantSpeech() {
@@ -4059,6 +4127,7 @@ function runLocalDemoFallback() {
 }
 
 function resetScenario(announce = true) {
+  clearTicketReturnToLanguageTimer();
   state = {};
   intent = null;
   trains = [];

@@ -1112,6 +1112,37 @@ body.ui-interaction-locked #user-input {
     background 0.2s ease;
 }
 
+/* Кнопка «Текст» в шапке (рядом с RU) */
+.top-actions .text-input-toggle.topbar-text-toggle {
+  align-self: center;
+  margin: 0;
+  min-height: 48px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 20px var(--panel-glow);
+  backdrop-filter: blur(10px);
+  -webkit-tap-highlight-color: transparent;
+  opacity: 1;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.top-actions .text-input-toggle.topbar-text-toggle:hover,
+.top-actions .text-input-toggle.topbar-text-toggle:focus-visible {
+  color: var(--text);
+  border-color: var(--cyan);
+  background: var(--panel);
+  box-shadow: 0 4px 20px var(--panel-glow);
+  outline: none;
+}
+
 .text-input-toggle:hover,
 .text-input-toggle:focus-visible {
   opacity: 1;
