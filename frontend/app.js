@@ -3434,9 +3434,11 @@ function resetScenario(announce = true) {
     routeLine.style.strokeDasharray = "";
     routeLine.style.strokeDashoffset = "";
   }
-  routeLineFlow?.style.strokeDasharray = "";
-  routeLineFlow?.style.strokeDashoffset = "";
-  routeLineFlow?.style.opacity = "";
+  if (routeLineFlow) {
+    routeLineFlow.style.strokeDasharray = "";
+    routeLineFlow.style.strokeDashoffset = "";
+    routeLineFlow.style.opacity = "";
+  }
   updateMapGeometry(routeVisuals.default);
   setTextInputPanelOpen(false);
   setStage("initial");
