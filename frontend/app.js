@@ -1510,7 +1510,7 @@ function updateTextInputToggleLabels() {
   textInputToggle.setAttribute("aria-label", textInputPanelOpen ? copy.textInputAriaHide : copy.textInputAriaShow);
 }
 
-.updateTextInputToggleLabels();
+updateTextInputToggleLabels();
 initThemeToggle();
 initPathLogModal();
 try {
