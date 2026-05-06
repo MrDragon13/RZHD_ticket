@@ -281,6 +281,23 @@ class TrainRouteStopsResponse(BaseModel):
     route_segment: RouteSegmentInfo
 
 
+class TrainCarriageDetailsRequest(BaseModel):
+    """Слой 5764 (вагоны/полки) для одного поезда — перед экраном выбора мест."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    language: Language = "ru"
+    origin: str = Field(..., description="Город отправления из поиска (как для code0).")
+    destination: str = Field(..., description="Город назначения из поиска (как для code1).")
+    train: TrainOption
+
+
+class TrainCarriageDetailsResponse(BaseModel):
+    """Поезд с заполненными carriage_details / полками после слоя 5764."""
+
+    train: TrainOption
+
+
 class RecommendRequest(BaseModel):
     """Запрос на гибридную рекомендацию: локальный скоринг + LLM-текст."""
 

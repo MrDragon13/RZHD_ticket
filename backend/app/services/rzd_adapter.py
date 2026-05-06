@@ -13,12 +13,18 @@ from app.models import (
     RouteSegmentInfo,
     TicketSearchRequest,
     TicketSearchResponse,
+    TrainCarriageDetailsRequest,
+    TrainCarriageDetailsResponse,
     TrainOption,
     TrainRouteStopsRequest,
     TrainRouteStopsResponse,
 )
 from app.services.route_segment import resolve_route_segment
-from app.services.rzd_live import train_option_from_aiorzd
+from app.services.rzd_live import (
+    _merge_stop_lists_from_carriage_layer,
+    apply_carriage_layer_payload,
+    train_option_from_aiorzd,
+)
 
 
 def _dep_date_dmY_from_train_id(train_id: str) -> str:
@@ -35,6 +41,19 @@ def _dep_date_dmY_from_train_id(train_id: str) -> str:
         return dt.strftime("%d.%m.%Y")
     except ValueError:
         return ""
+
+
+def _departure_datetime_from_train_option(train: TrainOption) -> datetime | None:
+    """Дата и время отправления для запроса слоя вагонов 5764."""
+
+    day = (train.departure_date_rzd or "").strip() or _dep_date_dmY_from_train_id(train.id)
+    hm = (train.departure_time or "").strip()
+    if not day or not hm:
+        return None
+    try:
+        return datetime.strptime(f"{hm} {day}", "%H:%M %d.%m.%Y")
+    except ValueError:
+        return None
 
 
 # RZD Data Adapter отделяет остальную систему от конкретного источника данных.
@@ -119,6 +138,52 @@ class RzdDataAdapter:
         )
         return TrainRouteStopsResponse(train_id=req.train_id, stops=stops, route_segment=info)
 
+    async def fetch_train_carriage_details(self, req: TrainCarriageDetailsRequest) -> TrainCarriageDetailsResponse:
+        """Слой 5764 для одного поезда — экран выбора мест / оформление."""
+
+        train = req.train
+        origin = (req.origin or "").strip() or (train.origin or "").strip()
+        destination = (req.destination or "").strip() or (train.destination or "").strip()
+        if not origin or not destination:
+            return TrainCarriageDetailsResponse(train=train)
+
+        dep_dt = _departure_datetime_from_train_option(train)
+        num = (train.train_number or "").strip()
+        if not self.live_enabled or dep_dt is None or not num:
+            return TrainCarriageDetailsResponse(train=train)
+
+        from app.vendor.aiorzd import RzdFetcher
+
+        raw: dict | None = None
+        async with RzdFetcher() as fetcher:
+            async with self._rzd_secondary_sem:
+                try:
+                    src_code = await fetcher.get_city_code(origin)
+                    dst_code = await fetcher.get_city_code(destination)
+                    raw = await fetcher.get_train_carriages(src_code, dst_code, dep_dt, num)
+                except Exception:
+                    logging.exception("lazy carriages layer failed train=%s", num)
+                    return TrainCarriageDetailsResponse(train=train)
+
+        if not isinstance(raw, dict) or raw.get("result") != "OK":
+            logging.info(
+                "lazy carriages not OK train=%s keys=%s",
+                num,
+                list(raw.keys()) if isinstance(raw, dict) else type(raw),
+            )
+            return TrainCarriageDetailsResponse(train=train)
+
+        updated = apply_carriage_layer_payload(train, raw)
+        merged_stops = _merge_stop_lists_from_carriage_layer(list(updated.stops), raw)
+        if merged_stops != list(updated.stops):
+            updated = updated.model_copy(update={"stops": merged_stops})
+        logging.info(
+            "RZD perf phase=lazy_carriages train=%s carriage_details=%s",
+            num,
+            len(updated.carriage_details),
+        )
+        return TrainCarriageDetailsResponse(train=updated)
+
     async def _search_demo(self, request: TicketSearchRequest) -> TicketSearchResponse:
         trains = self._load_demo_trains()
         normalized_destination = request.destination.lower()
@@ -151,7 +216,7 @@ class RzdDataAdapter:
         day_start = datetime.combine(travel_date, time.min)
         day_end = datetime.combine(travel_date, time(23, 59, 59))
 
-        enrich = _env_truthy_default_on("RZD_CARRIAGE_ENRICH")
+        enrich = _env_explicit_on("RZD_CARRIAGE_ENRICH")
         route_stops_on_search = _env_explicit_on("RZD_ROUTE_STOPS_ON_SEARCH")
         route_stops_max = int(os.getenv("RZD_ROUTE_STOPS_MAX_TRAINS", "15") or "15")
         route_stops_max = max(1, min(route_stops_max, 40))
@@ -339,15 +404,15 @@ class RzdDataAdapter:
                         )
             else:
                 logging.info(
-                    "RZD perf sid=%s phase=secondary_rzd skipped reason=%s raw_trains=%s eligible=%s",
+                    "RZD perf sid=%s phase=secondary_rzd skipped reason=%s raw_trains=%s eligible_with_seats=%s",
                     sid,
-                    "no_trains" if not trains_list else "no_seats",
+                    "no_trains" if not trains_list else "no_tasks_or_no_eligible_seats",
                     len(trains_list),
                     len(eligible_idx),
                 )
 
         mapped: list[TrainOption] = []
-        for index in eligible_idx:
+        for index in range(len(trains_list)):
             mapped.append(
                 train_option_from_aiorzd(
                     trains_list[index],
@@ -449,12 +514,12 @@ class RzdDataAdapter:
 
 
 def _clamp_secondary_concurrency() -> int:
-    """Параллельные вторичные запросы к pass.rzd.ru (1 по умолчанию — ниже риск капчи)."""
+    """Параллельные вторичные запросы к pass.rzd.ru (2 по умолчанию; 1 — меньше риск капчи)."""
 
     try:
-        raw = int(os.getenv("RZD_SECONDARY_CONCURRENCY", "1") or "1")
+        raw = int(os.getenv("RZD_SECONDARY_CONCURRENCY", "2") or "2")
     except ValueError:
-        raw = 1
+        raw = 2
     return max(1, min(raw, 8))
 
 

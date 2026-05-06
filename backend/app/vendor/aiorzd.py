@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import json
 import logging
+import os
 from collections import OrderedDict
 from inspect import stack
 from typing import Iterable
@@ -471,10 +472,10 @@ class RzdFetcher:
             ),
         )
 
+        rid_pause = float(os.getenv("RZD_TRAINS_RID_SLEEP_SEC", "0.35") or "0.35")
+
         fetching = True
         while fetching:
-            await asyncio.sleep(1)
-
             fetching = False
             try:
                 for r in rzd_requests:
@@ -483,6 +484,8 @@ class RzdFetcher:
                         r.counter += 1
                     if r.result is None and r.counter < self.wait_tries:
                         fetching = True
+                if fetching:
+                    await asyncio.sleep(rid_pause)
             except CaptchaRequired:
                 fetching = True
                 # rebuild requests
@@ -522,12 +525,12 @@ class RzdFetcher:
         return trains
 
     async def get_train_carriages(self, src_code: str, dst_code: str, dt: datetime.datetime, train_number: str):
+        rid_pause = float(os.getenv("RZD_CARRIAGE_RID_SLEEP_SEC", "0.35") or "0.35")
+
         fetching = True
 
         r = RzdCarriagesRequest(src_code, dst_code, dt, train_number)
         while fetching:
-            await asyncio.sleep(1)
-
             fetching = False
             try:
                 if r.result is None:
@@ -535,6 +538,7 @@ class RzdFetcher:
                     r.counter += 1
                 if r.result is None and r.counter < self.wait_tries:
                     fetching = True
+                    await asyncio.sleep(rid_pause)
             except CaptchaRequired:
                 fetching = True
                 # rebuild requests

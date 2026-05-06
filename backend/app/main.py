@@ -28,6 +28,8 @@ from app.models import (
     TicketSearchResponse,
     TrainRouteStopsRequest,
     TrainRouteStopsResponse,
+    TrainCarriageDetailsRequest,
+    TrainCarriageDetailsResponse,
     TripIntent,
     UnderstandRequest,
 )
@@ -248,6 +250,13 @@ async def train_route_stops(request: TrainRouteStopsRequest) -> TrainRouteStopsR
     """Догружает полный список станций (basicRoute) для выбранного поезда — карта и сегмент маршрута."""
 
     return await rzd_adapter.fetch_train_route_stops(request)
+
+
+@app.post("/api/train-carriage-details", response_model=TrainCarriageDetailsResponse)
+async def train_carriage_details(request: TrainCarriageDetailsRequest) -> TrainCarriageDetailsResponse:
+    """Догружает слой вагонов 5764 для выбора мест и уточнения полок."""
+
+    return await rzd_adapter.fetch_train_carriage_details(request)
 
 
 @app.post("/api/recommend", response_model=RecommendResponse)

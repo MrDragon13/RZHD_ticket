@@ -1227,10 +1227,7 @@ async function searchAndRecommend() {
   ticketSearchSource = ticketResponse.source || "demo";
   routeStopsLoadedIds = new Set();
 
-  trains = ticketResponse.trains.filter((t) => {
-    const s = t.available_seats || {};
-    return (s.platzkart || 0) + (s.coupe || 0) + (s.sv || 0) > 0;
-  });
+  trains = ticketResponse.trains || [];
   selectedTrain = null;
   lastSelectedTrainId = null;
 
@@ -1499,6 +1496,30 @@ function departureDateRzdFromTrain(train) {
   return `${ymd.slice(6, 8)}.${ymd.slice(4, 6)}.${ymd.slice(0, 4)}`;
 }
 
+/** Слой 5764 (вагоны, полки) — только перед выбором мест, не при поиске. */
+async function fetchTrainCarriageDetailsIfNeeded(train) {
+  if (!train || ticketSearchSource !== "live-cache") return train;
+  if (Array.isArray(train.carriage_details) && train.carriage_details.length > 0) return train;
+  try {
+    const res = await postJson("/api/train-carriage-details", {
+      language,
+      origin: intent.origin,
+      destination: intent.destination,
+      train,
+    });
+    const u = res.train;
+    const idx = trains.findIndex((t) => t.id === u.id);
+    if (idx >= 0) trains[idx] = u;
+    if (selectedTrain && selectedTrain.id === u.id) {
+      selectedTrain = u;
+    }
+    return u;
+  } catch (err) {
+    console.error("train-carriage-details failed", err);
+    return train;
+  }
+}
+
 async function fetchTrainRouteStops(train) {
   if (!train || ticketSearchSource !== "live-cache") return train;
   if (routeStopsLoadedIds.has(train.id)) return train;
@@ -1629,6 +1650,11 @@ async function createTicket() {
     }
     checkoutPanel.classList.add("hidden");
     steps.innerHTML = "";
+    let t = selectedTrain;
+    if (ticketSearchSource === "live-cache") {
+      t = await fetchTrainCarriageDetailsIfNeeded(selectedTrain);
+      selectedTrain = t;
+    }
     buildSeatPickerModel(selectedTrain);
     showSeatPicker();
   } finally {
