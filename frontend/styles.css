@@ -552,11 +552,15 @@ button {
 }
 
 .route-line-flow.route-line-flow-active {
-  animation: route-flow-travel var(--route-flow-duration, 4.5s) linear infinite;
+  animation: route-flow-travel var(--route-flow-duration, 8s) linear infinite;
 }
 
 @keyframes route-flow-travel {
+  from {
+    stroke-dashoffset: 0;
+  }
   to {
+    /* Один период = длина пути (в JS dash+gap = pathLen) — смещение на -pathLen за цикл. */
     stroke-dashoffset: calc(-1 * var(--route-flow-period, 1200));
   }
 }

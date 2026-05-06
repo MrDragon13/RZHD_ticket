@@ -791,19 +791,22 @@ function syncRouteFlowOverlay(flowEl, pathD) {
     flowEl.classList.remove("route-line-flow-active");
     void flowEl.getBoundingClientRect();
     try {
-      const len = flowEl.getTotalLength();
-      const period = Number.isFinite(len) && len > 40 ? len : 1100;
-      flowEl.style.setProperty("--route-flow-period", String(period));
-      const dur = Math.min(7.5, Math.max(3.2, period / 160));
-      flowEl.style.setProperty("--route-flow-duration", `${dur}s`);
-      const dash = Math.round(Math.min(84, Math.max(26, period * 0.052)));
-      const gap = Math.round(Math.max(period * 0.64, dash * 4));
-      flowEl.style.strokeDasharray = `${dash} ${gap}`;
+      const rawLen = flowEl.getTotalLength();
+      const pathLen = Number.isFinite(rawLen) && rawLen > 8 ? rawLen : 1100;
+      flowEl.style.setProperty("--route-flow-period", String(pathLen));
+      // Сумма dash+gap = длине пути: на линии ровно одна «волна» света, плавно бежит к концу.
+      const headLen = Math.round(
+        Math.min(Math.max(pathLen * 0.11, 26), Math.min(150, pathLen * 0.42)),
+      );
+      const gapLen = Math.max(pathLen - headLen, 1);
+      flowEl.style.strokeDasharray = `${headLen} ${gapLen}`;
       flowEl.style.strokeDashoffset = "0";
+      const durSec = Math.min(16, Math.max(5.5, pathLen / 72));
+      flowEl.style.setProperty("--route-flow-duration", `${durSec}s`);
     } catch {
-      flowEl.style.strokeDasharray = "52 420";
-      flowEl.style.setProperty("--route-flow-period", "472");
-      flowEl.style.setProperty("--route-flow-duration", "4.5s");
+      flowEl.style.strokeDasharray = "48 952";
+      flowEl.style.setProperty("--route-flow-period", "1000");
+      flowEl.style.setProperty("--route-flow-duration", "9s");
     }
     flowEl.classList.add("route-line-flow-active");
   } catch (e) {
