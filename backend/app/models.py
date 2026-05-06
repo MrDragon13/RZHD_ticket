@@ -75,12 +75,23 @@ class TripIntent(BaseModel):
         return _coerce_time_window(value)
 
 
+DialogRole = Literal["user", "assistant"]
+
+
+class DialogTurn(BaseModel):
+    """Одна реплика в краткой истории чата (для контекста LLM)."""
+
+    role: DialogRole
+    text: str = Field(..., max_length=4000)
+
+
 class DialogRequest(BaseModel):
     """Сообщение пользователя в сквозном диалоге с ассистентом."""
 
     language: Language
     text: str
     state: dict = Field(default_factory=dict)
+    conversation: list[DialogTurn] = Field(default_factory=list)
 
 
 class DialogResponse(BaseModel):
@@ -318,6 +329,7 @@ class RecommendRequest(BaseModel):
     intent: TripIntent
     trains: list[TrainOption]
     last_user_message: str | None = None
+    conversation: list[DialogTurn] = Field(default_factory=list)
 
 
 class Recommendation(BaseModel):

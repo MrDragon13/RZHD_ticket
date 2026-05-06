@@ -205,6 +205,15 @@ async def recommend_trains(
         ranked[0][0],
         recommendations[0].explanation,
     )
+    prior = [(t.role, t.text) for t in request.conversation]
+    polished = await deepseek_client.polish_assistant_reply(
+        request.language,
+        assistant_text,
+        prior_messages=prior,
+        scene="recommendation",
+    )
+    if polished:
+        assistant_text = polished
     return RecommendResponse(recommendations=recommendations, assistant_text=assistant_text)
 
 

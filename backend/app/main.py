@@ -97,6 +97,7 @@ rzd_adapter = RzdDataAdapter(deepseek_client=deepseek_client)
 # как собраны все обязательные параметры. Иначе ассистент задает уточняющий
 # вопрос и ждет следующую реплику пользователя.
 REQUIRED_DIALOG_FIELDS = ("origin", "destination", "date")
+_TRIP_STATE_KEYS = frozenset(k for k in TripIntent.model_fields.keys() if k != "assistant_text")
 
 _RU_MONTHS_GENITIVE = (
     "января",
@@ -179,21 +180,38 @@ async def dialog(request: DialogRequest) -> DialogResponse:
     """
 
     current_state = dict(request.state)
+    prior = [(t.role, t.text) for t in request.conversation]
+
     payload = await deepseek_client.understand_trip(
         request.language,
         request.text,
         current_state.get("origin"),
+        prior_messages=prior,
     )
-    current_state.update({key: value for key, value in payload.items() if value is not None})
+    current_state.update(
+        {key: value for key, value in payload.items() if key in _TRIP_STATE_KEYS and value is not None}
+    )
     missing_fields = [field for field in REQUIRED_DIALOG_FIELDS if not current_state.get(field)]
     if missing_fields:
         current_state["pending_fields"] = missing_fields
         action = "ask_clarification"
-        assistant_text = _clarification_text(request.language, missing_fields)
+        draft = (payload.get("assistant_text") or "").strip() or _clarification_text(request.language, missing_fields)
     else:
         current_state.pop("pending_fields", None)
         action = "search_tickets"
-        assistant_text = _ready_to_search_text(request.language, current_state)
+        draft = (payload.get("assistant_text") or "").strip() or _ready_to_search_text(request.language, current_state)
+
+    assistant_text = draft
+    scene = "dialog_clarify" if missing_fields else "dialog_ready"
+    polished = await deepseek_client.polish_assistant_reply(
+        request.language,
+        draft,
+        prior_messages=prior,
+        scene=scene,
+    )
+    if polished:
+        assistant_text = polished
+
     return DialogResponse(
         assistant_text=assistant_text,
         action=action,

@@ -262,6 +262,7 @@ const i18n = {
     themeNeonShort: "Неон",
     themeRzdShort: "РЖД",
     assistantRole: "Путь",
+    userRole: "Пассажир",
     stages: {
       initial: ["Казань утром", "Подешевле", "Хочу выспаться", "Без пересадок", "С ребенком"],
       searching: ["Покажи купе", "А есть быстрее?", "Самый дешевый", "Можно с животными?", "Женское купе"],
@@ -353,6 +354,7 @@ const i18n = {
     themeNeonShort: "Neon",
     themeRzdShort: "RZD",
     assistantRole: "Path",
+    userRole: "Passenger",
     stages: {
       initial: ["Kazan morning", "Cheaper", "I want to sleep", "Direct only", "With a child"],
       searching: ["Show coupe", "Any faster?", "Lowest price", "Pets allowed?", "Female compartment"],
@@ -1464,6 +1466,7 @@ let isSpeaking = false;
 let audioContext = null;
 let textInputPanelOpen = false;
 let lastDialogUserText = "";
+let lastSuccessfulSearchKey = null;
 let lastSelectedTrainId = null;
 
 /** Должны быть объявлены до первого вызова startLanguageScreenAmbient() (иначе TDZ). */
@@ -1674,13 +1677,23 @@ async function runDialog(text) {
   setUiInteractionLocked(true);
   try {
     setStage("searching");
-    const response = await postJson("/api/dialog", { language, text, state });
+    const response = await postJson("/api/dialog", {
+      language,
+      text,
+      state,
+      conversation: conversationPayload(),
+    });
     state = response.state;
     assistantSay(response.assistant_text);
     intent = normalizeIntent(state, response.assistant_text);
     renderIntent(intent);
     if (response.action === "search_tickets" && hasRequiredTripFields(intent)) {
-      await searchAndRecommend();
+      const fp = routeFingerprint(intent);
+      if (fp && fp === lastSuccessfulSearchKey) {
+        setStage(trains.length ? "results" : "initial");
+      } else {
+        await searchAndRecommend();
+      }
     } else {
       setStage("initial");
     }
@@ -1713,6 +1726,18 @@ function hasRequiredTripFields(data) {
   // Поиск запускается только когда ассистент уже получил все обязательные
   // параметры. Если он спросил уточнение, интерфейс ждет следующую реплику.
   return Boolean(data.origin && data.destination && data.date);
+}
+
+function routeFingerprint(data) {
+  if (!data?.origin || !data?.destination || !data?.date) return null;
+  return `${data.origin}|${data.destination}|${data.date}`;
+}
+
+function conversationPayload() {
+  return dialogMessages.slice(-10).map((m) => ({
+    role: m.role,
+    text: String(m.text || "").slice(0, 2000),
+  }));
 }
 
 async function searchAndRecommend() {
@@ -1780,6 +1805,7 @@ async function searchAndRecommendBody() {
     );
     renderTrains();
     setStage("results");
+    lastSuccessfulSearchKey = routeFingerprint(intent);
     return;
   }
 
@@ -1789,6 +1815,7 @@ async function searchAndRecommendBody() {
       intent,
       trains,
       last_user_message: lastDialogUserText || null,
+      conversation: conversationPayload(),
     });
     recommendations = recommendResponse.recommendations;
     assistantSay(recommendResponse.assistant_text);
@@ -1800,6 +1827,7 @@ async function searchAndRecommendBody() {
   await refreshTopRecommendedTrainRouteLikeSelect();
   renderTrains();
   setStage("results");
+  lastSuccessfulSearchKey = routeFingerprint(intent);
 }
 
 function renderIntent(data) {
@@ -3797,6 +3825,7 @@ function resetScenario(announce = true) {
   selectedSeatKeys = new Set();
   lastSelectedTrainId = null;
   lastDialogUserText = "";
+  lastSuccessfulSearchKey = null;
   dialogMessages = [];
   speechQueue = [];
   isSpeaking = false;

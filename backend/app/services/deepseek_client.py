@@ -126,6 +126,7 @@ class DeepSeekClient:
         user_prompt: str,
         *,
         timeout_seconds: float | None = None,
+        temperature: float = 0.35,
     ) -> str:
         """Возвращает обычный текстовый ответ LLM.
 
@@ -143,7 +144,7 @@ class DeepSeekClient:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": 0.35,
+            "temperature": temperature,
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
@@ -187,6 +188,62 @@ class DeepSeekClient:
             raise ValueError("DeepSeek response does not contain JSON object")
 
         return json.loads(cleaned[start : end + 1])
+
+    async def polish_assistant_reply(
+        self,
+        language: str,
+        draft_text: str,
+        *,
+        prior_messages: list[tuple[str, str]],
+        scene: str,
+    ) -> str | None:
+        """Перефразирует шаблонную реплику с учётом диалога; при сбое возвращает None."""
+
+        if not self.enabled:
+            return None
+        flag = os.getenv("DEEPSEEK_POLISH_ENABLED", "1").strip().lower()
+        if flag in ("0", "false", "no", "off"):
+            return None
+        text = (draft_text or "").strip()
+        if not text:
+            return None
+        timeout = float(os.getenv("DEEPSEEK_POLISH_TIMEOUT_SECONDS", "45"))
+        lang_name = "русском" if language == "ru" else "English"
+        system_prompt = (
+            "Ты редактор реплик голосового ассистента терминала РЖД «Путь». "
+            f"Перепиши черновик в одну естественную речевую фразу на {lang_name} (1–3 коротких предложения). "
+            "Сохрани все факты из черновика: города, даты, время отправления/прибытия, цены в рублях, номера поездов, числа мест — без искажений и без дополнительных предположений. "
+            "Если в черновике чего-то нет, не придумывай. "
+            "Смотри prior_dialog: не повторяй дословно одни и те же вступления и шаблоны, если ассистент уже их говорил; "
+            "отвечай по-человечески, как в чате с агентом, без лишних повторных сводок маршрута. "
+            "Верни ТОЛЬКО текст реплики, без кавычек, без списков и без пояснений."
+        )
+        user_payload = json.dumps(
+            {
+                "scene": scene,
+                "prior_dialog": [
+                    {"role": r, "text": (t or "")[:1200]}
+                    for r, t in prior_messages[-12:]
+                    if (t or "").strip()
+                ],
+                "draft_reply": text,
+            },
+            ensure_ascii=False,
+        )
+        try:
+            out = await self.chat_text(
+                system_prompt,
+                user_payload,
+                timeout_seconds=max(5.0, timeout),
+                temperature=0.55,
+            )
+        except Exception as exc:
+            logging.warning("polish_assistant_reply failed: %s", exc)
+            return None
+        cleaned = out.strip().strip('"').strip("'")
+        if len(cleaned) < 4:
+            return None
+        return cleaned
 
     def _base_date(self) -> date:
         try:
@@ -304,7 +361,14 @@ class DeepSeekClient:
             out["origin"] = origin_hint
         return out
 
-    async def understand_trip(self, language: str, text: str, origin_hint: str | None) -> dict[str, Any]:
+    async def understand_trip(
+        self,
+        language: str,
+        text: str,
+        origin_hint: str | None,
+        *,
+        prior_messages: list[tuple[str, str]] | None = None,
+    ) -> dict[str, Any]:
         """Преобразует естественную речь пассажира в JSON-параметры поездки."""
 
         if not self.enabled:
@@ -317,6 +381,9 @@ class DeepSeekClient:
             "Если параметр неизвестен, используй null. "
             f"Текущая дата для относительных и неполных дат: {self.current_date}. "
             "Если пользователь не назвал год, выбирай ближайшую будущую дату относительно текущей даты. "
+            "Если передан prior_dialog, учитывай контекст: при уточняющих вопросах по уже известному маршруту "
+            "(еда в поезде, скорость, удобство, дополнительные услуги) заполняй assistant_text ответом именно на этот вопрос, "
+            "без повторного полного подтверждения маршрута, если это уже звучало у ассистента. "
             "preferences заполняй короткими английскими тегами: sleep, comfort, cheap, speed, direct, child, luggage. "
             "Временные окна: departure_time_window — когда пассажир хочет УЕХАТЬ/ОТПРАВИТЬСЯ "
             "(рус.: уехать, выехать, отправление, сесть на поезд; англ.: leave, depart, morning outbound). "
@@ -336,29 +403,34 @@ class DeepSeekClient:
             "departure_time_window и arrival_time_window — только объект с полями start и end (строки HH:MM) или null; "
             "не используй одну строку для всего окна."
         )
-        user_prompt = json.dumps(
-            {
+        base_obj: dict[str, Any] = {
+            "language": language,
+            "current_date": self.current_date,
+            "origin_hint": origin_hint,
+            "user_text": text,
+            "required_schema": {
+                "intent": "search_ticket",
                 "language": language,
-                "current_date": self.current_date,
-                "origin_hint": origin_hint,
-                "user_text": text,
-                "required_schema": {
-                    "intent": "search_ticket",
-                    "language": language,
-                    "origin": "string|null",
-                    "destination": "string|null",
-                    "date": "YYYY-MM-DD|null",
-                    "departure_time_window": 'null или {"start":"HH:MM","end":"HH:MM"} — только объект, не строка',
-                    "arrival_time_window": 'null или {"start":"HH:MM","end":"HH:MM"} — только объект, не строка',
-                    "preferences": ["sleep"],
-                    "priority": "arrival_time|price|speed|comfort|null",
-                    "transfers": "direct_preferred|null",
-                    "assistant_text": "short phrase in selected language",
-                    "rank_with_llm": "boolean — true если запрос не сводится к обычным тегам preferences/priority (например поезд с животными, медицинское сопровождение, необычное время, сложные условия). Иначе false.",
-                },
+                "origin": "string|null",
+                "destination": "string|null",
+                "date": "YYYY-MM-DD|null",
+                "departure_time_window": 'null или {"start":"HH:MM","end":"HH:MM"} — только объект, не строка',
+                "arrival_time_window": 'null или {"start":"HH:MM","end":"HH:MM"} — только объект, не строка',
+                "preferences": ["sleep"],
+                "priority": "arrival_time|price|speed|comfort|null",
+                "transfers": "direct_preferred|null",
+                "assistant_text": "short phrase in selected language",
+                "rank_with_llm": "boolean — true если запрос не сводится к обычным тегам preferences/priority (например поезд с животными, медицинское сопровождение, необычное время, сложные условия). Иначе false.",
             },
-            ensure_ascii=False,
-        )
+        }
+        pm = prior_messages or []
+        if pm:
+            base_obj["prior_dialog"] = [
+                {"role": r, "text": (t or "")[:1200]}
+                for r, t in pm[-10:]
+                if (t or "").strip()
+            ]
+        user_prompt = json.dumps(base_obj, ensure_ascii=False)
         try:
             parsed = await self.chat_json(system_prompt, user_prompt)
         except Exception:
