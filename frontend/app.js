@@ -229,6 +229,8 @@ const i18n = {
     compartmentUnknown: "",
     wagonServices: "Услуги вагона",
     wagonFeatures: "Особенности вагона",
+    ticketCompartmentFeatures: "Особенности купе",
+    ticketSeatFeatures: "Особенности места",
     addSignsLabel: "Код РЖД",
     berthShort: {
       lower: "Н",
@@ -328,6 +330,8 @@ const i18n = {
     compartmentUnknown: "",
     wagonServices: "Car services",
     wagonFeatures: "Carriage features",
+    ticketCompartmentFeatures: "Compartment",
+    ticketSeatFeatures: "Seat details",
     addSignsLabel: "RZD code",
     berthShort: {
       lower: "L",
@@ -1126,6 +1130,118 @@ function ticketCarriageBadgesHtml(train) {
     .slice(0, 8)
     .map((f) => `<span class="amenity">${escapeHtml(featureLabels[language][f] || f)}</span>`)
     .join("");
+}
+
+/** Число условных отсеков на схеме — как при подсветке купе (для сопоставления с метаданными РЖД). */
+function compartmentCountFromSeatList(seats) {
+  if (!seats.length) return 1;
+  let maxCi = 0;
+  seats.forEach((s) => {
+    const ci = Number(s.compartmentIndex ?? 0);
+    if (ci > maxCi) maxCi = ci;
+  });
+  return maxCi + 1;
+}
+
+/**
+ * Пол купе/тип отсека для выбранного места: hints из seats[] РЖД или эвристика вагона.
+ */
+function compartmentKindEnumAtSeat(train, car, compartmentIndex, compartmentCount) {
+  const det = carriageDetailForTab(train, car);
+  if (!det) return null;
+  const hints = det.compartment_seat_hints;
+  if (Array.isArray(hints) && hints.length > 0) {
+    const row = hints.find((h) => Number(h.compartment_index) === Number(compartmentIndex));
+    if (row && row.kind && row.kind !== "unknown") return row.kind;
+  }
+  const wk = det.compartment_kind;
+  if (wk === "mixed") return "mixed";
+  if (!wk || wk === "unknown") return null;
+  if (wk === "female") {
+    const pick = deterministicFallbackCompartmentIndex(train, car, "female-coupe", compartmentCount);
+    return pick === compartmentIndex ? "female" : null;
+  }
+  if (wk === "male") {
+    const pick = deterministicFallbackCompartmentIndex(train, car, "male-coupe", compartmentCount);
+    return pick === compartmentIndex ? "male" : null;
+  }
+  if (wk === "children") {
+    const pick = deterministicFallbackCompartmentIndex(train, car, "children-coupe", compartmentCount);
+    return pick === compartmentIndex ? "children" : null;
+  }
+  if (wk === "family") {
+    const pick = deterministicFallbackCompartmentIndex(train, car, "family-coupe", compartmentCount);
+    return pick === compartmentIndex ? "family" : null;
+  }
+  return null;
+}
+
+function berthKindTicketDetailLabel(kind) {
+  const ru = language === "ru";
+  const m = {
+    lower: ru ? "нижняя полка" : "lower berth",
+    upper: ru ? "верхняя полка" : "upper berth",
+    side_lower: ru ? "боковая нижняя полка" : "side lower berth",
+    side_upper: ru ? "боковая верхняя полка" : "side upper berth",
+  };
+  return m[kind] || String(kind || "");
+}
+
+function platzZoneTicketLabel(zone) {
+  if (zone === "side") return language === "ru" ? "боковая зона" : "side bay";
+  if (zone === "open") return language === "ru" ? "основной зал" : "main hall";
+  return "";
+}
+
+/**
+ * Бейджи по выбранным на схеме местам: купе (пол/тип) и место (полка, зона плацкарта).
+ */
+function ticketCoupeSeatExtrasHtml(train) {
+  if (!train || !selectedSeatKeys.size) return "";
+  const copy = i18n[language];
+  const coupeSet = new Set();
+  const seatSet = new Set();
+
+  for (const car of demoCarriages) {
+    const seats = demoSeatLayouts.get(car) || [];
+    const compartmentCount = compartmentCountFromSeatList(seats);
+    for (const seat of seats) {
+      if (!selectedSeatKeys.has(seat.id)) continue;
+      const ci = seat.compartmentIndex ?? 0;
+      const ck = compartmentKindEnumAtSeat(train, car, ci, compartmentCount);
+      if (ck) {
+        const lab = compartmentKindLabel(ck);
+        if (lab && lab !== copy.compartmentUnknown) coupeSet.add(lab);
+      }
+      if (seat.berth_kind) {
+        const bl = berthKindTicketDetailLabel(seat.berth_kind);
+        if (bl) seatSet.add(bl);
+      }
+      if (seat.zone) {
+        const zl = platzZoneTicketLabel(seat.zone);
+        if (zl) seatSet.add(zl);
+      }
+    }
+  }
+
+  const blocks = [];
+  if (coupeSet.size) {
+    const chips = [...coupeSet]
+      .map((s) => `<span class="amenity">${escapeHtml(s)}</span>`)
+      .join("");
+    blocks.push(
+      `<p class="ticket-wagon-features-title">${escapeHtml(copy.ticketCompartmentFeatures)}</p><div class="amenity-row">${chips}</div>`,
+    );
+  }
+  if (seatSet.size) {
+    const chips = [...seatSet]
+      .map((s) => `<span class="amenity">${escapeHtml(s)}</span>`)
+      .join("");
+    blocks.push(
+      `<p class="ticket-wagon-features-title">${escapeHtml(copy.ticketSeatFeatures)}</p><div class="amenity-row">${chips}</div>`,
+    );
+  }
+  return blocks.join("");
 }
 
 let language = "ru";
@@ -3618,9 +3734,11 @@ function renderTicket() {
   const copy = i18n[language];
   document.querySelector("#ticket-title").textContent = copy.demoTicket;
   const badges = ticketCarriageBadgesHtml(selectedTrain);
+  const coupeSeatExtras = ticketCoupeSeatExtrasHtml(selectedTrain);
   const badgesBlock = badges
     ? `<p class="ticket-wagon-features-title">${copy.wagonFeatures}</p><div class="amenity-row">${badges}</div>`
     : "";
+  const coupeSeatBlock = coupeSeatExtras || "";
   document.querySelector("#ticket-body").innerHTML = `
     <strong>${demoTicket.route}</strong>
     <span>${language === "ru" ? "Поезд" : "Train"}: ${demoTicket.train_number}</span>
@@ -3630,7 +3748,7 @@ function renderTicket() {
     <span>${language === "ru" ? "Место" : "Seat"}: ${demoTicket.seat}</span>
     <span>${language === "ru" ? "Полка" : "Berth"}: ${demoTicket.berth_type}</span>
     <span>${travelClassForTicket(demoTicket.travel_class)}</span>
-    ${badgesBlock}
+    ${badgesBlock}${coupeSeatBlock}
     <small>${demoTicket.disclaimer}</small>
   `;
   renderTicketQrCanvas(buildDemoTicketQrPayload());
