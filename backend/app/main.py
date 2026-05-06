@@ -19,6 +19,8 @@ from app.models import (
     RecommendResponse,
     TicketSearchRequest,
     TicketSearchResponse,
+    TrainRouteStopsRequest,
+    TrainRouteStopsResponse,
     TripIntent,
     UnderstandRequest,
 )
@@ -180,6 +182,13 @@ async def search_tickets(request: TicketSearchRequest) -> TicketSearchResponse:
     """
 
     return await rzd_adapter.search(request)
+
+
+@app.post("/api/train-route-stops", response_model=TrainRouteStopsResponse)
+async def train_route_stops(request: TrainRouteStopsRequest) -> TrainRouteStopsResponse:
+    """Догружает полный список станций (basicRoute) для выбранного поезда — карта и сегмент маршрута."""
+
+    return await rzd_adapter.fetch_train_route_stops(request)
 
 
 @app.post("/api/recommend", response_model=RecommendResponse)

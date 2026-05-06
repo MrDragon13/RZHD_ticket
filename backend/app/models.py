@@ -191,6 +191,10 @@ class TrainOption(BaseModel):
     duration_minutes: int
     duration_label: str
     route_distance_km: int
+    departure_date_rzd: str | None = Field(
+        default=None,
+        description="Дата отправления по полю date0 РЖД (для отложенного basicRoute).",
+    )
     stops: list[str]
     available_seats: SeatInfo
     seat_details: SeatDetails = Field(default_factory=SeatDetails)
@@ -246,6 +250,35 @@ class TicketSearchResponse(BaseModel):
     source: Literal["demo", "live-cache"] = "demo"
     updated_at: str
     trains: list[TrainOption]
+
+
+class TrainRouteStopsRequest(BaseModel):
+    """Запрос полного списка остановок (basicRoute) для одного поезда после поиска."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    language: Language = "ru"
+    origin: str
+    destination: str
+    train_id: str
+    train_number: str
+    departure_date_rzd: str | None = None
+    departure_station: str = ""
+    arrival_station: str = ""
+    route_terminal_from: str | None = None
+    route_terminal_to: str | None = None
+    fallback_stops: list[str] = Field(
+        default_factory=list,
+        description="Остановки из выдачи 5827, если basicRoute ещё не вызывали.",
+    )
+
+
+class TrainRouteStopsResponse(BaseModel):
+    """Станции и сегмент маршрута для карты после догрузки basicRoute."""
+
+    train_id: str
+    stops: list[str]
+    route_segment: RouteSegmentInfo
 
 
 class RecommendRequest(BaseModel):

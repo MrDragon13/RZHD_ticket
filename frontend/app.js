@@ -695,6 +695,10 @@ let intent = null;
 let trains = [];
 let recommendations = [];
 let selectedTrain = null;
+/** Источник выдачи поездов: demo JSON или live-cache (отложенный basicRoute). */
+let ticketSearchSource = "demo";
+/** Уже догружен полный маршрут (POST /api/train-route-stops) для карты. */
+let routeStopsLoadedIds = new Set();
 let demoTicket = null;
 let checkoutAnimating = false;
 let issuingTicket = false;
@@ -1013,7 +1017,7 @@ document.querySelector("#chips").addEventListener("click", (event) => {
     return;
   }
   if (action === "choose-best" && trains.length) {
-    selectTrain(getSortedTrains()[0]);
+    void selectTrain(getSortedTrains()[0]);
     return;
   }
   if (action === "repeat-ticket" && demoTicket) {
@@ -1157,6 +1161,9 @@ async function searchAndRecommend() {
     return;
   }
 
+  ticketSearchSource = ticketResponse.source || "demo";
+  routeStopsLoadedIds = new Set();
+
   trains = ticketResponse.trains.filter((t) => {
     const s = t.available_seats || {};
     return (s.platzkart || 0) + (s.coupe || 0) + (s.sv || 0) > 0;
@@ -1204,6 +1211,7 @@ async function searchAndRecommend() {
     recommendations = buildFallbackRecommendationsFromTrains(trains);
     assistantSay(localVoiceExplanationFromTrain(trains[0]));
   }
+  await prefetchRecommendedRouteStops();
   renderTrains();
   updateRouteMapForSelectedTrain();
   setStage("results");
@@ -1397,13 +1405,63 @@ function renderTrains() {
         <span>${language === "ru" ? "Плацкарт" : "Platzkart"}: ${formatPrice(train.prices.platzkart)}</span>
       </div>
     `;
-    card.addEventListener("click", () => selectTrain(train));
+    card.addEventListener("click", () => void selectTrain(train));
     list.append(card);
   });
 }
 
 function recommendationFor(trainId) {
   return recommendations.find((item) => item.train_id === trainId);
+}
+
+function mergeTrainRouteData(trainId, stops, route_segment) {
+  const idx = trains.findIndex((t) => t.id === trainId);
+  if (idx < 0) return;
+  const prev = trains[idx];
+  trains[idx] = { ...prev, stops, route_segment };
+  if (selectedTrain && selectedTrain.id === trainId) {
+    selectedTrain = trains[idx];
+  }
+}
+
+async function fetchTrainRouteStops(train) {
+  if (!train || ticketSearchSource !== "live-cache") return train;
+  if (routeStopsLoadedIds.has(train.id)) return train;
+  try {
+    const res = await postJson("/api/train-route-stops", {
+      language,
+      origin: intent.origin,
+      destination: intent.destination,
+      train_id: train.id,
+      train_number: train.train_number,
+      departure_date_rzd: train.departure_date_rzd ?? null,
+      departure_station: train.departure_station,
+      arrival_station: train.arrival_station,
+      route_terminal_from: train.origin,
+      route_terminal_to: train.destination,
+      fallback_stops: train.stops || [],
+    });
+    mergeTrainRouteData(res.train_id, res.stops, res.route_segment);
+    routeStopsLoadedIds.add(train.id);
+    return trains.find((t) => t.id === train.id) || train;
+  } catch (err) {
+    console.error("train-route-stops failed", err);
+    return train;
+  }
+}
+
+async function fetchTrainRouteStopsIfNeeded(train) {
+  if (!train || ticketSearchSource !== "live-cache") return;
+  if (routeStopsLoadedIds.has(train.id)) return;
+  await fetchTrainRouteStops(train);
+}
+
+async function prefetchRecommendedRouteStops() {
+  const topId = recommendations[0]?.train_id || getSortedTrains()[0]?.id;
+  if (!topId) return;
+  const tr = trains.find((t) => t.id === topId);
+  if (!tr) return;
+  await fetchTrainRouteStops(tr);
 }
 
 function getSortedTrains() {
@@ -1438,7 +1496,7 @@ function renderAmenityBadges(amenities = []) {
     .join("");
 }
 
-function selectTrain(train) {
+async function selectTrain(train) {
   selectedTrain = train;
   checkoutPanel.classList.remove("hidden");
   if (!checkoutAnimating && !issuingTicket) {
@@ -1455,6 +1513,7 @@ function selectTrain(train) {
     assistantSay(phrase);
   }
   setStage("checkout");
+  await fetchTrainRouteStopsIfNeeded(train);
   updateTrainCardHighlight();
   updateRouteMapForSelectedTrain();
   checkoutPanel.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -2481,6 +2540,8 @@ function resetScenario(announce = true) {
   demoTicket = null;
   checkoutAnimating = false;
   issuingTicket = false;
+  ticketSearchSource = "demo";
+  routeStopsLoadedIds = new Set();
   demoCarriages = [];
   activeCarriageIndex = 0;
   demoSeatLayouts = new Map();

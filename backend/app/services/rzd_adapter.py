@@ -7,7 +7,14 @@ import os
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 
-from app.models import RouteSegmentInfo, TicketSearchRequest, TicketSearchResponse, TrainOption
+from app.models import (
+    RouteSegmentInfo,
+    TicketSearchRequest,
+    TicketSearchResponse,
+    TrainOption,
+    TrainRouteStopsRequest,
+    TrainRouteStopsResponse,
+)
 from app.services.route_segment import resolve_route_segment
 from app.services.rzd_live import train_option_from_aiorzd
 
@@ -21,6 +28,8 @@ class RzdDataAdapter:
         self.live_enabled = _env_truthy_default_on("RZD_LIVE_ENABLED")
         self.live_fallback = os.getenv("RZD_LIVE_FALLBACK", "1").strip().lower() not in ("0", "false", "no")
         self._deepseek = deepseek_client
+        # Один поток на вторичные запросы РЖД (basicRoute, carriages), чтобы реже ловить капчу.
+        self._rzd_io_sem = asyncio.Semaphore(1)
 
     async def search(self, request: TicketSearchRequest) -> TicketSearchResponse:
         if self.live_enabled:
@@ -32,6 +41,56 @@ class RzdDataAdapter:
                     return await self._search_demo(request)
                 raise
         return await self._search_demo(request)
+
+    async def fetch_train_route_stops(self, req: TrainRouteStopsRequest) -> TrainRouteStopsResponse:
+        """Полный маршрут basicRoute для одного поезда (после выдачи рекомендации или выбора карточки)."""
+
+        origin = (req.origin or "").strip()
+        destination = (req.destination or "").strip()
+        date_rzd = (req.departure_date_rzd or "").strip()
+
+        stops_live: list[str] = []
+        if self.live_enabled and date_rzd and req.train_number.strip():
+            from app.vendor.aiorzd import RzdFetcher
+
+            async with RzdFetcher() as fetcher:
+                async with self._rzd_io_sem:
+                    try:
+                        stops_live = await fetcher.get_basic_route_stops(req.train_number.strip(), date_rzd)
+                    except Exception:
+                        logging.exception("lazy basicRoute failed train=%s", req.train_number)
+                        stops_live = []
+
+        stops = stops_live if len(stops_live) >= 2 else list(req.fallback_stops or [])
+        if stops_live and len(stops_live) < 2:
+            logging.info(
+                "lazy basicRoute sparse train=%s dep=%s — using fallback_stops count=%s",
+                req.train_number,
+                date_rzd,
+                len(req.fallback_stops or []),
+            )
+
+        seg = await resolve_route_segment(
+            stops=stops,
+            search_origin=origin,
+            search_destination=destination,
+            departure_station=req.departure_station,
+            arrival_station=req.arrival_station,
+            route_terminal_from=req.route_terminal_from or origin,
+            route_terminal_to=req.route_terminal_to or destination,
+            train_number=req.train_number,
+            train_id=req.train_id,
+            deepseek=self._deepseek,
+        )
+        info = RouteSegmentInfo(
+            intermediate_stops=seg.intermediate_stops,
+            endpoint_fraction=seg.endpoint_fraction,
+            method=seg.method,
+            origin_index=seg.origin_index,
+            destination_index=seg.destination_index,
+            debug_steps=seg.debug_steps[:30],
+        )
+        return TrainRouteStopsResponse(train_id=req.train_id, stops=stops, route_segment=info)
 
     async def _search_demo(self, request: TicketSearchRequest) -> TicketSearchResponse:
         trains = self._load_demo_trains()
@@ -65,9 +124,6 @@ class RzdDataAdapter:
         day_end = datetime.combine(travel_date, time(23, 59, 59))
 
         enrich = _env_truthy_default_on("RZD_CARRIAGE_ENRICH")
-        route_stops_enrich = _env_truthy_default_on("RZD_ROUTE_STOPS_ENRICH")
-        route_stops_max = int(os.getenv("RZD_ROUTE_STOPS_MAX_TRAINS", "12") or "12")
-        route_stops_max = max(1, min(route_stops_max, 40))
         carriage_max = int(os.getenv("RZD_CARRIAGE_ENRICH_MAX_TRAINS", "15") or "15")
         carriage_max = max(1, min(carriage_max, 40))
 
@@ -95,16 +151,12 @@ class RzdDataAdapter:
                 for i, t in enumerate(light)
                 if t.available_seats.platzkart + t.available_seats.coupe + t.available_seats.sv > 0
             ]
-            route_idx = eligible_idx[:route_stops_max] if route_stops_enrich else []
             carriage_idx = eligible_idx[:carriage_max] if enrich else []
 
             carriage_by_index: dict[int, dict] = {}
-            basic_stops_by_index: dict[int, list[str]] = {}
             if trains_list and eligible_idx:
                 src_code = await fetcher.get_city_code(origin)
                 dst_code = await fetcher.get_city_code(destination)
-
-                sem_rzd = asyncio.Semaphore(1)
 
                 async def carriage_one(idx: int) -> None:
                     t = trains_list[idx]
@@ -114,7 +166,7 @@ class RzdDataAdapter:
                     dep = getattr(t, "departure_time", None)
                     if dep is None:
                         return
-                    async with sem_rzd:
+                    async with self._rzd_io_sem:
                         try:
                             raw = await fetcher.get_train_carriages(src_code, dst_code, dep, num)
                         except Exception:
@@ -123,30 +175,7 @@ class RzdDataAdapter:
                         if isinstance(raw, dict) and raw.get("result") == "OK":
                             carriage_by_index[idx] = raw
 
-                async def route_stops_one(idx: int) -> None:
-                    if not route_stops_enrich:
-                        return
-                    t = trains_list[idx]
-                    content = t.content or {}
-                    num = str(getattr(t, "number", "") or content.get("number") or "")
-                    dep_date = str(content.get("date0") or "").strip()
-                    if not num or not dep_date:
-                        return
-                    async with sem_rzd:
-                        try:
-                            route_names = await fetcher.get_basic_route_stops(num, dep_date)
-                        except Exception:
-                            logging.debug("basicRoute stops failed for train %s", num, exc_info=True)
-                            return
-                        if len(route_names) >= 2:
-                            basic_stops_by_index[idx] = route_names
-
-                tasks = []
-                for i in route_idx:
-                    tasks.append(route_stops_one(i))
-                for i in carriage_idx:
-                    tasks.append(carriage_one(i))
-
+                tasks = [carriage_one(i) for i in carriage_idx]
                 if tasks:
                     await asyncio.gather(*tasks)
 
@@ -160,7 +189,7 @@ class RzdDataAdapter:
                     dest_hint=destination,
                     language=request.language,
                     carriage_payload=carriage_by_index.get(index),
-                    basic_route_stops=basic_stops_by_index.get(index),
+                    basic_route_stops=None,
                 ),
             )
 

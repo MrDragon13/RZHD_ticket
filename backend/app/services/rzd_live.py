@@ -426,6 +426,9 @@ def train_option_from_aiorzd(
 
     tid = f"rzd-{train_number}-{dep.strftime('%Y%m%d%H%M')}-{index}"
 
+    date0_raw = str(content.get("date0") or "").strip()
+    departure_date_rzd = date0_raw or None
+
     base = TrainOption(
         id=tid,
         train_number=train_number,
@@ -438,6 +441,7 @@ def train_option_from_aiorzd(
         duration_minutes=dur_min,
         duration_label=duration_label,
         route_distance_km=route_km,
+        departure_date_rzd=departure_date_rzd,
         stops=stops,
         available_seats=seat_info,
         seat_details=seat_details,
