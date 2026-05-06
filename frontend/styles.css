@@ -395,16 +395,26 @@ button {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto 1fr;
   gap: 20px;
   height: 100vh;
   padding: 28px;
 }
 
-/* Область выбора языка и основного терминала — одна ячейка сетки (перекрывающиеся экраны) */
+/* Единая колонка под статус-полосу (если видна) и экраны: иначе при [hidden] у strip
+   вся «высота 1fr» уезжала не в screen-stage, и стартовый экран сжимался. */
+.app-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+/* Область выбора языка и основного терминала — перекрывающиеся экраны, заполняют тело */
 .screen-stage {
   display: grid;
   grid-template-rows: 1fr;
+  flex: 1;
   min-height: 0;
   align-self: stretch;
 }
@@ -451,6 +461,7 @@ button {
 
 .terminal-status-strip {
   padding: 0 28px 10px;
+  flex-shrink: 0;
 }
 
 .terminal-status-strip[hidden] {
@@ -681,6 +692,7 @@ body.ui-interaction-locked #user-input {
   bottom: 16px;
   left: 16px;
   right: 16px;
+  z-index: 1;
   max-height: min(148px, 32vh);
   overflow-y: auto;
   font-size: 16px;
@@ -692,7 +704,7 @@ body.ui-interaction-locked #user-input {
 
 .language-card-layer {
   position: relative;
-  z-index: 2;
+  z-index: 10;
   pointer-events: none;
   width: 100%;
   display: grid;
