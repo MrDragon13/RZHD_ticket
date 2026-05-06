@@ -512,12 +512,6 @@ body.ui-interaction-locked #user-input {
   text-transform: uppercase;
 }
 
-#transcript.assist-muted-label {
-  margin: 0 0 12px;
-  letter-spacing: 0.04em;
-  text-transform: none;
-}
-
 .status-pill {
   padding: 14px 22px;
   border: 1px solid var(--border);

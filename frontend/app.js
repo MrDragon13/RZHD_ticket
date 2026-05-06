@@ -1610,7 +1610,6 @@ const screens = {
 const assistantText = document.querySelector("#assistant-text");
 const userInput = document.querySelector("#user-input");
 const languageBadge = document.querySelector("#language-badge");
-const transcript = document.querySelector("#transcript");
 const intentPanel = document.querySelector("#intent-panel");
 const trainsPanel = document.querySelector("#trains-panel");
 const checkoutPanel = document.querySelector("#checkout-panel");
@@ -1818,13 +1817,11 @@ async function handleUserText(text) {
   if (!cleanText) return;
   if (cleanText.toLowerCase() === PATH_DEBUG_TRIGGER) {
     if (userInput) userInput.value = "";
-    if (transcript) transcript.textContent = "";
     openPathLogModal();
     return;
   }
   if (uiInteractionLocked) return;
   lastDialogUserText = cleanText;
-  transcript.textContent = cleanText;
 
   if (await tryVoiceCheckoutConfirmation(cleanText)) {
     addMessage("user", cleanText);
@@ -4156,7 +4153,6 @@ function resetScenario(announce = true) {
   hideBackendHealthBanner();
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   if (userInput) userInput.value = "";
-  if (transcript) transcript.textContent = "";
   if (assistantText) assistantText.textContent = i18n[language].assistantReady;
   [intentPanel, trainsPanel, checkoutPanel, seatPickerPanel, ticketPanel].forEach((panel) =>
     panel?.classList.add("hidden"),
