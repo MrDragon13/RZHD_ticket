@@ -51,3 +51,23 @@ def test_index_html_has_auth_and_idle_warning():
     html = (root / "frontend" / "index.html").read_text(encoding="utf-8")
     assert 'id="auth-screen"' in html
     assert 'id="session-idle-warning"' in html
+
+
+def test_index_html_has_logout_button():
+    root = Path(__file__).resolve().parents[2]
+    html = (root / "frontend" / "index.html").read_text(encoding="utf-8")
+    assert 'id="session-logout-button"' in html
+
+
+def test_app_js_idle_deadline_and_pause():
+    src = _app_js()
+    assert "idleLogoutDeadline" in src
+    assert "beginIdlePause" in src
+    assert "scheduleIdleFromDeadline" in src
+
+
+def test_api_client_wraps_fetch_with_idle_hooks():
+    root = Path(__file__).resolve().parents[2]
+    api = (root / "frontend" / "api-client.js").read_text(encoding="utf-8")
+    assert "pathTerminalIdleFetchBegin" in api
+    assert "pathTerminalIdleFetchEnd" in api

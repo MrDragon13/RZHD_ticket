@@ -172,8 +172,9 @@ const i18n = {
     authOtpHint: "Код подставится автоматически через несколько секунд.",
     authLogin: "Войти",
     sessionUserLabel: "Пассажир",
+    sessionLogout: "Выход",
     idleLogoutWarning:
-      "Нет действий — через несколько секунд произойдёт выход и возврат к выбору языка. Коснитесь экрана, чтобы остаться.",
+      "Нет действий около двух минут — если не коснётесь экрана, через несколько секунд произойдёт выход и возврат к выбору языка.",
     ticketPassenger: "Пассажир",
     ticketPassengerDoc: "Документ",
     ticketPassengerPhone: "Телефон",
@@ -291,8 +292,9 @@ const i18n = {
     authOtpHint: "The code will appear automatically in a few seconds.",
     authLogin: "Sign in",
     sessionUserLabel: "Passenger",
+    sessionLogout: "Sign out",
     idleLogoutWarning:
-      "No activity — you will be signed out and returned to the language screen shortly. Touch the screen to stay.",
+      "No activity for about two minutes — unless you touch the screen, you will be signed out and returned to the language screen shortly.",
     ticketPassenger: "Passenger",
     ticketPassengerDoc: "ID",
     ticketPassengerPhone: "Phone",
@@ -1567,8 +1569,8 @@ let lastDialogUserText = "";
 let lastSuccessfulSearchKey = null;
 let lastSelectedTrainId = null;
 
-/** Уведомление за 5 с до возврата на экран языка */
-const GLOBAL_IDLE_MS = 60_000;
+/** Уведомление за GLOBAL_IDLE_WARN_BEFORE_MS до возврата на экран языка */
+const GLOBAL_IDLE_MS = 120_000;
 const GLOBAL_IDLE_WARN_BEFORE_MS = 5000;
 
 /** Должны быть объявлены до первого вызова startLanguageScreenAmbient() (иначе TDZ). */
@@ -1577,6 +1579,12 @@ let languageAmbientAbort = null;
 /** Таймеры бездействия: предупреждение и выход на экран языка */
 let globalIdleWarningTimer = null;
 let globalIdleLogoutTimer = null;
+/** Абсолютное время logout (Date.now() + оставшиеся мс); паузится при запросах к API */
+let idleLogoutDeadline = null;
+/** Вложенность пауз (несколько параллельных fetch) */
+let idlePauseDepth = 0;
+/** Оставшееся время сессии при входе в паузу */
+let idleRemainingMsAfterPause = GLOBAL_IDLE_MS;
 /** После выбора языка отслеживаем активность до возврата на старт */
 let sessionIdleTrackingActive = false;
 
@@ -1630,6 +1638,7 @@ const textInputToggle = document.querySelector("#text-input-toggle");
 const sessionUserStrip = document.querySelector("#session-user-strip");
 const sessionUserLabelEl = document.querySelector("#session-user-label");
 const sessionUserNameEl = document.querySelector("#session-user-name");
+const sessionLogoutButton = document.querySelector("#session-logout-button");
 const sessionIdleWarningEl = document.querySelector("#session-idle-warning");
 
 const authScreen = document.querySelector("#auth-screen");
@@ -1743,29 +1752,63 @@ function showIdleWarning() {
   sessionIdleWarningEl.classList.remove("hidden");
 }
 
-function scheduleGlobalIdleTimers() {
+function scheduleIdleFromDeadline() {
   clearGlobalIdleTimers();
-  if (!sessionIdleTrackingActive) return;
+  if (!sessionIdleTrackingActive || idlePauseDepth > 0) return;
+  const now = Date.now();
+  if (idleLogoutDeadline == null) {
+    idleLogoutDeadline = now + GLOBAL_IDLE_MS;
+  }
+  const msLogout = Math.max(0, idleLogoutDeadline - now);
+  const warnAt = idleLogoutDeadline - GLOBAL_IDLE_WARN_BEFORE_MS;
+  const msWarn = Math.max(0, warnAt - now);
+
+  if (msLogout <= 0) {
+    hideIdleWarning();
+    void performIdleLogout();
+    return;
+  }
   globalIdleWarningTimer = setTimeout(() => {
     globalIdleWarningTimer = null;
     showIdleWarning();
-  }, GLOBAL_IDLE_MS - GLOBAL_IDLE_WARN_BEFORE_MS);
+  }, msWarn);
   globalIdleLogoutTimer = setTimeout(() => {
     globalIdleLogoutTimer = null;
     hideIdleWarning();
     void performIdleLogout();
-  }, GLOBAL_IDLE_MS);
+  }, msLogout);
 }
 
-function touchGlobalIdle() {
+/** Начало ожидания ответа backend — «замораживаем» отсчёт бездействия. */
+function beginIdlePause() {
   if (!sessionIdleTrackingActive) return;
+  idlePauseDepth += 1;
+  if (idlePauseDepth === 1) {
+    idleRemainingMsAfterPause =
+      idleLogoutDeadline != null ? Math.max(0, idleLogoutDeadline - Date.now()) : GLOBAL_IDLE_MS;
+    clearGlobalIdleTimers();
+  }
+}
+
+/** Конец запроса — возобновляем отсчёт с сохранённым остатком времени. */
+function endIdlePause() {
+  idlePauseDepth -= 1;
+  if (idlePauseDepth < 0) idlePauseDepth = 0;
+  if (idlePauseDepth !== 0 || !sessionIdleTrackingActive) return;
+  idleLogoutDeadline = Date.now() + idleRemainingMsAfterPause;
+  scheduleIdleFromDeadline();
+}
+
+function touchGlobalIdle(ev) {
+  if (!sessionIdleTrackingActive) return;
+  if (ev?.target?.closest?.("#session-logout-button")) return;
   hideIdleWarning();
-  scheduleGlobalIdleTimers();
+  idleLogoutDeadline = Date.now() + GLOBAL_IDLE_MS;
+  idleRemainingMsAfterPause = GLOBAL_IDLE_MS;
+  scheduleIdleFromDeadline();
 }
 
 async function performIdleLogout() {
-  sessionIdleTrackingActive = false;
-  clearGlobalIdleTimers();
   await returnToLanguageIdleScreen();
 }
 
@@ -1823,12 +1866,18 @@ function renderSessionUserStrip() {
   if (!sessionUserStrip || !sessionUserNameEl) return;
   if (!sessionPassenger.fullName) {
     sessionUserStrip.classList.add("hidden");
+    sessionLogoutButton?.classList.add("hidden");
     return;
   }
   const copy = i18n[language];
   if (sessionUserLabelEl) sessionUserLabelEl.textContent = copy.sessionUserLabel;
   sessionUserNameEl.textContent = sessionPassenger.fullName;
   sessionUserStrip.classList.remove("hidden");
+  if (sessionLogoutButton) {
+    sessionLogoutButton.textContent = copy.sessionLogout;
+    sessionLogoutButton.setAttribute("aria-label", copy.sessionLogout);
+    sessionLogoutButton.classList.toggle("hidden", !sessionPassenger.isAuthenticated);
+  }
 }
 
 function clearSessionPassenger() {
@@ -1839,6 +1888,7 @@ function clearSessionPassenger() {
   authPhoneDigits = [];
   sessionUserStrip?.classList.add("hidden");
   if (sessionUserNameEl) sessionUserNameEl.textContent = "";
+  sessionLogoutButton?.classList.add("hidden");
 }
 
 function buildAuthVirtualKeyboard() {
@@ -2049,6 +2099,13 @@ updateTextInputToggleLabels();
 initThemeToggle();
 initPathLogModal();
 
+window.pathTerminalIdleFetchBegin = beginIdlePause;
+window.pathTerminalIdleFetchEnd = endIdlePause;
+
+if (sessionLogoutButton) {
+  sessionLogoutButton.addEventListener("click", () => void returnToLanguageIdleScreen());
+}
+
 if (authPhoneClearBtn) {
   authPhoneClearBtn.addEventListener("click", () => {
     resetAuthFlow();
@@ -2058,8 +2115,8 @@ if (authPhoneClearBtn) {
 if (authPhoneContinueBtn) authPhoneContinueBtn.addEventListener("click", () => void runAuthOtpPhase());
 if (authOtpDoneBtn) authOtpDoneBtn.addEventListener("click", () => void completeAuthFlow());
 
-document.addEventListener("pointerdown", touchGlobalIdle, true);
-document.addEventListener("keydown", touchGlobalIdle, true);
+document.addEventListener("pointerdown", (ev) => touchGlobalIdle(ev), true);
+document.addEventListener("keydown", (ev) => touchGlobalIdle(ev), true);
 try {
   startLanguageScreenAmbient();
 } catch (ambientBootErr) {
@@ -2094,6 +2151,8 @@ document.querySelector("#chips")?.addEventListener("click", (event) => {
 
 async function returnToLanguageIdleScreen() {
   sessionIdleTrackingActive = false;
+  idleLogoutDeadline = null;
+  idlePauseDepth = 0;
   clearGlobalIdleTimers();
   hideIdleWarning();
   clearSessionPassenger();

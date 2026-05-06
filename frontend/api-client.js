@@ -52,49 +52,64 @@ async function fetchApi(path, opts = {}) {
   const outerSignal = opts.signal;
   const url = `${API_BASE_URL}${path}`;
   let lastErr;
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    if (outerSignal?.aborted) {
-      const e = new Error("Aborted");
-      e.name = "AbortError";
-      throw e;
-    }
-    const rid = generateRequestId();
-    const timeoutController = new AbortController();
-    const timer = setTimeout(() => timeoutController.abort(), timeoutMs);
-    const combined = mergeAbortSignals(timeoutController.signal, outerSignal || null);
+  try {
+    /** Пауза idle-таймера киоска на время ожидания ответа (см. app.js). */
     try {
-      const headers = {
-        Accept: "application/json",
-        "X-Request-Id": rid,
-      };
-      if (body !== undefined) {
-        headers["Content-Type"] = "application/json";
+      if (typeof window.pathTerminalIdleFetchBegin === "function") window.pathTerminalIdleFetchBegin();
+    } catch {
+      /* ignore */
+    }
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      if (outerSignal?.aborted) {
+        const e = new Error("Aborted");
+        e.name = "AbortError";
+        throw e;
       }
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: combined,
-      });
-      clearTimeout(timer);
-      if (!response.ok) {
-        throw new Error(`API error ${response.status}`);
+      const rid = generateRequestId();
+      const timeoutController = new AbortController();
+      const timer = setTimeout(() => timeoutController.abort(), timeoutMs);
+      const combined = mergeAbortSignals(timeoutController.signal, outerSignal || null);
+      try {
+        const headers = {
+          Accept: "application/json",
+          "X-Request-Id": rid,
+        };
+        if (body !== undefined) {
+          headers["Content-Type"] = "application/json";
+        }
+        const response = await fetch(url, {
+          method,
+          headers,
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: combined,
+        });
+        clearTimeout(timer);
+        if (!response.ok) {
+          throw new Error(`API error ${response.status}`);
+        }
+        const ct = response.headers.get("content-type") || "";
+        if (ct.includes("application/json")) {
+          return response.json();
+        }
+        return null;
+      } catch (err) {
+        clearTimeout(timer);
+        lastErr = err;
+        if (outerSignal?.aborted) throw err;
+        const canRetry = attempt < retries && shouldRetryFetchError(err);
+        if (!canRetry) throw err;
+        await wait(450 * (attempt + 1));
       }
-      const ct = response.headers.get("content-type") || "";
-      if (ct.includes("application/json")) {
-        return response.json();
-      }
-      return null;
-    } catch (err) {
-      clearTimeout(timer);
-      lastErr = err;
-      if (outerSignal?.aborted) throw err;
-      const canRetry = attempt < retries && shouldRetryFetchError(err);
-      if (!canRetry) throw err;
-      await wait(450 * (attempt + 1));
+    }
+    throw lastErr || new Error("fetchApi failed");
+  } finally {
+    try {
+      if (typeof window.pathTerminalIdleFetchEnd === "function") window.pathTerminalIdleFetchEnd();
+    } catch {
+      /* ignore */
     }
   }
-  throw lastErr || new Error("fetchApi failed");
 }
 
 async function postJson(path, payload, options = {}) {
