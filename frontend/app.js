@@ -1194,10 +1194,35 @@ function ticketCarCodesForLookup(carField) {
 }
 
 /**
+ * РЖД иногда кладёт в услуги внутренние slug / бренды — на билете это выглядит как «мусор».
+ * Оставляем человекочитаемые строки; сложные slug с несколькими подчёркиваниями не показываем.
+ */
+function normalizeCarriageServiceChip(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  const und = (s.match(/_/g) || []).length;
+  if (und >= 2) return null;
+  if (/^фпк$/i.test(s) || /^fpk$/i.test(s)) return null;
+  if (und === 1) {
+    const parts = s.split("_").map((p) => p.trim()).filter(Boolean);
+    if (parts.length !== 2) return null;
+    const [a, b] = parts;
+    if (a.length <= 4 && b.length <= 4 && /^[a-zа-яё]+$/i.test(a + b)) return null;
+    const spaced = `${a} ${b}`.replace(/\s+/g, " ");
+    return spaced
+      .split(/\s+/)
+      .map((w) => (w.length ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""))
+      .join(" ")
+      .trim();
+  }
+  return s;
+}
+
+/**
  * Единый список подписей для билета: удобства поезда, теги маршрута, услуги вагона (РЖД),
  * тип купе/полка/зона по выбранным местам — без дублей, в одном порядке для чипов.
  */
-function collectUnifiedTicketFeatureLabels(train, ticketCarField) {
+function collectUnifiedTicketFeatureLabels(train, ticketCarField, ticketRow) {
   if (!train) return [];
   const copy = i18n[language];
   const labels = [];
@@ -1211,6 +1236,8 @@ function collectUnifiedTicketFeatureLabels(train, ticketCarField) {
     labels.push(t);
   };
 
+  const berthOnTicket = String(ticketRow?.berth_type || "").trim().toLowerCase();
+
   for (const item of train.amenities || []) {
     add(amenityLabels[language][item] || item);
   }
@@ -1221,8 +1248,14 @@ function collectUnifiedTicketFeatureLabels(train, ticketCarField) {
   for (const cc of ticketCarCodesForLookup(ticketCarField)) {
     const det = carriageDetailForTab(train, cc);
     if (!det) continue;
-    for (const svc of det.services_short || []) add(svc);
-    if (det.service_summary) add(det.service_summary);
+    for (const svc of det.services_short || []) {
+      const n = normalizeCarriageServiceChip(svc);
+      if (n) add(n);
+    }
+    if (det.service_summary) {
+      const n = normalizeCarriageServiceChip(det.service_summary);
+      if (n) add(n);
+    }
   }
 
   if (selectedSeatKeys.size) {
@@ -1237,7 +1270,10 @@ function collectUnifiedTicketFeatureLabels(train, ticketCarField) {
           const lab = compartmentKindLabel(ck);
           if (lab && lab !== copy.compartmentUnknown) add(lab);
         }
-        if (seat.berth_kind) add(berthKindTicketDetailLabel(seat.berth_kind));
+        if (seat.berth_kind) {
+          const bl = berthKindTicketDetailLabel(seat.berth_kind);
+          if (bl && bl.trim().toLowerCase() !== berthOnTicket) add(bl);
+        }
         if (seat.zone) add(platzZoneTicketLabel(seat.zone));
       }
     }
@@ -1246,8 +1282,8 @@ function collectUnifiedTicketFeatureLabels(train, ticketCarField) {
   return labels;
 }
 
-function ticketUnifiedFeaturesHtml(train, ticketCarField) {
-  const list = collectUnifiedTicketFeatureLabels(train, ticketCarField);
+function ticketUnifiedFeaturesHtml(train, ticketCarField, ticketRow) {
+  const list = collectUnifiedTicketFeatureLabels(train, ticketCarField, ticketRow);
   if (!list.length) return "";
   const copy = i18n[language];
   const chips = list.map((s) => `<span class="amenity">${escapeHtml(s)}</span>`).join("");
@@ -3976,7 +4012,7 @@ function renderTicket() {
   setStage("ticket");
   const copy = i18n[language];
   document.querySelector("#ticket-title").textContent = copy.demoTicket;
-  const featuresBlock = ticketUnifiedFeaturesHtml(selectedTrain, demoTicket?.car);
+  const featuresBlock = ticketUnifiedFeaturesHtml(selectedTrain, demoTicket?.car, demoTicket);
   document.querySelector("#ticket-body").innerHTML = `
     <strong>${demoTicket.route}</strong>
     <span>${language === "ru" ? "Поезд" : "Train"}: ${demoTicket.train_number}</span>

@@ -16,6 +16,8 @@ def test_app_js_has_dialog_abort_and_message_cap():
     assert "languageScreenBusy" in src
     assert "selectTrainSeq" in src
     assert "orbRecognition" in src
+    assert "normalizeCarriageServiceChip" in src
+    assert "ticketAllFeatures" in src
 
 
 def test_index_html_user_input_maxlength():
