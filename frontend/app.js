@@ -2641,8 +2641,13 @@ function buildDemoTicketQrPayload() {
   const copy = i18n[language];
   const d = demoTicket;
   if (!d) return "";
+  const thanks = copy.ticketThanks;
+  // Backend уже кладёт компактный JSON — он надёжнее для QR, чем длинный текст с дисклеймером.
+  if (typeof d.qr_payload === "string" && d.qr_payload.trim()) {
+    return `${d.qr_payload.trim()}\n\n${thanks}`;
+  }
   const ru = language === "ru";
-  const core = [
+  return [
     copy.demoTicket,
     `${ru ? "Маршрут" : "Route"}: ${d.route}`,
     `${ru ? "Поезд" : "Train"}: ${d.train_number}`,
@@ -2653,56 +2658,90 @@ function buildDemoTicketQrPayload() {
     `${ru ? "Полка" : "Berth"}: ${d.berth_type}`,
     d.travel_class,
     `${ru ? "Идентификатор" : "Ticket ID"}: ${d.ticket_id}`,
-    d.disclaimer,
+    thanks,
   ].join("\n");
-  return `${core}\n\n${copy.ticketThanks}`;
 }
 
 function renderTicketQrCanvas(payloadText) {
   const wrap = document.querySelector("#ticket-qr-wrap");
   const thanksEl = document.querySelector("#ticket-thanks");
   if (!wrap || !thanksEl) return;
-  wrap.innerHTML = "";
   thanksEl.textContent = i18n[language].ticketThanks;
+
+  const textFallback = (text) => {
+    wrap.innerHTML = "";
+    wrap.textContent = text.slice(0, 480);
+  };
+
   const QR = window.QRCode;
-  if (typeof QR === "undefined") {
-    wrap.textContent = payloadText.slice(0, 480);
+  if (typeof QR === "undefined" || !String(payloadText || "").trim()) {
+    if (payloadText) textFallback(payloadText);
     return;
   }
-  const drawQr = (text) => {
-    wrap.innerHTML = "";
-    const qr = new QR(wrap, {
-      width: 220,
-      height: 220,
-      colorDark: "#071018",
-      colorLight: "#ffffff",
-      correctLevel: QR.CorrectLevel.L,
-    });
-    qr.makeCode(text);
-    return wrap.querySelector("canvas, img, table");
+
+  const baseOpts = {
+    width: 220,
+    height: 220,
+    colorDark: "#071018",
+    colorLight: "#ffffff",
+    correctLevel: QR.CorrectLevel.L,
   };
-  try {
-    if (!drawQr(payloadText)) throw new Error("qr_empty");
-  } catch {
+
+  const idFallback =
+    demoTicket && typeof demoTicket.ticket_id === "string" && demoTicket.ticket_id.trim()
+      ? `PATH:${demoTicket.ticket_id.trim()}`
+      : "PATH:demo";
+
+  const candidates = [String(payloadText)];
+  if (payloadText.length > 900) candidates.push(payloadText.slice(0, 900));
+  if (payloadText.length > 450) candidates.push(payloadText.slice(0, 450));
+  candidates.push(idFallback);
+
+  const findQrNode = () => wrap.querySelector("canvas, img, table, svg");
+
+  const polishQrDom = () => {
+    const node = findQrNode();
+    if (!node) return false;
+    const tag = node.tagName;
+    if (tag === "CANVAS") {
+      node.setAttribute("aria-hidden", "true");
+      node.style.display = "block";
+    } else if (tag === "IMG") {
+      node.alt = "";
+      node.style.display = "block";
+    }
+    if (tag === "CANVAS" || tag === "IMG" || tag === "SVG") {
+      node.style.margin = "0 auto";
+      node.style.maxWidth = "100%";
+      node.style.height = "auto";
+    }
+    wrap.setAttribute("aria-hidden", "false");
+    return true;
+  };
+
+  let drew = false;
+  for (const text of candidates) {
     try {
-      if (!drawQr(payloadText.slice(0, 1200))) throw new Error("qr_empty");
-    } catch {
-      try {
-        if (!drawQr(payloadText.slice(0, 400))) throw new Error("qr_empty");
-      } catch {
-        wrap.textContent = payloadText.slice(0, 480);
+      wrap.innerHTML = "";
+      // Один вызов с text в опциях — так задумано в qrcode.js (makeCode внутри конструктора).
+      new QR(wrap, { ...baseOpts, text });
+      if (findQrNode()) {
+        drew = true;
+        break;
       }
+    } catch {
+      /* пробуем короче */
     }
   }
-  const canvas = wrap.querySelector("canvas");
-  const img = wrap.querySelector("img");
-  if (canvas) {
-    canvas.setAttribute("aria-hidden", "true");
-    wrap.setAttribute("aria-hidden", "false");
-  } else if (img) {
-    img.alt = "";
-    wrap.setAttribute("aria-hidden", "false");
+
+  if (!drew || !polishQrDom()) {
+    textFallback(payloadText);
+    return;
   }
+
+  // qrcode.js иногда асинхронно подменяет canvas на img (data URL); перепроверяем кадр позже.
+  requestAnimationFrame(() => polishQrDom());
+  setTimeout(() => polishQrDom(), 80);
 }
 
 function renderTicket() {
