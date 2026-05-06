@@ -24,13 +24,86 @@
       </header>
 
       <section id="language-screen" class="screen language-screen">
-        <div class="language-card">
-          <div class="brand-mark">П</div>
-          <h2>ПУТЬ</h2>
-          <p>Выберите язык интерфейса / Select interface language</p>
-          <div class="language-actions">
-            <button data-language="ru">Русский</button>
-            <button data-language="en">English</button>
+        <div class="language-screen-bg" aria-hidden="true">
+          <div class="language-map-shell map-content">
+            <div class="map-title language-map-title">
+              <div>
+                <span id="language-route-heading-label">Маршрут</span>
+                <h2 id="language-route-meta">Москва → Казань</h2>
+              </div>
+              <span id="language-route-ambient-badge" class="language-ambient-badge">Случайный маршрут</span>
+            </div>
+            <svg class="route-map language-route-map" viewBox="0 0 900 520" role="img" aria-hidden="true">
+              <defs>
+                <linearGradient id="languageRouteGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#00e5ff" />
+                  <stop offset="55%" stop-color="#8a2be2" />
+                  <stop offset="100%" stop-color="#00ff9c" />
+                </linearGradient>
+                <filter id="languageGlowFilter">
+                  <feGaussianBlur stdDeviation="5" result="coloredBlur" />
+                  <feMerge>
+                    <feMergeNode in="coloredBlur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <path
+                class="map-landmass"
+                d="M58 340 C118 245 214 178 328 158 C438 139 544 104 650 75 C766 44 842 83 866 164 C891 246 802 318 714 335 C623 353 548 438 430 456 C318 473 235 417 151 411 C82 407 30 389 58 340Z"
+              />
+              <path class="map-region-line" d="M120 410 C210 340 276 270 338 166" />
+              <path class="map-region-line" d="M330 452 C420 355 498 250 650 76" />
+              <path class="map-region-line" d="M178 214 C300 250 438 230 602 168" />
+              <path class="rail-background" d="M70 380 C220 320 340 380 510 280 S720 130 840 190" />
+              <path
+                id="language-route-line"
+                class="route-line"
+                d="M125 350 C260 255 390 280 535 210 S700 155 790 115"
+                fill="none"
+                stroke="url(#languageRouteGradient)"
+                stroke-width="8"
+                stroke-linecap="round"
+                filter="url(#languageGlowFilter)"
+              />
+              <circle id="language-origin-dot" class="city-dot" cx="125" cy="350" r="14" fill="#00e5ff" />
+              <circle id="language-stop-dot-a" class="stop-dot hidden-map-point" cx="278" cy="276" r="8" />
+              <circle id="language-stop-dot-b" class="stop-dot hidden-map-point" cx="535" cy="210" r="8" />
+              <circle id="language-stop-dot-c" class="stop-dot hidden-map-point" cx="665" cy="158" r="8" />
+              <circle id="language-stop-dot-d" class="stop-dot hidden-map-point" cx="400" cy="240" r="8" />
+              <circle id="language-stop-dot-e" class="stop-dot hidden-map-point" cx="420" cy="230" r="8" />
+              <circle
+                id="language-route-pulse"
+                class="city-dot pulse"
+                cx="790"
+                cy="115"
+                r="24"
+                fill="rgba(0,255,156,.32)"
+              />
+              <circle id="language-destination-dot" class="city-dot" cx="790" cy="115" r="16" fill="#00ff9c" />
+              <text id="language-origin-label" x="82" y="386" fill="#eef8ff" font-size="24">Москва</text>
+              <text id="language-destination-label" x="730" y="95" fill="#eef8ff" font-size="24">Казань</text>
+              <text id="language-stop-label-a" class="stop-label hidden-map-point" x="278" y="262"></text>
+              <text id="language-stop-label-b" class="stop-label hidden-map-point" x="535" y="196"></text>
+              <text id="language-stop-label-c" class="stop-label hidden-map-point" x="665" y="144"></text>
+              <text id="language-stop-label-d" class="stop-label hidden-map-point" x="400" y="226"></text>
+              <text id="language-stop-label-e" class="stop-label hidden-map-point" x="420" y="216"></text>
+            </svg>
+            <article class="fact-card language-intro-fact">
+              <strong id="language-fact-title">AI Fact</strong>
+              <p id="language-route-fact">Факт о маршруте появится после поиска билетов.</p>
+            </article>
+          </div>
+        </div>
+        <div class="language-card-layer">
+          <div class="language-card">
+            <div class="brand-mark">П</div>
+            <h2>ПУТЬ</h2>
+            <p>Выберите язык интерфейса / Select interface language</p>
+            <div class="language-actions">
+              <button type="button" data-language="ru">Русский</button>
+              <button type="button" data-language="en">English</button>
+            </div>
           </div>
         </div>
       </section>

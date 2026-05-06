@@ -163,7 +163,78 @@ button {
 }
 
 .language-screen {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  display: grid;
   place-items: center;
+  overflow: hidden;
+}
+
+.language-screen-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.92;
+}
+
+.language-map-shell {
+  position: absolute;
+  inset: 0;
+  padding: 8px 12px 108px;
+}
+
+.language-map-title {
+  margin-bottom: 10px;
+}
+
+.language-map-title #language-route-heading-label {
+  color: var(--muted);
+}
+
+.language-ambient-badge {
+  align-self: start;
+  padding: 8px 14px;
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: 999px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: rgba(203, 234, 255, 0.85);
+  background: rgba(0, 229, 255, 0.06);
+}
+
+.language-route-map {
+  width: 100%;
+  height: calc(100% - 168px);
+  min-height: 280px;
+}
+
+.language-intro-fact.fact-card {
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  max-height: min(132px, 28vh);
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.45;
+  padding: 16px 18px;
+  background: rgba(5, 12, 28, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.language-card-layer {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+}
+
+.language-card-layer .language-card {
+  pointer-events: auto;
 }
 
 .language-card {
@@ -478,6 +549,14 @@ button {
 @keyframes draw-route {
   to {
     stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .language-screen #language-route-line.route-line-active {
+    animation: none;
+    stroke-dashoffset: 0 !important;
+    stroke-dasharray: none !important;
   }
 }
 

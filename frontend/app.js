@@ -131,6 +131,8 @@ const i18n = {
     searchTicketError:
       "Не удалось загрузить поезда с сайта РЖД. Проверьте соединение или попробуйте позже.",
     routeFactUnavailable: "Факт о маршруте временно недоступен.",
+    routeFactLoading: "Подбираем факт о маршруте…",
+    languageAmbientBadge: "Случайный маршрут",
     clarifyHint: "Я дождусь уточнения и только потом подберу варианты.",
     logModalCopy: "Копировать всё",
     logModalCopied: "Скопировано",
@@ -214,6 +216,8 @@ const i18n = {
     searchTicketError:
       "Could not load trains from RZD. Check your connection or try again later.",
     routeFactUnavailable: "Route fact is temporarily unavailable.",
+    routeFactLoading: "Finding a route fact…",
+    languageAmbientBadge: "Random route",
     clarifyHint: "I will wait for clarification before searching options.",
     logModalCopy: "Copy all",
     logModalCopied: "Copied",
@@ -298,6 +302,71 @@ const routeVisuals = {
     ],
   },
 };
+
+/** Города для фоновой анимации на экране выбора языка. */
+const INTRO_AMBIENT_CITIES_RU = [
+  "Москва",
+  "Санкт-Петербург",
+  "Казань",
+  "Нижний Новгород",
+  "Екатеринбург",
+  "Новосибирск",
+  "Красноярск",
+  "Иркутск",
+  "Сочи",
+  "Ростов-на-Дону",
+  "Краснодар",
+  "Самара",
+  "Уфа",
+  "Челябинск",
+  "Омск",
+  "Воронеж",
+  "Липецк",
+  "Тверь",
+  "Ярославль",
+  "Владимир",
+  "Тула",
+  "Рязань",
+  "Волгоград",
+  "Астрахань",
+  "Пермь",
+  "Ульяновск",
+  "Пенза",
+  "Хабаровск",
+  "Владивосток",
+];
+
+const INTRO_AMBIENT_CITIES_EN = [
+  "Moscow",
+  "Saint Petersburg",
+  "Kazan",
+  "Nizhny Novgorod",
+  "Yekaterinburg",
+  "Novosibirsk",
+  "Krasnoyarsk",
+  "Irkutsk",
+  "Sochi",
+  "Rostov-on-Don",
+  "Krasnodar",
+  "Samara",
+  "Ufa",
+  "Chelyabinsk",
+  "Omsk",
+  "Voronezh",
+  "Lipetsk",
+  "Tver",
+  "Yaroslavl",
+  "Vladimir",
+  "Tula",
+  "Ryazan",
+  "Volgograd",
+  "Astrakhan",
+  "Perm",
+  "Ulyanovsk",
+  "Penza",
+  "Khabarovsk",
+  "Vladivostok",
+];
 
 /** Максимум промежуточных точек на SVG-карте маршрута (пары #stop-dot-a…e + #stop-label-a…e в index.html). */
 const ROUTE_MAP_MAX_INTERMEDIATE_STOPS = 5;
@@ -1125,6 +1194,7 @@ const screens = {
   language: document.querySelector("#language-screen"),
   terminal: document.querySelector("#terminal-screen"),
 };
+startLanguageScreenAmbient();
 const assistantText = document.querySelector("#assistant-text");
 const userInput = document.querySelector("#user-input");
 const languageBadge = document.querySelector("#language-badge");
@@ -1221,6 +1291,7 @@ document.querySelector("#chips").addEventListener("click", (event) => {
 });
 
 function setLanguage(nextLanguage) {
+  stopLanguageScreenAmbient();
   language = nextLanguage;
   const copy = i18n[language];
   screens.language.classList.add("hidden");
@@ -1544,6 +1615,161 @@ function updateStopPoint(dot, label, stop) {
   label.setAttribute("x", String(stop.x + 12));
   label.setAttribute("y", String(stop.y - 12));
   label.textContent = stop.name;
+}
+
+let languageAmbientTimer = null;
+let languageAmbientAbort = null;
+
+function pickRandomIntroRoutePair() {
+  const list = language === "ru" ? INTRO_AMBIENT_CITIES_RU : INTRO_AMBIENT_CITIES_EN;
+  if (!list || list.length < 2) {
+    return {
+      origin: language === "ru" ? "Москва" : "Moscow",
+      destination: language === "ru" ? "Казань" : "Kazan",
+    };
+  }
+  let i = Math.floor(Math.random() * list.length);
+  let j = Math.floor(Math.random() * list.length);
+  let guard = 0;
+  while (
+    (i === j || normalizeStationName(list[i]) === normalizeStationName(list[j])) &&
+    guard < 100
+  ) {
+    j = Math.floor(Math.random() * list.length);
+    guard += 1;
+  }
+  if (i === j) {
+    j = (i + 1) % list.length;
+  }
+  return { origin: list[i], destination: list[j] };
+}
+
+function buildIntroRouteVisual(originRaw, destRaw) {
+  const d = String(destRaw || "").trim();
+  const template = findRouteVisual(d);
+  const dyn = getDynamicRouteGeometry(originRaw, destRaw);
+  if (!dyn) {
+    return {
+      ...template,
+      origin: DEFAULT_ROUTE_ORIGIN,
+      stops: [],
+    };
+  }
+  return {
+    ...template,
+    line: dyn.line,
+    origin: dyn.origin,
+    destination: dyn.destination,
+    stops: [],
+  };
+}
+
+function updateIntroMapGeometry(visual, labelOverride) {
+  const originText =
+    labelOverride?.origin ?? (language === "ru" ? "Москва" : "Moscow");
+  const destText =
+    labelOverride?.destination ?? (language === "ru" ? "Казань" : "Kazan");
+  const oVis = visual.origin || DEFAULT_ROUTE_ORIGIN;
+  const originDot = document.querySelector("#language-origin-dot");
+  const destinationDot = document.querySelector("#language-destination-dot");
+  const routePulseEl = document.querySelector("#language-route-pulse");
+  const originLabel = document.querySelector("#language-origin-label");
+  const destinationLabel = document.querySelector("#language-destination-label");
+  if (originDot) {
+    originDot.setAttribute("cx", String(oVis.x));
+    originDot.setAttribute("cy", String(oVis.y));
+  }
+  [destinationDot, routePulseEl].forEach((dot) => {
+    if (!dot) return;
+    dot.setAttribute("cx", String(visual.destination.x));
+    dot.setAttribute("cy", String(visual.destination.y));
+  });
+  if (originLabel) {
+    originLabel.textContent = originText;
+    originLabel.setAttribute("x", String(oVis.labelX ?? oVis.x - 43));
+    originLabel.setAttribute("y", String(oVis.labelY ?? oVis.y + 36));
+  }
+  if (destinationLabel) {
+    destinationLabel.textContent = destText;
+    destinationLabel.setAttribute("x", String(visual.destination.labelX));
+    destinationLabel.setAttribute("y", String(visual.destination.labelY));
+  }
+  for (let i = 0; i < ROUTE_MAP_MAX_INTERMEDIATE_STOPS; i += 1) {
+    const letter = String.fromCharCode(97 + i);
+    const dot = document.querySelector(`#language-stop-dot-${letter}`);
+    const lab = document.querySelector(`#language-stop-label-${letter}`);
+    updateStopPoint(dot, lab, null);
+  }
+}
+
+function applyIntroRouteGeometry(visual, labelOverride) {
+  const introLine = document.querySelector("#language-route-line");
+  const introPulse = document.querySelector("#language-route-pulse");
+  if (!introLine) return;
+  const reducedMotion =
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  introLine.classList.remove("route-line-active");
+  introLine.setAttribute("d", visual.line);
+  introLine.style.strokeDasharray = "";
+  introLine.style.strokeDashoffset = "";
+  if (reducedMotion) {
+    introLine.style.strokeDashoffset = "0";
+    introLine.style.strokeDasharray = "none";
+  }
+  void introLine.getBoundingClientRect();
+  if (!reducedMotion) {
+    introLine.classList.add("route-line-active");
+  }
+  if (introPulse) introPulse.classList.add("route-pulse-active");
+  updateIntroMapGeometry(visual, labelOverride);
+}
+
+async function tickLanguageScreenAmbient() {
+  if (!screens.language || screens.language.classList.contains("hidden")) return;
+  const { origin, destination } = pickRandomIntroRoutePair();
+  const visual = buildIntroRouteVisual(origin, destination);
+  const copy = i18n[language];
+  const heading = document.querySelector("#language-route-heading-label");
+  const badge = document.querySelector("#language-route-ambient-badge");
+  const meta = document.querySelector("#language-route-meta");
+  const ft = document.querySelector("#language-fact-title");
+  const factEl = document.querySelector("#language-route-fact");
+  if (heading) heading.textContent = copy.route;
+  if (ft) ft.textContent = copy.fact;
+  if (badge) badge.textContent = copy.languageAmbientBadge;
+  if (meta) meta.textContent = `${origin} → ${destination}`;
+  applyIntroRouteGeometry(visual, { origin, destination });
+  if (factEl) factEl.textContent = copy.routeFactLoading;
+  languageAmbientAbort?.abort();
+  languageAmbientAbort = new AbortController();
+  try {
+    const res = await postJson(
+      "/api/fun-fact",
+      { language, origin, destination },
+      { signal: languageAmbientAbort.signal },
+    );
+    if (factEl && screens.language && !screens.language.classList.contains("hidden")) {
+      factEl.textContent = res.fact;
+    }
+  } catch (e) {
+    if (e?.name === "AbortError") return;
+    if (factEl) factEl.textContent = copy.routeFactUnavailable;
+  }
+}
+
+function startLanguageScreenAmbient() {
+  stopLanguageScreenAmbient();
+  void tickLanguageScreenAmbient();
+  languageAmbientTimer = window.setInterval(() => void tickLanguageScreenAmbient(), 10000);
+}
+
+function stopLanguageScreenAmbient() {
+  if (languageAmbientTimer != null) {
+    window.clearInterval(languageAmbientTimer);
+    languageAmbientTimer = null;
+  }
+  languageAmbientAbort?.abort();
+  languageAmbientAbort = null;
 }
 
 function localVoiceExplanationFromTrain(train) {
@@ -2935,11 +3161,12 @@ function playOrbTapSound() {
   oscillator.stop(audioContext.currentTime + 0.17);
 }
 
-async function postJson(path, payload) {
+async function postJson(path, payload, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal: options.signal,
   });
   if (!response.ok) {
     throw new Error(`API error ${response.status}`);
