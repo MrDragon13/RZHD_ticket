@@ -552,7 +552,12 @@ button {
   filter: drop-shadow(0 0 14px rgba(0, 235, 255, 0.55)) drop-shadow(0 0 28px rgba(0, 255, 200, 0.35));
 }
 
+/* Однотонный stroke: линейный градиент по bbox делает яркое «окно» только на части линии — как будто подсветка не едет дальше ~10%. */
 .route-line-flow.route-line-flow-active {
+  stroke: rgba(255, 255, 255, 0.92) !important;
+}
+
+.route-line-flow.route-line-flow--css-only {
   animation: route-flow-travel var(--route-flow-duration, 8s) linear infinite;
 }
 
@@ -561,7 +566,6 @@ button {
     stroke-dashoffset: 0;
   }
   to {
-    /* Один период = длина пути (в JS dash+gap = pathLen) — смещение на -pathLen за цикл. */
     stroke-dashoffset: calc(-1 * var(--route-flow-period, 1200));
   }
 }
@@ -583,8 +587,8 @@ button {
     stroke-dasharray: none !important;
   }
 
-  .route-line-flow.route-line-flow-active {
-    animation: none;
+  .route-line-flow.route-line-flow--css-only {
+    animation: none !important;
     opacity: 0.28 !important;
   }
 }

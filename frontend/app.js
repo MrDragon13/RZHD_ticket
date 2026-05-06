@@ -782,40 +782,80 @@ function routeMapDestinationKey() {
   return String(intent?.destination || "").trim();
 }
 
-/** Световой «поток» по линии маршрута (нижний слой под основной обводкой). */
+/** Отмена WAAPI-анимаций обводки (иначе «застывает» при смене пути). */
+function cancelSvgFlowAnimations(el) {
+  if (!el || typeof el.getAnimations !== "function") return;
+  try {
+    for (const a of el.getAnimations()) {
+      a.cancel();
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Световой «поток» по линии маршрута (поверх базовой обводки). */
 function syncRouteFlowOverlay(flowEl, pathD) {
   if (!flowEl || !pathD) return;
+  cancelSvgFlowAnimations(flowEl);
   try {
     flowEl.setAttribute("d", pathD);
     flowEl.style.opacity = "";
-    flowEl.classList.remove("route-line-flow-active");
+    flowEl.classList.remove("route-line-flow-active", "route-line-flow--css-only");
     void flowEl.getBoundingClientRect();
     try {
       const rawLen = flowEl.getTotalLength();
       const pathLen = Number.isFinite(rawLen) && rawLen > 8 ? rawLen : 1100;
-      flowEl.style.setProperty("--route-flow-period", String(pathLen));
-      // Сумма dash+gap = длине пути: на линии ровно одна «волна» света, плавно бежит к концу.
+      // Сумма dash+gap = длине пути — один светлый сегмент пробегает всю кривую.
       const headLen = Math.round(
         Math.min(Math.max(pathLen * 0.11, 26), Math.min(150, pathLen * 0.42)),
       );
       const gapLen = Math.max(pathLen - headLen, 1);
       flowEl.style.strokeDasharray = `${headLen} ${gapLen}`;
-      flowEl.style.strokeDashoffset = "0";
-      const durSec = Math.min(16, Math.max(5.5, pathLen / 72));
-      flowEl.style.setProperty("--route-flow-duration", `${durSec}s`);
+      /* Инлайн stroke-dashoffset ломает анимацию на SVG в WebKit — только removeProperty + WAAPI/CSS. */
+      flowEl.style.removeProperty("stroke-dashoffset");
+
+      const durMs = Math.min(16000, Math.max(5500, (pathLen / 72) * 1000));
+
+      flowEl.classList.add("route-line-flow-active");
+      flowEl.classList.remove("route-line-flow--css-only");
+
+      if (typeof flowEl.animate === "function") {
+        flowEl.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: -pathLen }], {
+          duration: durMs,
+          iterations: Infinity,
+          easing: "linear",
+        });
+      } else {
+        flowEl.style.setProperty("--route-flow-period", String(pathLen));
+        flowEl.style.setProperty("--route-flow-duration", `${durMs / 1000}s`);
+        flowEl.classList.add("route-line-flow--css-only");
+      }
     } catch {
       flowEl.style.strokeDasharray = "48 952";
-      flowEl.style.setProperty("--route-flow-period", "1000");
-      flowEl.style.setProperty("--route-flow-duration", "9s");
+      flowEl.style.removeProperty("stroke-dashoffset");
+      flowEl.classList.add("route-line-flow-active");
+      flowEl.classList.remove("route-line-flow--css-only");
+      const fallbackLen = 1000;
+      if (typeof flowEl.animate === "function") {
+        flowEl.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: -fallbackLen }], {
+          duration: 9000,
+          iterations: Infinity,
+          easing: "linear",
+        });
+      } else {
+        flowEl.style.setProperty("--route-flow-period", String(fallbackLen));
+        flowEl.style.setProperty("--route-flow-duration", "9s");
+        flowEl.classList.add("route-line-flow--css-only");
+      }
     }
-    flowEl.classList.add("route-line-flow-active");
   } catch (e) {
     try {
       console.warn("[route-flow]", e);
     } catch {
       /* ignore */
     }
-    flowEl.classList.remove("route-line-flow-active");
+    flowEl.classList.remove("route-line-flow-active", "route-line-flow--css-only");
   }
 }
 
@@ -823,6 +863,7 @@ function applyRouteGeometry(visual, labelOverride) {
   if (!routeLine || !visual?.line) return;
   routeLine.classList.remove("route-line-active");
   routeLineFlow?.classList.remove("route-line-flow-active");
+  routeLineFlow?.classList.remove("route-line-flow--css-only");
   routeLine.setAttribute("d", visual.line);
   if (visual.routeClip && Number.isFinite(visual.routeClip.totalLen) && visual.routeClip.totalLen > 0) {
     const L = visual.routeClip.totalLen;
@@ -841,8 +882,9 @@ function applyRouteGeometry(visual, labelOverride) {
   if (!flowReduced && routeLineFlow) {
     syncRouteFlowOverlay(routeLineFlow, visual.line);
   } else if (routeLineFlow) {
+    cancelSvgFlowAnimations(routeLineFlow);
     routeLineFlow.setAttribute("d", visual.line);
-    routeLineFlow.classList.remove("route-line-flow-active");
+    routeLineFlow.classList.remove("route-line-flow-active", "route-line-flow--css-only");
     routeLineFlow.style.strokeDasharray = "none";
     routeLineFlow.style.opacity = "0.22";
   }
@@ -1801,8 +1843,9 @@ function applyIntroRouteGeometry(visual, labelOverride) {
     if (!reducedMotion) {
       syncRouteFlowOverlay(introFlow, visual.line);
     } else {
+      cancelSvgFlowAnimations(introFlow);
       introFlow.setAttribute("d", visual.line);
-      introFlow.classList.remove("route-line-flow-active");
+      introFlow.classList.remove("route-line-flow-active", "route-line-flow--css-only");
       introFlow.style.strokeDasharray = "none";
       introFlow.style.opacity = "0.22";
     }
@@ -1870,6 +1913,11 @@ function stopLanguageScreenAmbient() {
   }
   languageAmbientAbort?.abort();
   languageAmbientAbort = null;
+  const introFlow = document.querySelector("#language-route-line-flow");
+  if (introFlow) {
+    cancelSvgFlowAnimations(introFlow);
+    introFlow.classList.remove("route-line-flow-active", "route-line-flow--css-only");
+  }
 }
 
 function localVoiceExplanationFromTrain(train) {
@@ -3433,6 +3481,8 @@ function resetScenario(announce = true) {
         : "A route fact will appear after ticket search.";
   routeLine?.classList.remove("route-line-active");
   routeLineFlow?.classList.remove("route-line-flow-active");
+  routeLineFlow?.classList.remove("route-line-flow--css-only");
+  if (routeLineFlow) cancelSvgFlowAnimations(routeLineFlow);
   if (routeLine) {
     routeLine.style.strokeDasharray = "";
     routeLine.style.strokeDashoffset = "";
