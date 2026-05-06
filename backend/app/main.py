@@ -9,10 +9,10 @@ _level_name = os.getenv("LOG_LEVEL", "INFO").strip().upper()
 _level = getattr(logging, _level_name, logging.INFO)
 logging.basicConfig(level=_level, format="%(levelname)s %(name)s %(message)s", force=True)
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.models import (
     DemoCheckoutRequest,
@@ -24,6 +24,9 @@ from app.models import (
     HealthResponse,
     RecommendRequest,
     RecommendResponse,
+    SpeechSettingsResponse,
+    SpeechToTextResponse,
+    TextToSpeechRequest,
     TicketSearchRequest,
     TicketSearchResponse,
     TrainRouteStopsRequest,
@@ -33,10 +36,14 @@ from app.models import (
     TripIntent,
     UnderstandRequest,
 )
+from app.services.audio_convert import webm_or_any_to_wav_16k_mono
 from app.services.checkout import create_demo_ticket
 from app.services.deepseek_client import DeepSeekClient
+from app.services.piper_tts import synthesize_wav
 from app.services.recommendations import recommend_trains
 from app.services.rzd_adapter import RzdDataAdapter
+from app.services.speech_config import effective_stt_engine, effective_tts_engine, piper_voice_ready, stt_engine_for_client, tts_engine_for_client
+from app.services.vosk_stt import transcribe_wav_pcm_bytes
 
 
 # FastAPI-приложение является центральной точкой backend. Оно держит ключ DeepSeek
@@ -144,6 +151,51 @@ async def health() -> HealthResponse:
     """Healthcheck для VDS, reverse proxy и быстрой ручной проверки."""
 
     return HealthResponse()
+
+
+@app.get("/api/speech-settings", response_model=SpeechSettingsResponse)
+async def speech_settings() -> SpeechSettingsResponse:
+    """Режимы STT/TTS для клиента (отдельно распознавание и синтез)."""
+
+    return SpeechSettingsResponse(
+        stt_engine=stt_engine_for_client(),
+        tts_engine=tts_engine_for_client(),
+    )
+
+
+@app.post("/api/stt", response_model=SpeechToTextResponse)
+async def speech_to_text(audio: UploadFile = File(...)) -> SpeechToTextResponse:
+    """Распознавание с микрофона (аудио webm/wav/…) через Vosk на сервере."""
+
+    if effective_stt_engine() != "vosk":
+        raise HTTPException(status_code=503, detail="stt_mode_not_vosk")
+    raw = await audio.read()
+    if len(raw) < 64:
+        raise HTTPException(status_code=400, detail="audio_too_short")
+    try:
+        wav = webm_or_any_to_wav_16k_mono(raw)
+        text = transcribe_wav_pcm_bytes(wav)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    return SpeechToTextResponse(text=text)
+
+
+@app.post("/api/tts")
+async def text_to_speech(req: TextToSpeechRequest) -> Response:
+    """Озвучка Piper (WAV); при режиме legacy клиент не должен вызывать."""
+
+    if effective_tts_engine() != "piper":
+        raise HTTPException(status_code=503, detail="tts_mode_not_piper")
+    lang = req.language
+    if lang == "en" and not piper_voice_ready("en"):
+        raise HTTPException(status_code=503, detail="piper_en_voice_missing")
+    try:
+        wav = synthesize_wav(req.text, lang)
+    except (RuntimeError, ValueError):
+        raise HTTPException(status_code=500, detail="tts_failed") from None
+    return Response(content=wav, media_type="audio/wav")
 
 
 @app.post("/api/understand", response_model=TripIntent)

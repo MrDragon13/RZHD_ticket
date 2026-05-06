@@ -133,6 +133,8 @@ const i18n = {
     routeFactUnavailable: "Факт о маршруте временно недоступен.",
     routeFactLoading: "Подбираем факт о маршруте…",
     languageAmbientBadge: "Случайный маршрут",
+    speechTapAgain: "Нажмите сферу ещё раз, чтобы отправить запись.",
+    speechNotUnderstood: "Не разобрал речь. Повторите или введите текст.",
     clarifyHint: "Я дождусь уточнения и только потом подберу варианты.",
     logModalCopy: "Копировать всё",
     logModalCopied: "Скопировано",
@@ -218,6 +220,8 @@ const i18n = {
     routeFactUnavailable: "Route fact is temporarily unavailable.",
     routeFactLoading: "Finding a route fact…",
     languageAmbientBadge: "Random route",
+    speechTapAgain: "Tap the sphere again to send your recording.",
+    speechNotUnderstood: "Could not understand. Try again or type.",
     clarifyHint: "I will wait for clarification before searching options.",
     logModalCopy: "Copy all",
     logModalCopied: "Copied",
@@ -951,6 +955,17 @@ function formatRoutePair(origin, destination, lang = language) {
   if (d) return d;
   return "—";
 }
+
+/** Режимы STT/TTS с сервера (по умолчанию Vosk + Piper). */
+let speechSettings = { stt_engine: "vosk", tts_engine: "piper" };
+let pathSpeechAudio = null;
+let voskMimeType = "audio/webm";
+let voskMediaRecorder = null;
+let voskMediaStream = null;
+let voskRecordedChunks = [];
+let voskRecordingActive = false;
+let voskAutoStopTimer = null;
+
 let state = {};
 let intent = null;
 let trains = [];
@@ -1381,6 +1396,7 @@ function updateTextInputToggleLabels() {
 
 updateTextInputToggleLabels();
 initPathLogModal();
+void refreshSpeechSettings();
 try {
   startLanguageScreenAmbient();
 } catch (ambientBootErr) {
@@ -3203,15 +3219,123 @@ function renderTicket() {
 
 function stopAssistantSpeech() {
   speechQueue.length = 0;
+  if (pathSpeechAudio) {
+    try {
+      pathSpeechAudio.pause();
+    } catch {
+      /* ignore */
+    }
+    pathSpeechAudio.src = "";
+    pathSpeechAudio = null;
+  }
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
+  abortVoskCapture();
   isSpeaking = false;
 }
 
-function startVoiceRecognition() {
-  stopAssistantSpeech();
-  playOrbTapSound();
+function abortVoskCapture() {
+  if (voskAutoStopTimer != null) {
+    clearTimeout(voskAutoStopTimer);
+    voskAutoStopTimer = null;
+  }
+  if (voskMediaRecorder && voskRecordingActive) {
+    try {
+      voskMediaRecorder.onstop = null;
+      if (voskMediaRecorder.state === "recording") voskMediaRecorder.stop();
+    } catch {
+      /* ignore */
+    }
+  }
+  if (voskMediaStream) {
+    try {
+      voskMediaStream.getTracks().forEach((t) => t.stop());
+    } catch {
+      /* ignore */
+    }
+    voskMediaStream = null;
+  }
+  voskMediaRecorder = null;
+  voskRecordedChunks = [];
+  voskRecordingActive = false;
+  const hint = document.querySelector("#start-prompt");
+  if (hint) hint.textContent = i18n[language].startPrompt;
+}
+
+async function toggleVoskCapture() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    assistantSay(i18n[language].noSpeech);
+    return;
+  }
+  if (voskRecordingActive && voskMediaRecorder && voskMediaRecorder.state === "recording") {
+    voskMediaRecorder.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    voskMediaStream = stream;
+    voskRecordedChunks = [];
+    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : "audio/webm";
+    voskMimeType = mime;
+    voskMediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+    voskMediaRecorder.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size) voskRecordedChunks.push(ev.data);
+    };
+    voskMediaRecorder.onstop = async () => {
+      voskRecordingActive = false;
+      voskAutoStopTimer = null;
+      try {
+        voskMediaStream?.getTracks().forEach((t) => t.stop());
+      } catch {
+        /* ignore */
+      }
+      voskMediaStream = null;
+      voskMediaRecorder = null;
+      const blob = new Blob(voskRecordedChunks, { type: voskMimeType });
+      voskRecordedChunks = [];
+      const hint = document.querySelector("#start-prompt");
+      if (hint) hint.textContent = i18n[language].startPrompt;
+      if (!blob.size) {
+        if (uiStage !== "searching") setOrbMode("idle");
+        return;
+      }
+      try {
+        const fd = new FormData();
+        fd.append("audio", blob, "speech.webm");
+        const res = await fetch(`${API_BASE_URL}/api/stt`, { method: "POST", body: fd });
+        if (!res.ok) throw new Error("stt");
+        const data = await res.json();
+        const spokenText = String(data.text || "").trim();
+        if (spokenText) {
+          userInput.value = spokenText;
+          handleUserText(spokenText);
+        } else {
+          assistantSay(i18n[language].speechNotUnderstood);
+        }
+      } catch {
+        assistantSay(i18n[language].noSpeech);
+      }
+      if (uiStage !== "searching") setOrbMode("idle");
+    };
+    voskMediaRecorder.start();
+    voskRecordingActive = true;
+    setOrbMode("listening");
+    const hintEl = document.querySelector("#start-prompt");
+    if (hintEl) hintEl.textContent = i18n[language].speechTapAgain;
+    voskAutoStopTimer = window.setTimeout(() => {
+      if (voskMediaRecorder && voskMediaRecorder.state === "recording") {
+        voskMediaRecorder.stop();
+      }
+    }, 20000);
+  } catch {
+    assistantSay(i18n[language].noSpeech);
+  }
+}
+
+function startLegacyVoiceRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     assistantSay(i18n[language].noSpeech);
@@ -3224,8 +3348,6 @@ function startVoiceRecognition() {
   setOrbMode("listening");
   recognition.onresult = (event) => {
     const spokenText = event.results[0][0].transcript;
-    // Голосовой ввод сначала появляется в поле: пассажир видит, что понял
-    // браузерный STT, и только затем фраза отправляется ассистенту.
     userInput.value = spokenText;
     handleUserText(spokenText);
   };
@@ -3234,6 +3356,16 @@ function startVoiceRecognition() {
     if (uiStage !== "searching") setOrbMode("idle");
   };
   recognition.start();
+}
+
+function startVoiceRecognition() {
+  stopAssistantSpeech();
+  playOrbTapSound();
+  if (speechSettings.stt_engine === "vosk" && language === "ru") {
+    void toggleVoskCapture();
+    return;
+  }
+  startLegacyVoiceRecognition();
 }
 
 function assistantSay(text, options = {}) {
@@ -3287,19 +3419,68 @@ function speakNext() {
     return;
   }
   isSpeaking = true;
-  speak(speechQueue.shift());
+  const piece = speechQueue.shift();
+  void runSpeakPipeline(piece);
 }
 
-function speak(text) {
-  if (!("speechSynthesis" in window)) return;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = language === "ru" ? "ru-RU" : "en-US";
-  utterance.rate = 0.95;
-  utterance.onend = () => {
+async function fetchTtsWav(text, lang) {
+  const res = await fetch(`${API_BASE_URL}/api/tts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, language: lang }),
+  });
+  if (!res.ok) throw new Error(`tts ${res.status}`);
+  return res.blob();
+}
+
+function speakBrowserPromise(text) {
+  return new Promise((resolve) => {
+    if (!("speechSynthesis" in window)) {
+      resolve();
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = language === "ru" ? "ru-RU" : "en-US";
+    utterance.rate = 0.95;
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
+async function playSpeechBlob(blob) {
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  pathSpeechAudio = audio;
+  try {
+    await audio.play();
+    await new Promise((resolve) => {
+      audio.onended = resolve;
+      audio.onerror = resolve;
+    });
+  } catch {
+    /* ignore */
+  } finally {
+    URL.revokeObjectURL(url);
+    if (pathSpeechAudio === audio) pathSpeechAudio = null;
+  }
+}
+
+async function runSpeakPipeline(text) {
+  try {
+    if (speechSettings.tts_engine === "piper") {
+      try {
+        const blob = await fetchTtsWav(text, language);
+        await playSpeechBlob(blob);
+      } catch {
+        await speakBrowserPromise(text);
+      }
+    } else {
+      await speakBrowserPromise(text);
+    }
+  } finally {
     speakNext();
-  };
-  utterance.onerror = () => speakNext();
-  window.speechSynthesis.speak(utterance);
+  }
 }
 
 function playOrbTapSound() {
@@ -3332,6 +3513,16 @@ async function postJson(path, payload, options = {}) {
     throw new Error(`API error ${response.status}`);
   }
   return response.json();
+}
+
+async function refreshSpeechSettings() {
+  try {
+    const r = await fetch(`${API_BASE_URL}/api/speech-settings`);
+    if (!r.ok) return;
+    speechSettings = await r.json();
+  } catch {
+    /* нет сети или старый backend */
+  }
 }
 
 function formatPrice(price) {
@@ -3469,6 +3660,15 @@ function resetScenario(announce = true) {
   isSpeaking = false;
   dynamicRouteCache = { key: "", geom: null };
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  if (pathSpeechAudio) {
+    try {
+      pathSpeechAudio.pause();
+    } catch {
+      /* ignore */
+    }
+    pathSpeechAudio = null;
+  }
+  abortVoskCapture();
   if (userInput) userInput.value = "";
   if (transcript) transcript.textContent = "";
   if (assistantText) assistantText.textContent = i18n[language].assistantReady;

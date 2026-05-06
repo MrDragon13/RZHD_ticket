@@ -403,6 +403,26 @@ class DemoTicket(BaseModel):
     disclaimer: str
 
 
+SpeechEngineStt = Literal["vosk", "legacy"]
+SpeechEngineTts = Literal["piper", "legacy"]
+
+
+class SpeechSettingsResponse(BaseModel):
+    """Активные режимы речи: серверные Vosk/Piper или браузерный Web Speech API."""
+
+    stt_engine: SpeechEngineStt
+    tts_engine: SpeechEngineTts
+
+
+class SpeechToTextResponse(BaseModel):
+    text: str
+
+
+class TextToSpeechRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=8000)
+    language: Language = "ru"
+
+
 class HealthResponse(BaseModel):
     """Минимальный healthcheck для мониторинга VDS."""
 
