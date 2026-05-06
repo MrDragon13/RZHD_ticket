@@ -117,6 +117,7 @@ async function getJson(path, options = {}) {
 
 /** Ввод в поле текста и «Отправить» открывает журнал с этой точной строкой (без учёта регистра). */
 const PATH_DEBUG_TRIGGER = "logloglog";
+const THEME_STORAGE_KEY = "path-theme-v1";
 const PATH_LOG_CAP = 600;
 const pathClientLogs = [];
 
@@ -256,7 +257,9 @@ const i18n = {
     logModalClose: "Закрыть",
     logModalClear: "Очистить",
     logModalEmpty: "(Записей пока нет)",
-    userRole: "Вы",
+    themeToggleAria: "Переключить тему оформления: неон или корпоративная палитра РЖД",
+    themeNeonShort: "Неон",
+    themeRzdShort: "РЖД",
     assistantRole: "Путь",
     stages: {
       initial: ["Казань утром", "Подешевле", "Хочу выспаться", "Без пересадок", "С ребенком"],
@@ -344,7 +347,9 @@ const i18n = {
     logModalClose: "Close",
     logModalClear: "Clear",
     logModalEmpty: "(No entries yet)",
-    userRole: "You",
+    themeToggleAria: "Switch color theme: neon or RZD corporate palette",
+    themeNeonShort: "Neon",
+    themeRzdShort: "RZD",
     assistantRole: "Path",
     stages: {
       initial: ["Kazan morning", "Cheaper", "I want to sleep", "Direct only", "With a child"],
@@ -1505,7 +1510,8 @@ function updateTextInputToggleLabels() {
   textInputToggle.setAttribute("aria-label", textInputPanelOpen ? copy.textInputAriaHide : copy.textInputAriaShow);
 }
 
-updateTextInputToggleLabels();
+.updateTextInputToggleLabels();
+initThemeToggle();
 initPathLogModal();
 try {
   startLanguageScreenAmbient();
@@ -1564,6 +1570,7 @@ function setLanguage(nextLanguage) {
   if (confirmSeatsButton) confirmSeatsButton.textContent = copy.seatPickerConfirm;
   resetScenario(false);
   updateTextInputToggleLabels();
+  refreshThemeToggleLabels();
   assistantSay(copy.assistantReady, { addToHistory: true });
   void pingBackendHealth();
 }
@@ -3294,6 +3301,13 @@ function buildDemoTicketQrPayload() {
   ].join("\n");
 }
 
+function qrColorsFromTheme() {
+  const cs = getComputedStyle(document.documentElement);
+  const colorDark = (cs.getPropertyValue("--qr-dark") || "#071018").trim();
+  const colorLight = (cs.getPropertyValue("--qr-light") || "#ffffff").trim();
+  return { colorDark, colorLight };
+}
+
 function renderTicketQrCanvas(payloadText) {
   const wrap = document.querySelector("#ticket-qr-wrap");
   const thanksEl = document.querySelector("#ticket-thanks");
@@ -3314,8 +3328,7 @@ function renderTicketQrCanvas(payloadText) {
   const baseOpts = {
     width: TICKET_QR_RENDER_PX,
     height: TICKET_QR_RENDER_PX,
-    colorDark: "#071018",
-    colorLight: "#ffffff",
+    ...qrColorsFromTheme(),
   };
 
   /** ticket_id уже вида PATH-… — не добавляем второй префикс PATH: */
@@ -3641,6 +3654,52 @@ function initPathLogModal() {
       closePathLogModal();
     }
   });
+}
+
+function initThemeToggle() {
+  const html = document.documentElement;
+  let stored = null;
+  try {
+    stored = localStorage.getItem(THEME_STORAGE_KEY);
+  } catch {
+    stored = null;
+  }
+  if (stored !== "neon" && stored !== "rzd") stored = "neon";
+  html.dataset.theme = stored;
+
+  const btn = document.getElementById("theme-toggle");
+  if (!btn) return;
+
+  const syncActiveClass = () => {
+    btn.classList.toggle("theme-toggle--rzd-active", html.dataset.theme === "rzd");
+    btn.setAttribute("aria-pressed", html.dataset.theme === "rzd" ? "true" : "false");
+  };
+
+  btn.addEventListener("click", () => {
+    html.dataset.theme = html.dataset.theme === "rzd" ? "neon" : "rzd";
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, html.dataset.theme);
+    } catch {
+      /* private mode */
+    }
+    syncActiveClass();
+    refreshThemeToggleLabels();
+    if (demoTicket) renderTicketQrCanvas(buildDemoTicketQrPayload());
+  });
+
+  syncActiveClass();
+  refreshThemeToggleLabels();
+}
+
+function refreshThemeToggleLabels() {
+  const btn = document.getElementById("theme-toggle");
+  if (!btn) return;
+  const copy = i18n[language];
+  btn.setAttribute("aria-label", copy.themeToggleAria);
+  const neonEl = btn.querySelector(".theme-toggle__neon");
+  const rzdEl = btn.querySelector(".theme-toggle__rzd");
+  if (neonEl) neonEl.textContent = copy.themeNeonShort;
+  if (rzdEl) rzdEl.textContent = copy.themeRzdShort;
 }
 
 function runLocalDemoFallback() {

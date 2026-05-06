@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="neon">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -322,6 +322,20 @@
           <pre id="path-log-modal-content" class="path-log-modal-content" tabindex="0"></pre>
         </div>
       </div>
+    </div>
+
+    <div class="theme-toggle-host">
+      <button
+        type="button"
+        id="theme-toggle"
+        class="theme-toggle"
+        aria-pressed="false"
+        aria-label="Переключить тему оформления"
+      >
+        <span class="theme-toggle__neon theme-toggle__opt">Неон</span>
+        <span class="theme-toggle__sep" aria-hidden="true">/</span>
+        <span class="theme-toggle__rzd theme-toggle__opt">РЖД</span>
+      </button>
     </div>
 
     <!-- app.js первым: если qrcode недоступен на CDN/кэше, интерфейс и язык всё равно работают (QR подгружается позже). -->
