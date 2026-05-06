@@ -2303,7 +2303,16 @@ function renderTicket() {
   ticketPanel.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
+function stopAssistantSpeech() {
+  speechQueue.length = 0;
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+  isSpeaking = false;
+}
+
 function startVoiceRecognition() {
+  stopAssistantSpeech();
   playOrbTapSound();
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
