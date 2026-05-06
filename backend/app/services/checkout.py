@@ -71,7 +71,12 @@ def create_demo_ticket(request: DemoCheckoutRequest) -> DemoTicket:
         car = random_car
         seat_s, berth_type = _pick_demo_seat(train.seat_details.model_dump(), request.language)
 
-    route = f"{train.departure_station} -> {train.arrival_station}"
+    dep_s = (train.departure_station or "").strip()
+    arr_s = (train.arrival_station or "").strip()
+    if request.language == "en":
+        route = f"{dep_s} to {arr_s}" if dep_s and arr_s else dep_s or arr_s
+    else:
+        route = f"{dep_s} в {arr_s}" if dep_s and arr_s else dep_s or arr_s
 
     warning = (
         "Демонстрационный билет. Не является проездным документом. Оплата не производится."

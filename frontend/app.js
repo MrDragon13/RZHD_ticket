@@ -904,7 +904,7 @@ function updateRouteMapForSelectedTrain() {
   const metaOrigin = String(intent?.origin || "").trim();
   const metaDest = String(intent?.destination || "").trim();
   const kmDur = routeDistanceLabel();
-  let metaText = `${metaOrigin} → ${metaDest}`;
+  let metaText = formatRoutePair(metaOrigin, metaDest);
   if (kmDur) metaText += ` · ${kmDur}`;
   document.querySelector("#route-meta").textContent = metaText;
 }
@@ -941,6 +941,16 @@ const amenityLabels = {
 };
 
 let language = "ru";
+
+/** Пара городов для экрана и озвучки: RU «А в Б», EN «A to B» (без «стрелки» для TTS). */
+function formatRoutePair(origin, destination, lang = language) {
+  const o = String(origin ?? "").trim();
+  const d = String(destination ?? "").trim();
+  if (o && d) return lang === "ru" ? `${o} в ${d}` : `${o} to ${d}`;
+  if (o) return o;
+  if (d) return d;
+  return "—";
+}
 let state = {};
 let intent = null;
 let trains = [];
@@ -1870,7 +1880,7 @@ async function tickLanguageScreenAmbient() {
     if (heading) heading.textContent = copy.route;
     if (ft) ft.textContent = copy.fact;
     if (badge) badge.textContent = copy.languageAmbientBadge;
-    if (meta) meta.textContent = `${origin} → ${destination}`;
+    if (meta) meta.textContent = formatRoutePair(origin, destination);
     applyIntroRouteGeometry(visual, { origin, destination });
     if (factEl) factEl.textContent = copy.routeFactLoading;
   } catch (e) {
@@ -2000,7 +2010,7 @@ function renderTrains() {
         <span></span>
         <strong>${train.arrival_time}</strong>
       </div>
-      <p>${train.departure_station} -> ${train.arrival_station}</p>
+      <p>${escapeHtml(formatRoutePair(train.departure_station, train.arrival_station))}</p>
       <p>${train.duration_label} · ${train.route_distance_km} ${language === "ru" ? "км" : "km"}</p>
       <p class="reason">${recommendation?.explanation || ""}</p>
       <div class="seat-grid">
@@ -2720,7 +2730,7 @@ function renderCheckoutTrainSummary(train) {
       <span class="checkout-train-dash"></span>
       <strong>${train.arrival_time}</strong>
     </div>
-    <p class="checkout-train-route">${train.departure_station} → ${train.arrival_station}</p>
+    <p class="checkout-train-route">${escapeHtml(formatRoutePair(train.departure_station, train.arrival_station))}</p>
     <p class="checkout-train-meta">${train.duration_label} · ${train.route_distance_km} ${language === "ru" ? "км" : "km"}</p>
     ${recommendation?.explanation ? `<p class="checkout-train-reason">${escapeHtml(recommendation.explanation)}</p>` : ""}
     <div class="checkout-train-amenities">${renderAmenityBadges(train.amenities)}</div>
@@ -3473,7 +3483,10 @@ function resetScenario(announce = true) {
   const routeMeta = document.querySelector("#route-meta");
   const routeFactEl = document.querySelector("#route-fact");
   if (routeMeta)
-    routeMeta.textContent = language === "ru" ? "Москва -> Казань" : "Moscow -> Kazan";
+    routeMeta.textContent = formatRoutePair(
+      language === "ru" ? "Москва" : "Moscow",
+      language === "ru" ? "Казань" : "Kazan",
+    );
   if (routeFactEl)
     routeFactEl.textContent =
       language === "ru"

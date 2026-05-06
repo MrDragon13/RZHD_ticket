@@ -231,7 +231,7 @@ def _ready_to_search_text(language: str, state: dict) -> str:
     date_spoken = _format_date_for_assistant_speech(state.get("date"), language)
     if language == "en":
         return f"Thank you. I have the route: {origin} to {destination}, {date_spoken}. Searching suitable trains."
-    return f"Спасибо. Маршрут собран: {origin} -> {destination}, {date_spoken}. Подбираю подходящие поезда."
+    return f"Спасибо. Маршрут собран: {origin} в {destination}, {date_spoken}. Подбираю подходящие поезда."
 
 
 @app.post("/api/tickets/search", response_model=TicketSearchResponse)
