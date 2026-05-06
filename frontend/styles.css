@@ -546,9 +546,10 @@ button {
   fill: none;
   pointer-events: none;
   stroke-linecap: round;
-  opacity: 0.78;
-  mix-blend-mode: screen;
-  filter: drop-shadow(0 0 12px rgba(0, 235, 255, 0.55)) drop-shadow(0 0 26px rgba(0, 255, 180, 0.28));
+  /* Рисуется поверх #route-line: без «screen» иначе подложка перекрывалась и эффект почти не виден */
+  opacity: 0.96;
+  mix-blend-mode: normal;
+  filter: drop-shadow(0 0 14px rgba(0, 235, 255, 0.55)) drop-shadow(0 0 28px rgba(0, 255, 200, 0.35));
 }
 
 .route-line-flow.route-line-flow-active {
