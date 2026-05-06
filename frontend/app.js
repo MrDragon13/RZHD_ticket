@@ -1925,6 +1925,8 @@ function countBerthsByKind(seats) {
  * чтобы занятость считалась согласованно с раскладкой.
  * При частичных суммах РЖД свободными остаются только места из berth_available; по остальным
  * местам вагона считаем, что они проданы (в merge ниже ограничиваем free по фрагменту).
+ *
+ * Проектная политика (не менять без согласования): docs/DEV_RZD_FRAGMENT_RULES.md
  */
 function mergedCarriageDetailForLayout(train, car, seats) {
   const d = carriageDetailForTab(train, car);

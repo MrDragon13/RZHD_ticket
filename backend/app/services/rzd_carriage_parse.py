@@ -1,4 +1,7 @@
-"""Разбор JSON слоя вагонов РЖД (pass.rzd.ru) и вложенных seats в строках поиска."""
+"""Разбор JSON слоя вагонов РЖД (pass.rzd.ru) и вложенных seats в строках поиска.
+
+Политика по фрагментированным ответам (занятость, вместимость): docs/DEV_RZD_FRAGMENT_RULES.md
+"""
 
 from __future__ import annotations
 
