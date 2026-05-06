@@ -6,11 +6,11 @@ import logging
 import os
 import re
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, Literal, Sequence
 
 import httpx
 
-from app.models import CarriageDetail, TrainOption, TripIntent
+from app.models import CarriageDetail, DialogTurn, TrainOption, TripIntent
 
 
 def _dedupe_preserve(items: list[str], *, limit: int, max_len: int) -> list[str]:
@@ -120,11 +120,30 @@ class DeepSeekClient:
 
         return bool(self.api_key)
 
+    def _prior_chat_messages(
+        self,
+        prior_messages: Sequence[tuple[Literal["user", "assistant"], str]] | None,
+    ) -> list[dict[str, str]]:
+        """Последние реплики до финального user JSON — дают модели контекст диалога."""
+
+        out: list[dict[str, str]] = []
+        if not prior_messages:
+            return out
+        for role, content in prior_messages[-10:]:
+            text = (content or "").strip()
+            if not text:
+                continue
+            if role not in ("user", "assistant"):
+                continue
+            out.append({"role": role, "content": text[:2000]})
+        return out
+
     async def chat_text(
         self,
         system_prompt: str,
         user_prompt: str,
         *,
+        prior_messages: Sequence[tuple[Literal["user", "assistant"], str]] | None = None,
         timeout_seconds: float | None = None,
     ) -> str:
         """Возвращает обычный текстовый ответ LLM.
@@ -137,12 +156,13 @@ class DeepSeekClient:
         if not self.enabled:
             raise RuntimeError("DeepSeek API key is not configured")
 
+        messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+        messages.extend(self._prior_chat_messages(prior_messages))
+        messages.append({"role": "user", "content": user_prompt})
+
         payload = {
             "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+            "messages": messages,
             "temperature": 0.35,
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
@@ -162,14 +182,20 @@ class DeepSeekClient:
             data = response.json()
             return data["choices"][0]["message"]["content"].strip()
 
-    async def chat_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def chat_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        prior_messages: Sequence[tuple[Literal["user", "assistant"], str]] | None = None,
+    ) -> dict[str, Any]:
         """Запрашивает у LLM строгий JSON и аккуратно его разбирает.
 
         DeepSeek обычно следует инструкции, но модель все равно может добавить
         markdown-блок. Поэтому ниже есть небольшой безопасный очиститель.
         """
 
-        text = await self.chat_text(system_prompt, user_prompt)
+        text = await self.chat_text(system_prompt, user_prompt, prior_messages=prior_messages)
         return self._parse_json_payload(text)
 
     def _parse_json_payload(self, text: str) -> dict[str, Any]:
@@ -304,15 +330,39 @@ class DeepSeekClient:
             out["origin"] = origin_hint
         return out
 
-    async def understand_trip(self, language: str, text: str, origin_hint: str | None) -> dict[str, Any]:
+    def _dialog_prior_for_llm(
+        self,
+        conversation: Sequence[DialogTurn] | None,
+    ) -> list[tuple[Literal["user", "assistant"], str]]:
+        prior: list[tuple[Literal["user", "assistant"], str]] = []
+        if not conversation:
+            return prior
+        for turn in conversation[-10:]:
+            content = (turn.content or "").strip()
+            if not content:
+                continue
+            prior.append((turn.role, content))
+        return prior
+
+    async def understand_trip(
+        self,
+        language: str,
+        text: str,
+        origin_hint: str | None,
+        *,
+        conversation: Sequence[DialogTurn] | None = None,
+    ) -> dict[str, Any]:
         """Преобразует естественную речь пассажира в JSON-параметры поездки."""
 
         if not self.enabled:
             base = self._fallback_understanding(language, text, origin_hint)
             return self._merge_route_heuristics(language, text, origin_hint, base)
 
+        prior_messages = self._dialog_prior_for_llm(conversation)
+
         system_prompt = (
             "Ты смысловой модуль билетного терминала РЖД «Путь». "
+            "Если перед финальным сообщением пользователя переданы предыдущие реплики диалога — опирайся на них, чтобы не терять город назначения, дату и намерение. "
             "Верни строго JSON без markdown. Не выдумывай цены и номера поездов. "
             "Если параметр неизвестен, используй null. "
             f"Текущая дата для относительных и неполных дат: {self.current_date}. "
@@ -360,7 +410,7 @@ class DeepSeekClient:
             ensure_ascii=False,
         )
         try:
-            parsed = await self.chat_json(system_prompt, user_prompt)
+            parsed = await self.chat_json(system_prompt, user_prompt, prior_messages=prior_messages or None)
         except Exception:
             parsed = self._fallback_understanding(language, text, origin_hint)
         return self._merge_route_heuristics(language, text, origin_hint, parsed)

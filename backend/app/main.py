@@ -183,6 +183,7 @@ async def dialog(request: DialogRequest) -> DialogResponse:
         request.language,
         request.text,
         current_state.get("origin"),
+        conversation=request.conversation,
     )
     current_state.update({key: value for key, value in payload.items() if value is not None})
     missing_fields = [field for field in REQUIRED_DIALOG_FIELDS if not current_state.get(field)]

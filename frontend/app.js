@@ -1616,7 +1616,16 @@ async function runDialog(text) {
   setUiInteractionLocked(true);
   try {
     setStage("searching");
-    const response = await postJson("/api/dialog", { language, text, state });
+    const priorConversation = dialogMessages
+      .slice(0, -1)
+      .slice(-10)
+      .map((m) => ({ role: m.role, content: m.text }));
+    const response = await postJson("/api/dialog", {
+      language,
+      text,
+      state,
+      conversation: priorConversation,
+    });
     state = response.state;
     assistantSay(response.assistant_text);
     intent = normalizeIntent(state, response.assistant_text);
@@ -1668,6 +1677,7 @@ async function searchAndRecommend() {
 }
 
 async function searchAndRecommendBody() {
+  setOrbMode("thinking");
   const searchRequest = {
     language,
     origin: intent.origin,

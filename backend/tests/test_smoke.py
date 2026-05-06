@@ -18,3 +18,25 @@ def test_request_id_echo():
     rid = "test-req-id-12345"
     response = client.get("/api/health", headers={"X-Request-Id": rid})
     assert response.headers.get("X-Request-Id") == rid
+
+
+def test_dialog_accepts_conversation_history():
+    """Схема /api/dialog принимает короткую историю реплик (контекст для LLM)."""
+
+    response = client.post(
+        "/api/dialog",
+        json={
+            "language": "ru",
+            "text": "Казань",
+            "state": {},
+            "conversation": [
+                {"role": "user", "content": "Привет"},
+                {"role": "assistant", "content": "Куда поедем?"},
+            ],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert "assistant_text" in body
+    assert "state" in body
+    assert "action" in body

@@ -75,12 +75,23 @@ class TripIntent(BaseModel):
         return _coerce_time_window(value)
 
 
+class DialogTurn(BaseModel):
+    """Одна реплика в краткой истории диалога (для контекста LLM)."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(..., max_length=4000)
+
+
 class DialogRequest(BaseModel):
     """Сообщение пользователя в сквозном диалоге с ассистентом."""
 
     language: Language
     text: str
     state: dict = Field(default_factory=dict)
+    conversation: list[DialogTurn] = Field(
+        default_factory=list,
+        description="Предыдущие реплики (без текущего сообщения); до ~10 последних.",
+    )
 
 
 class DialogResponse(BaseModel):
