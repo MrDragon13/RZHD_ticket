@@ -1274,9 +1274,8 @@ async function searchAndRecommend() {
     recommendations = buildFallbackRecommendationsFromTrains(trains);
     assistantSay(localVoiceExplanationFromTrain(trains[0]));
   }
-  await prefetchRecommendedRouteStops();
+  await refreshTopRecommendedTrainRouteLikeSelect();
   renderTrains();
-  updateRouteMapForSelectedTrain();
   setStage("results");
 }
 
@@ -1504,7 +1503,10 @@ async function fetchTrainRouteStops(train) {
   if (!train || ticketSearchSource !== "live-cache") return train;
   if (routeStopsLoadedIds.has(train.id)) return train;
   const seg = train.route_segment?.intermediate_stops;
-  if (Array.isArray(seg) && seg.length > 0) {
+  const nStops = Array.isArray(train.stops) ? train.stops.length : 0;
+  /** Поиск может отдать эвристический сегмент без полного basicRoute — пока мало станций в stops, догружаем. */
+  const hasRichStopList = nStops >= 5;
+  if (Array.isArray(seg) && seg.length > 0 && hasRichStopList) {
     routeStopsLoadedIds.add(train.id);
     return train;
   }
@@ -1542,12 +1544,15 @@ async function fetchTrainRouteStopsIfNeeded(train) {
   await fetchTrainRouteStops(train);
 }
 
-async function prefetchRecommendedRouteStops() {
-  const topId = recommendations[0]?.train_id || getSortedTrains()[0]?.id;
-  if (!topId) return;
-  const tr = trains.find((t) => t.id === topId);
-  if (!tr) return;
-  await fetchTrainRouteStops(tr);
+/**
+ * После рекомендаций обновить маршрут для топ-поезда так же, как при выборе карточки
+ * (без озвучки и без перехода в checkout): тот же поезд, что подсвечен как лучший.
+ */
+async function refreshTopRecommendedTrainRouteLikeSelect() {
+  const top = getSortedTrains()[0];
+  if (!top) return;
+  await fetchTrainRouteStopsIfNeeded(top);
+  updateRouteMapForSelectedTrain();
 }
 
 function getSortedTrains() {
