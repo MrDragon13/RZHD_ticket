@@ -82,16 +82,12 @@ const i18n = {
     seatPickerZoneOpen: "Открытая часть вагона (места 1–36)",
     seatPickerZoneSide: "Боковые места у окна (места 37–54)",
     seatPickerKindFromSeatRows:
-      "Подсветка по строкам seats РЖД: видны отдельные отсеки, где удалось сопоставить номер купе и пол.",
-    seatPickerKindFemaleSingleFallback:
-      "Вагон помечен как женский без разбивки по отсекам — один блок на схеме выделен как условное женское купе.",
-    seatPickerKindMaleSingleFallback:
-      "Вагон помечен как мужской без разбивки по отсекам — один блок выделен как условное мужское купе.",
-    seatPickerKindMixed: "По данным РЖД — смешанное купе (метаданные вагона).",
-    seatPickerKindChildren:
-      "Детское купе по данным РЖД без номера отсека — один блок выделен условно.",
-    seatPickerKindFamily:
-      "Семейное купе по данным РЖД без номера отсека — один блок выделен условно.",
+      "Подсветка по строкам seats РЖД: отмечены отдельные отсеки, где удалось сопоставить номер купе и пол.",
+    seatPickerKindFemaleSingleFallback: "Розовая подсветка — женское купе.",
+    seatPickerKindMaleSingleFallback: "Голубая подсветка — мужское купе.",
+    seatPickerKindMixed: "Сиреневая подсветка — смешанное купе.",
+    seatPickerKindChildren: "Жёлтая подсветка — детское купе.",
+    seatPickerKindFamily: "Зелёная подсветка — семейное купе.",
     selectedTrainHeading: "Выбранный поезд",
     carClassPlatzkart: "Плацкарт",
     carClassCoupe: "Купе",
@@ -169,16 +165,12 @@ const i18n = {
     seatPickerZoneOpen: "Open section (seats 1–36)",
     seatPickerZoneSide: "Side berths by the window (seats 37–54)",
     seatPickerKindFromSeatRows:
-      "Seat rows from RZD: highlighted compartments where coupe index and gender could be parsed.",
-    seatPickerKindFemaleSingleFallback:
-      "RZD marked the car as female without per-compartment split — one block is highlighted as an illustrative female coupe.",
-    seatPickerKindMaleSingleFallback:
-      "RZD marked the car as male without per-compartment split — one block is highlighted as an illustrative male coupe.",
-    seatPickerKindMixed: "RZD metadata: mixed compartment car.",
-    seatPickerKindChildren:
-      "Children compartment per RZD without coupe index — one block highlighted illustratively.",
-    seatPickerKindFamily:
-      "Family compartment per RZD without coupe index — one block highlighted illustratively.",
+      "RZD seat rows: compartments highlighted where coupe index and gender could be matched.",
+    seatPickerKindFemaleSingleFallback: "Pink highlight: female compartment.",
+    seatPickerKindMaleSingleFallback: "Blue highlight: male compartment.",
+    seatPickerKindMixed: "Violet highlight: mixed compartment.",
+    seatPickerKindChildren: "Yellow highlight: children compartment.",
+    seatPickerKindFamily: "Green highlight: family compartment.",
     selectedTrainHeading: "Selected train",
     carClassPlatzkart: "Platzkart",
     carClassCoupe: "Coupe",
