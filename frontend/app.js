@@ -2590,6 +2590,7 @@ async function searchAndRecommendBody(signal) {
   if (signal.aborted) return;
   await refreshTopRecommendedTrainRouteLikeSelect(signal);
   renderTrains();
+  await prepareRecommendedCheckoutUi();
   setStage("results");
   lastSuccessfulSearchKey = routeFingerprint(intent);
 }
@@ -3170,9 +3171,41 @@ function renderTrains() {
     frag.append(card);
   });
   list.append(frag);
+  if (getTrainsForUi().length === 0) {
+    selectedTrain = null;
+    checkoutPanel.classList.add("hidden");
+  }
   syncCheckoutPanelPlacement();
   updateRouteMapForSelectedTrain();
   scrollRecommendedTrainCardIntoView();
+}
+
+/** Сразу после поиска: рекомендованный поезд считается выбранным — «Оформить» под его карточкой без клика. Этап UI остаётся results. */
+async function prepareRecommendedCheckoutUi() {
+  const top = getTrainsForUi()[0];
+  if (!top) {
+    selectedTrain = null;
+    checkoutPanel.classList.add("hidden");
+    syncCheckoutPanelPlacement();
+    return;
+  }
+  selectedTrain = top;
+  lastSelectedTrainId = top.id;
+  checkoutPanel.classList.remove("hidden");
+  if (!checkoutAnimating && !issuingTicket) {
+    checkoutButton.textContent = i18n[language].checkout;
+    checkoutButton.disabled = false;
+  }
+  syncCheckoutPanelPlacement();
+  updateTrainCardHighlight();
+  await fetchTrainRouteStopsIfNeeded(top);
+  updateRouteMapForSelectedTrain();
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const behavior = prefersReducedMotion() ? "auto" : "smooth";
+      checkoutPanel.scrollIntoView({ behavior, block: "nearest" });
+    });
+  });
 }
 
 /** После выдачи списка — прокрутить к рекомендованной карточке сразу под закреплённым assistant-core. */
