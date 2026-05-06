@@ -100,7 +100,7 @@ const i18n = {
       side_upper: "Бв",
     },
     demoTicket: "ДЕМО-БИЛЕТ",
-    ticketThanks: "Спасибо, что разделили путь вместе с нами.",
+    ticketThanks: "Спасибо, что разделили Путь вместе с нами.",
     restart: "Начать заново",
     newSession: "Новый запрос",
     noSpeech: "Распознавание речи недоступно в этом браузере. Используйте текстовое поле.",
@@ -176,7 +176,7 @@ const i18n = {
       side_upper: "SU",
     },
     demoTicket: "DEMO TICKET",
-    ticketThanks: "Thank you for sharing the journey with us.",
+    ticketThanks: "Thank you for sharing the Path with us.",
     restart: "Start over",
     newSession: "New request",
     noSpeech: "Speech recognition is not available in this browser. Use the text field.",
@@ -272,7 +272,7 @@ const routeVisuals = {
 /** Максимум промежуточных точек на SVG-карте маршрута (пары #stop-dot-a…e + #stop-label-a…e в index.html). */
 const ROUTE_MAP_MAX_INTERMEDIATE_STOPS = 5;
 /** Интервал между появлением точек по направлению от отправления к прибытию (мс). */
-const ROUTE_STOP_STAGGER_MS = 170;
+const ROUTE_STOP_STAGGER_MS = 510;
 
 /**
  * Равномерно выбирает до maxCount названий из упорядоченного сегмента (не подряд с начала):
