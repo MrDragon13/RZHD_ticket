@@ -1,3 +1,29 @@
+/* --- Общая шкала отступов/типа и высот, завязанных на вьюпорт (обе темы наследуют) --- */
+:root {
+  --space-3xs: clamp(3px, 0.55vmin, 6px);
+  --space-2xs: clamp(6px, 1vmin, 10px);
+  --space-xs: clamp(8px, 1.35vmin, 12px);
+  --space-sm: clamp(10px, 1.75vmin, 16px);
+  --space-md: clamp(14px, 2.35vmin, 22px);
+  --space-lg: clamp(18px, 2.85vmin, 28px);
+  --space-xl: clamp(22px, 3.6vmin, 36px);
+  --text-xs: clamp(0.6875rem, 1.45vmin, 0.8125rem);
+  --text-sm: clamp(0.8125rem, 1.65vmin, 0.9375rem);
+  --text-md: clamp(0.875rem, 1.9vmin, 1rem);
+  --text-lg: clamp(1rem, 2.25vmin, 1.125rem);
+  --text-xl: clamp(1.125rem, 2.65vmin, 1.5rem);
+  --touch-target-min: 44px;
+  --radius-panel: clamp(20px, 2.8vmin, 34px);
+  --radius-card: clamp(16px, 2.2vmin, 26px);
+  --orb-size: clamp(92px, 18vmin, 130px);
+  --route-map-min-h: clamp(200px, 38dvh, 560px);
+  --checkout-map-host-min: clamp(160px, 24dvh, 280px);
+  --checkout-map-content-min: clamp(180px, 28dvh, 320px);
+  --checkout-route-map-min: clamp(150px, 22dvh, 280px);
+  --train-skeleton-min-h: clamp(110px, 20dvh, 172px);
+  --ticket-qr-min-h: clamp(180px, 30dvh, 340px);
+}
+
 html:not([data-theme]),
 html[data-theme="neon"] {
   color-scheme: dark;
@@ -1145,17 +1171,19 @@ body.ui-interaction-locked #user-input {
 
 .checkout-map-host {
   flex: 1;
-  min-height: 280px;
+  min-height: var(--checkout-map-host-min);
   border-radius: 24px;
   border: 1px solid var(--checkout-map-border);
   overflow: hidden;
   background: var(--checkout-map-inner-bg);
+  container-type: inline-size;
+  container-name: checkout-map;
 }
 
 .checkout-map-host .map-content {
   height: 100%;
-  min-height: 320px;
-  padding: 14px 18px 12px;
+  min-height: var(--checkout-map-content-min);
+  padding: var(--space-sm) var(--space-md) var(--space-xs);
   box-sizing: border-box;
 }
 
@@ -1172,8 +1200,8 @@ body.ui-interaction-locked #user-input {
 }
 
 .checkout-map-host .route-map {
-  min-height: 280px;
-  height: calc(100% - 94px);
+  min-height: var(--checkout-route-map-min);
+  height: calc(100% - clamp(72px, 11vmin, 100px));
 }
 
 .map-panel,
@@ -1181,7 +1209,7 @@ body.ui-interaction-locked #user-input {
 .ticket-panel {
   min-height: 0;
   border: 1px solid var(--border);
-  border-radius: 34px;
+  border-radius: var(--radius-panel);
   background: var(--panel);
   box-shadow: 0 0 50px var(--panel-glow);
   backdrop-filter: blur(18px);
@@ -1190,15 +1218,22 @@ body.ui-interaction-locked #user-input {
 .map-panel {
   position: relative;
   overflow: hidden;
-  padding: 26px;
+  padding: var(--space-lg);
+}
+
+#route-panel {
+  container-type: inline-size;
+  container-name: route-panel;
 }
 
 .control-panel {
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 24px;
+  padding: var(--space-md);
   overflow: hidden;
+  container-type: inline-size;
+  container-name: control-panel;
 }
 
 .control-panel-head {
@@ -1334,7 +1369,15 @@ body.ui-interaction-locked #user-input {
 
 .map-title h2 {
   margin: 0;
-  font-size: 32px;
+  font-size: clamp(1.35rem, 2vw + 1.2vh, 2rem);
+}
+
+#route-panel .map-title h2 {
+  font-size: clamp(1.35rem, 1.1rem + 2.8cqw, 2rem);
+}
+
+.checkout-map-host .map-title h2 {
+  font-size: clamp(1.2rem, 1rem + 3cqw, 1.85rem);
 }
 
 .map-title span {
@@ -1351,8 +1394,8 @@ body.ui-interaction-locked #user-input {
 
 .route-map {
   width: 100%;
-  height: calc(100% - 94px);
-  min-height: 430px;
+  height: calc(100% - clamp(72px, 11vmin, 100px));
+  min-height: var(--route-map-min-h);
 }
 
 .map-landmass {
@@ -1587,7 +1630,7 @@ body.ui-interaction-locked #user-input {
 .dialog-history {
   display: grid;
   gap: 10px;
-  max-height: 220px;
+  max-height: clamp(140px, 28dvh, 240px);
   overflow: auto;
   scrollbar-gutter: stable;
 }
@@ -1630,18 +1673,18 @@ body.ui-interaction-locked #user-input {
 .assistant-core {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 20px;
+  gap: var(--space-md);
   align-items: center;
-  padding: 20px;
+  padding: var(--space-md);
   border: 1px solid var(--border);
-  border-radius: 30px;
+  border-radius: clamp(22px, 3vmin, 30px);
   background: linear-gradient(145deg, var(--assistant-core-a), var(--assistant-core-b));
 }
 
 .orb {
   position: relative;
-  width: 122px;
-  height: 122px;
+  width: var(--orb-size);
+  height: var(--orb-size);
   border: 2px solid var(--cyan);
   border-radius: 50%;
   background:
@@ -1661,9 +1704,9 @@ body.ui-interaction-locked #user-input {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 44px;
-  height: 44px;
-  margin: -22px 0 0 -22px;
+  width: 36%;
+  height: 36%;
+  margin: -18% 0 0 -18%;
   pointer-events: none;
   fill: var(--cyan);
   opacity: 0.38;
@@ -1754,14 +1797,14 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
 
 .assistant-text h2 {
   margin: 0 0 10px;
-  font-size: 26px;
+  font-size: clamp(1.15rem, 0.95rem + 1.8cqw, 1.625rem);
 }
 
 .assistant-text p {
-  min-height: 54px;
+  min-height: clamp(var(--touch-target-min), 10vmin, 54px);
   margin: 0;
   color: var(--assistant-body);
-  font-size: 18px;
+  font-size: var(--text-lg);
   line-height: 1.45;
 }
 
@@ -1858,9 +1901,9 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
 }
 
 .train-card {
-  padding: 18px;
+  padding: var(--space-md);
   border: 1px solid var(--border-card);
-  border-radius: 24px;
+  border-radius: var(--radius-card);
   cursor: pointer;
   background: var(--surface-card);
 }
@@ -1879,7 +1922,7 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
 .train-card-skeleton {
   cursor: default;
   pointer-events: none;
-  min-height: 172px;
+  min-height: var(--train-skeleton-min-h);
   background: var(--skeleton-bg);
   animation: train-skeleton-pulse 1.15s ease-in-out infinite;
 }
@@ -1924,7 +1967,7 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
 
 .train-number {
   color: var(--cyan);
-  font-size: 25px;
+  font-size: clamp(1.15rem, 0.95rem + 2cqw, 1.55rem);
   font-weight: 900;
 }
 
@@ -2120,11 +2163,13 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
 
 .glass-panel {
   width: min(860px, 100%);
-  padding: 24px 26px 28px;
+  padding: var(--space-md) var(--space-lg) var(--space-xl);
   border: 1px solid var(--picker-glass-border);
-  border-radius: 28px;
+  border-radius: clamp(22px, 3vmin, 28px);
   background: var(--picker-glass-bg);
   box-shadow: 0 0 40px var(--picker-glass-shadow);
+  container-type: inline-size;
+  container-name: seat-picker;
 }
 
 .seat-picker-header {
@@ -2192,7 +2237,7 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
 }
 
 .carriage-tab {
-  min-height: 48px;
+  min-height: max(48px, var(--touch-target-min));
   padding: 8px 14px 10px;
   border-radius: 14px;
   border: 1px solid var(--picker-tab-border);
@@ -2656,7 +2701,7 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
   justify-content: center;
   align-items: center;
   margin-top: 22px;
-  min-height: 308px;
+  min-height: var(--ticket-qr-min-h);
 }
 
 .ticket-qr-wrap canvas,
@@ -2731,6 +2776,72 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
 @media (max-width: 420px) {
   .language-screen .language-actions {
     grid-template-columns: 1fr;
+  }
+}
+
+@container route-panel (max-width: 520px) {
+  .map-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+
+  #route-state {
+    align-self: flex-start;
+  }
+}
+
+@container checkout-map (max-width: 460px) {
+  .map-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
+  }
+}
+
+@container control-panel (max-width: 560px) {
+  .assistant-core {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .assistant-text {
+    width: 100%;
+  }
+
+  .train-times,
+  .timeline {
+    font-size: clamp(1rem, 4.2cqw, 1.35rem);
+  }
+
+  .train-number {
+    font-size: clamp(1.05rem, 5cqw, 1.45rem);
+  }
+}
+
+@container control-panel (max-width: 420px) {
+  .orb {
+    width: min(var(--orb-size), 72cqw);
+    height: min(var(--orb-size), 72cqw);
+  }
+}
+
+@container seat-picker (max-width: 520px) {
+  .seat-picker-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .seat-picker-metrics {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+
+  .seat-picker-header h2 {
+    font-size: clamp(1.05rem, 5.5cqw, 1.35rem);
   }
 }
 
