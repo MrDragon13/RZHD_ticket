@@ -16,6 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.models import (
+    CheckoutVoiceIntentRequest,
+    CheckoutVoiceIntentResponse,
     DemoCheckoutRequest,
     DemoTicket,
     DialogRequest,
@@ -169,6 +171,18 @@ async def understand(request: UnderstandRequest) -> TripIntent:
         request.origin_hint,
     )
     return TripIntent(**payload)
+
+
+@app.post("/api/checkout-voice-intent", response_model=CheckoutVoiceIntentResponse)
+async def checkout_voice_intent(request: CheckoutVoiceIntentRequest) -> CheckoutVoiceIntentResponse:
+    """Определяет по фразе DeepSeek, подтверждает ли пользователь оформление демо-билета."""
+
+    ok = await deepseek_client.classify_demo_checkout_intent(
+        request.language,
+        request.text,
+        request.ui_stage,
+    )
+    return CheckoutVoiceIntentResponse(confirm_demo_checkout=ok)
 
 
 @app.post("/api/dialog", response_model=DialogResponse)

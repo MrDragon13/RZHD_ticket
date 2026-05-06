@@ -1708,8 +1708,22 @@ function matchesVoiceCheckoutIntent(text) {
 }
 
 async function tryVoiceCheckoutConfirmation(text) {
-  if (!matchesVoiceCheckoutIntent(text)) return false;
   if (checkoutAnimating || issuingTicket) return false;
+
+  let wantsCheckout = matchesVoiceCheckoutIntent(text);
+  if (
+    !wantsCheckout &&
+    (uiStage === "results" || uiStage === "checkout") &&
+    (uiStage !== "results" || trains.length > 0)
+  ) {
+    setUiInteractionLocked(true);
+    try {
+      wantsCheckout = await fetchCheckoutVoiceIntentFromLlm(text);
+    } finally {
+      setUiInteractionLocked(false);
+    }
+  }
+  if (!wantsCheckout) return false;
 
   if (uiStage === "results" && trains.length > 0) {
     const id = getTrainHighlightId();
@@ -1726,6 +1740,20 @@ async function tryVoiceCheckoutConfirmation(text) {
   }
 
   return false;
+}
+
+async function fetchCheckoutVoiceIntentFromLlm(text) {
+  try {
+    const res = await postJson("/api/checkout-voice-intent", {
+      language,
+      text,
+      ui_stage: uiStage,
+    });
+    return Boolean(res.confirm_demo_checkout);
+  } catch (e) {
+    console.warn("checkout-voice-intent failed", e);
+    return false;
+  }
 }
 
 async function runDialog(text) {

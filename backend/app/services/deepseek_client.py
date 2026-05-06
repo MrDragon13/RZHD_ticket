@@ -163,15 +163,68 @@ class DeepSeekClient:
             data = response.json()
             return data["choices"][0]["message"]["content"].strip()
 
-    async def chat_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def chat_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        temperature: float = 0.35,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, Any]:
         """Запрашивает у LLM строгий JSON и аккуратно его разбирает.
 
         DeepSeek обычно следует инструкции, но модель все равно может добавить
         markdown-блок. Поэтому ниже есть небольшой безопасный очиститель.
         """
 
-        text = await self.chat_text(system_prompt, user_prompt)
+        text = await self.chat_text(
+            system_prompt,
+            user_prompt,
+            timeout_seconds=timeout_seconds,
+            temperature=temperature,
+        )
         return self._parse_json_payload(text)
+
+    async def classify_demo_checkout_intent(self, language: str, text: str, ui_stage: str) -> bool:
+        """Нейросеть решает, подтверждает ли пользователь оформление демо-билета."""
+
+        if not self.enabled:
+            return False
+        flag = os.getenv("DEEPSEEK_CHECKOUT_INTENT_ENABLED", "1").strip().lower()
+        if flag in ("0", "false", "no", "off"):
+            return False
+        raw = (text or "").strip()
+        if len(raw) < 2:
+            return False
+        timeout = float(os.getenv("DEEPSEEK_CHECKOUT_INTENT_TIMEOUT_SECONDS", "15"))
+        stage_hint = (
+            "Пользователь видит список рекомендованных поездов с подсветкой лучшего варианта."
+            if ui_stage == "results"
+            else "Пользователь уже выбрал поезд и видит кнопку оформления демо-билета."
+        )
+        system_prompt = (
+            "Ты классификатор намерения для терминала РЖД «Путь». "
+            f"Контекст экрана: {stage_hint} "
+            "Определи, выражает ли реплика СОГЛАСИЕ начать оформление ДЕМО-билета (имитация, без реальной оплаты): "
+            "одобрение рекомендации, «оформляй», «беру этот поезд», «устраивает», явное «да» про текущий выбор. "
+            "Верни строго JSON без markdown вида {\"confirm_demo_checkout\": true} или {\"confirm_demo_checkout\": false}. "
+            "False если отказ, новый поиск маршрута, сравнение без решения, уточняющий вопрос без согласия на оформление."
+        )
+        user_prompt = json.dumps(
+            {"language": language, "ui_stage": ui_stage, "user_text": raw[:800]},
+            ensure_ascii=False,
+        )
+        try:
+            parsed = await self.chat_json(
+                system_prompt,
+                user_prompt,
+                temperature=0.12,
+                timeout_seconds=max(5.0, timeout),
+            )
+            return bool(parsed.get("confirm_demo_checkout"))
+        except Exception as exc:
+            logging.warning("classify_demo_checkout_intent failed: %s", exc)
+            return False
 
     def _parse_json_payload(self, text: str) -> dict[str, Any]:
         """Извлекает JSON из ответа модели без выполнения произвольного кода."""

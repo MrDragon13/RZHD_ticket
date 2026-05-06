@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # Явные модели защищают приложение от произвольного текста LLM: frontend всегда
 # получает структурированные данные, а backend может валидировать ответы.
 Language = Literal["ru", "en"]
+CheckoutUiStage = Literal["results", "checkout"]
 
 
 class TimeWindow(BaseModel):
@@ -100,6 +101,18 @@ class DialogResponse(BaseModel):
     assistant_text: str
     action: str
     state: dict = Field(default_factory=dict)
+
+
+class CheckoutVoiceIntentRequest(BaseModel):
+    """Реплика на экране списка поездов или перед оформлением — нужно ли трактовать как согласие на демо-билет."""
+
+    language: Language
+    text: str = Field(..., max_length=2000)
+    ui_stage: CheckoutUiStage
+
+
+class CheckoutVoiceIntentResponse(BaseModel):
+    confirm_demo_checkout: bool
 
 
 class TicketSearchRequest(BaseModel):
