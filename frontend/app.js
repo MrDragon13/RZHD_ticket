@@ -400,8 +400,24 @@ function buildRouteVisualBase(destinationKey) {
 /**
  * Доля длины пути SVG до конечной точки сегмента пользователя на полном маршруте поезда.
  * Приоритет: поле route_segment с бэкенда (эвристика + DeepSeek).
+ *
+ * Важно: декоративная линия на карте уже идёт от intent.origin к intent.destination.
+ * Если билет на том же участке, что и поиск (station из выдачи РЖД совпадает с запросом),
+ * обрезать линию по «доле полного пути поезда» нельзя — иначе для поезда с длинным
+ * следованием доля окажется маленькой и все точки съедут к началу.
  */
 function segmentEndpointFraction(train) {
+  const userFrom = intent?.origin;
+  const userTo = intent?.destination;
+  if (!userFrom || !userTo) return null;
+
+  const ticketMatchesSearch =
+    stationMatches(train?.departure_station, userFrom) &&
+    stationMatches(train?.arrival_station, userTo);
+  if (ticketMatchesSearch) {
+    return 1;
+  }
+
   const rf = train?.route_segment?.endpoint_fraction;
   if (rf != null && Number.isFinite(Number(rf))) {
     return Number(rf);
@@ -410,9 +426,6 @@ function segmentEndpointFraction(train) {
   const raw = Array.isArray(train?.stops)
     ? train.stops.map((s) => String(s).trim()).filter(Boolean)
     : [];
-  const userFrom = intent?.origin;
-  const userTo = intent?.destination;
-  if (!userFrom || !userTo) return null;
 
   if (raw.length >= 2) {
     let iFrom = raw.findIndex((name) => stationMatches(name, userFrom));
@@ -428,10 +441,6 @@ function segmentEndpointFraction(train) {
       return (idxEnd + 1) / (raw.length + 1);
     }
   }
-
-  const depOk = stationMatches(train?.departure_station, userFrom);
-  const arrOk = stationMatches(train?.arrival_station, userTo);
-  if (depOk && arrOk) return 1;
 
   return null;
 }
