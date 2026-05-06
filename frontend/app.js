@@ -2684,19 +2684,36 @@ function renderTicketQrCanvas(payloadText) {
     height: 220,
     colorDark: "#071018",
     colorLight: "#ffffff",
-    // EC-M (~15%): читаемость при частичном повреждении; qrcode.js кодирует строку в 8-bit byte (UTF-8 для кириллицы).
-    correctLevel: QR.CorrectLevel.M,
   };
 
-  const idFallback =
-    demoTicket && typeof demoTicket.ticket_id === "string" && demoTicket.ticket_id.trim()
-      ? `PATH:${demoTicket.ticket_id.trim()}`
-      : "PATH:demo";
+  /** ticket_id уже вида PATH-… — не добавляем второй префикс PATH: */
+  function qrMinimalIdPayload() {
+    const raw = demoTicket && typeof demoTicket.ticket_id === "string" ? demoTicket.ticket_id.trim() : "";
+    if (raw) return raw;
+    return "PATH-unknown";
+  }
 
-  const candidates = [String(payloadText)];
-  if (payloadText.length > 900) candidates.push(payloadText.slice(0, 900));
-  if (payloadText.length > 450) candidates.push(payloadText.slice(0, 450));
-  candidates.push(idFallback);
+  /**
+   * Длинный UTF-8 текст на кириллице может не поместиться в максимальную матрицу при EC-M.
+   * Сначала полный текст + M (предпочтение), затем полный + L (больше полезной нагрузки), потом укороченные варианты.
+   */
+  function buildQrAttempts(fullText) {
+    const t = String(fullText);
+    const out = [];
+    const pushPair = (text) => {
+      out.push({ text, ec: QR.CorrectLevel.M });
+      out.push({ text, ec: QR.CorrectLevel.L });
+    };
+    pushPair(t);
+    if (t.length > 1400) pushPair(t.slice(0, 1400));
+    if (t.length > 1000) pushPair(t.slice(0, 1000));
+    if (t.length > 700) pushPair(t.slice(0, 700));
+    out.push({ text: qrMinimalIdPayload(), ec: QR.CorrectLevel.M });
+    out.push({ text: qrMinimalIdPayload(), ec: QR.CorrectLevel.L });
+    return out;
+  }
+
+  const attempts = buildQrAttempts(payloadText);
 
   /** qrcode.js кладёт и canvas, и img; оба с display:block дают два QR в ряд — оставляем только canvas. */
   function dropQrRasterDuplicate(wrapEl) {
@@ -2727,18 +2744,17 @@ function renderTicketQrCanvas(payloadText) {
   };
 
   let drew = false;
-  for (const text of candidates) {
+  for (const { text, ec } of attempts) {
     try {
       wrap.innerHTML = "";
-      // Один вызов с text в опциях — так задумано в qrcode.js (makeCode внутри конструктора).
-      new QR(wrap, { ...baseOpts, text });
+      new QR(wrap, { ...baseOpts, text, correctLevel: ec });
       dropQrRasterDuplicate(wrap);
       if (findQrNode()) {
         drew = true;
         break;
       }
     } catch {
-      /* пробуем короче */
+      /* следующая длина или уровень коррекции */
     }
   }
 
