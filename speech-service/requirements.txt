@@ -1,7 +1,4 @@
 fastapi
 uvicorn[standard]
 python-multipart
-httpx
-python-dotenv
-aiohttp>=3.9.0
 vosk>=0.3.45

@@ -13,11 +13,11 @@ TtsMode = Literal["piper", "legacy"]
 
 
 def _env_stt_requested() -> SttMode:
-    raw = os.getenv("SPEECH_STT_ENGINE", "vosk").strip().lower()
+    raw = os.getenv("SPEECH_STT_ENGINE", "legacy").strip().lower()
     if raw in ("vosk", "legacy"):
         return raw  # type: ignore[return-value]
-    logger.warning("SPEECH_STT_ENGINE=%r invalid, using vosk", raw)
-    return "vosk"
+    logger.warning("SPEECH_STT_ENGINE=%r invalid, using legacy", raw)
+    return "legacy"
 
 
 def _env_tts_requested() -> TtsMode:
@@ -26,6 +26,13 @@ def _env_tts_requested() -> TtsMode:
         return raw  # type: ignore[return-value]
     logger.warning("SPEECH_TTS_ENGINE=%r invalid, using piper", raw)
     return "piper"
+
+
+def speech_service_base_url() -> str | None:
+    """HTTP sidecar с Vosk/Piper (см. docker-compose сервис speech). Без слэша на конце."""
+
+    u = os.getenv("SPEECH_SERVICE_URL", "").strip().rstrip("/")
+    return u if u else None
 
 
 def vosk_model_dir() -> str | None:
@@ -63,18 +70,30 @@ def vosk_ready() -> bool:
 
 def effective_stt_engine() -> SttMode:
     req = _env_stt_requested()
-    if req == "vosk" and not vosk_ready():
-        logger.warning("Vosk requested but VOSK_MODEL_PATH missing or empty — falling back to legacy STT hint on client")
-        return "legacy"
-    return req
+    if req != "vosk":
+        return req
+    if vosk_ready() or speech_service_base_url():
+        return "vosk"
+    logger.warning(
+        "Vosk requested but no local model and SPEECH_SERVICE_URL unset — falling back to legacy STT on client",
+    )
+    return "legacy"
 
 
 def effective_tts_engine() -> TtsMode:
     req = _env_tts_requested()
-    if req == "piper" and not piper_voice_ready("ru"):
-        logger.warning("Piper requested but RU voice .onnx missing — client should use legacy TTS")
-        return "legacy"
-    return req
+    if req != "piper":
+        return req
+    if piper_voice_ready("ru") or speech_service_base_url():
+        return "piper"
+    logger.warning("Piper requested but no local RU voice and SPEECH_SERVICE_URL unset — client should use legacy TTS")
+    return "legacy"
+
+
+def piper_en_voice_available() -> bool:
+    """Английский голос Piper: локально или на speech-sidecar."""
+
+    return piper_voice_ready("en") or bool(speech_service_base_url())
 
 
 def stt_engine_for_client() -> SttMode:

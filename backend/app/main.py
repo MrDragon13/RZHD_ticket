@@ -9,6 +9,8 @@ _level_name = os.getenv("LOG_LEVEL", "INFO").strip().upper()
 _level = getattr(logging, _level_name, logging.INFO)
 logging.basicConfig(level=_level, format="%(levelname)s %(name)s %(message)s", force=True)
 
+import httpx
+
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,7 +44,14 @@ from app.services.deepseek_client import DeepSeekClient
 from app.services.piper_tts import synthesize_wav
 from app.services.recommendations import recommend_trains
 from app.services.rzd_adapter import RzdDataAdapter
-from app.services.speech_config import effective_stt_engine, effective_tts_engine, piper_voice_ready, stt_engine_for_client, tts_engine_for_client
+from app.services.speech_config import (
+    effective_stt_engine,
+    effective_tts_engine,
+    piper_en_voice_available,
+    speech_service_base_url,
+    stt_engine_for_client,
+    tts_engine_for_client,
+)
 from app.services.vosk_stt import transcribe_wav_pcm_bytes
 
 
@@ -86,6 +95,59 @@ async def validation_engineering_log(request: Request, exc: RequestValidationErr
 
 deepseek_client = DeepSeekClient()
 rzd_adapter = RzdDataAdapter(deepseek_client=deepseek_client)
+
+SPEECH_HTTP_TIMEOUT = httpx.Timeout(120.0, connect=30.0)
+
+
+async def _proxy_stt_to_sidecar(raw: bytes, upload: UploadFile) -> SpeechToTextResponse:
+    base = speech_service_base_url()
+    if not base:
+        raise RuntimeError("speech sidecar URL missing")
+    url = f"{base}/stt"
+    filename = upload.filename or "speech.webm"
+    ct = upload.content_type or "application/octet-stream"
+    try:
+        async with httpx.AsyncClient(timeout=SPEECH_HTTP_TIMEOUT) as client:
+            response = await client.post(url, files={"audio": (filename, raw, ct)})
+    except httpx.RequestError as exc:
+        logging.warning("speech sidecar STT request failed: %s", exc)
+        raise HTTPException(status_code=503, detail="speech_service_unavailable") from exc
+    if response.status_code != 200:
+        logging.warning(
+            "speech sidecar STT %s: %s",
+            response.status_code,
+            response.text[:400],
+        )
+        raise HTTPException(status_code=503, detail="stt_upstream_failed")
+    try:
+        payload = response.json()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="stt_bad_response") from exc
+    return SpeechToTextResponse(text=str(payload.get("text", "")))
+
+
+async def _proxy_tts_to_sidecar(req: TextToSpeechRequest) -> Response:
+    base = speech_service_base_url()
+    if not base:
+        raise RuntimeError("speech sidecar URL missing")
+    url = f"{base}/tts"
+    try:
+        async with httpx.AsyncClient(timeout=SPEECH_HTTP_TIMEOUT) as client:
+            response = await client.post(
+                url,
+                json={"text": req.text, "language": req.language},
+            )
+    except httpx.RequestError as exc:
+        logging.warning("speech sidecar TTS request failed: %s", exc)
+        raise HTTPException(status_code=503, detail="speech_service_unavailable") from exc
+    if response.status_code != 200:
+        logging.warning(
+            "speech sidecar TTS %s: %s",
+            response.status_code,
+            response.text[:400],
+        )
+        raise HTTPException(status_code=503, detail="tts_upstream_failed")
+    return Response(content=response.content, media_type="audio/wav")
 
 
 # Для логически последовательного диалога поиск запускается только после того,
@@ -165,13 +227,15 @@ async def speech_settings() -> SpeechSettingsResponse:
 
 @app.post("/api/stt", response_model=SpeechToTextResponse)
 async def speech_to_text(audio: UploadFile = File(...)) -> SpeechToTextResponse:
-    """Распознавание с микрофона (аудио webm/wav/…) через Vosk на сервере."""
+    """Распознавание с микрофона (аудио webm/wav/…) через Vosk на сервере или speech-sidecar."""
 
     if effective_stt_engine() != "vosk":
         raise HTTPException(status_code=503, detail="stt_mode_not_vosk")
     raw = await audio.read()
     if len(raw) < 64:
         raise HTTPException(status_code=400, detail="audio_too_short")
+    if speech_service_base_url():
+        return await _proxy_stt_to_sidecar(raw, audio)
     try:
         wav = webm_or_any_to_wav_16k_mono(raw)
         text = transcribe_wav_pcm_bytes(wav)
@@ -189,8 +253,10 @@ async def text_to_speech(req: TextToSpeechRequest) -> Response:
     if effective_tts_engine() != "piper":
         raise HTTPException(status_code=503, detail="tts_mode_not_piper")
     lang = req.language
-    if lang == "en" and not piper_voice_ready("en"):
+    if lang == "en" and not piper_en_voice_available():
         raise HTTPException(status_code=503, detail="piper_en_voice_missing")
+    if speech_service_base_url():
+        return await _proxy_tts_to_sidecar(req)
     try:
         wav = synthesize_wav(req.text, lang)
     except (RuntimeError, ValueError):
