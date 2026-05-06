@@ -186,6 +186,28 @@
         </div>
       </section>
     </main>
+
+    <div
+      id="path-log-modal"
+      class="path-log-modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="path-log-modal-title"
+      aria-hidden="true"
+    >
+      <div id="path-log-modal-backdrop" class="path-log-modal-backdrop"></div>
+      <div class="path-log-modal-panel glass-panel">
+        <header class="path-log-modal-header">
+          <h2 id="path-log-modal-title">Журнал</h2>
+          <div class="path-log-modal-actions">
+            <button type="button" id="path-log-clear" class="ghost-button">Очистить</button>
+            <button type="button" id="path-log-close" class="primary-button">Закрыть</button>
+          </div>
+        </header>
+        <pre id="path-log-modal-content" class="path-log-modal-content" tabindex="0"></pre>
+      </div>
+    </div>
+
     <script src="./app.js"></script>
   </body>
 </html>

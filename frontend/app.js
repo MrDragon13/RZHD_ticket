@@ -3,6 +3,49 @@
 // во внутренний backend-контейнер, а ключ DeepSeek остается только на сервере.
 const API_BASE_URL = window.PATH_API_BASE_URL || "";
 
+/** Ввод в поле текста и «Отправить» открывает журнал с этой точной строкой (без учёта регистра). */
+const PATH_DEBUG_TRIGGER = "logloglog";
+const PATH_LOG_CAP = 600;
+const pathClientLogs = [];
+
+function pathFormatLogArg(a) {
+  if (a instanceof Error) return a.stack || a.message;
+  if (typeof a === "object" && a !== null) {
+    try {
+      return JSON.stringify(a);
+    } catch {
+      return String(a);
+    }
+  }
+  return String(a);
+}
+
+function pathLogAppend(level, args) {
+  const ts = new Date().toISOString();
+  const body = Array.from(args).map(pathFormatLogArg).join(" ");
+  const line = `[${ts}] [${level}] ${body}`;
+  pathClientLogs.push(line);
+  if (pathClientLogs.length > PATH_LOG_CAP) {
+    pathClientLogs.splice(0, pathClientLogs.length - PATH_LOG_CAP);
+  }
+}
+
+(function installPathConsoleCapture() {
+  const methods = ["log", "info", "warn", "error", "debug"];
+  for (const m of methods) {
+    const orig = console[m].bind(console);
+    console[m] = (...args) => {
+      try {
+        pathLogAppend(m.toUpperCase(), args);
+      } catch {
+        /* ignore */
+      }
+      orig(...args);
+    };
+  }
+  pathLogAppend("INFO", ["Путь: захват консольных сообщений включён"]);
+})();
+
 // Все пользовательские надписи вынесены в словарь, чтобы выбранный на первом
 // экране язык проходил сквозь весь интерфейс, голосовые реплики и демо-билет.
 const i18n = {
@@ -65,6 +108,10 @@ const i18n = {
       "Не удалось загрузить поезда с сайта РЖД. Проверьте соединение или попробуйте позже.",
     routeFactUnavailable: "Факт о маршруте временно недоступен.",
     clarifyHint: "Я дождусь уточнения и только потом подберу варианты.",
+    logModalTitle: "Журнал консоли",
+    logModalClose: "Закрыть",
+    logModalClear: "Очистить",
+    logModalEmpty: "(Записей пока нет)",
     userRole: "Вы",
     assistantRole: "Путь",
     stages: {
@@ -134,6 +181,10 @@ const i18n = {
       "Could not load trains from RZD. Check your connection or try again later.",
     routeFactUnavailable: "Route fact is temporarily unavailable.",
     clarifyHint: "I will wait for clarification before searching options.",
+    logModalTitle: "Console log",
+    logModalClose: "Close",
+    logModalClear: "Clear",
+    logModalEmpty: "(No entries yet)",
     userRole: "You",
     assistantRole: "Path",
     stages: {
@@ -1005,6 +1056,7 @@ function updateTextInputToggleLabels() {
 }
 
 updateTextInputToggleLabels();
+initPathLogModal();
 
 // Чипы меняются в зависимости от стадии сценария: старт, поиск, результаты,
 // оформление. Неактуальные подсказки исчезают, чтобы экран не выглядел шумным.
@@ -1087,6 +1139,12 @@ function setStage(nextStage) {
 async function handleUserText(text) {
   const cleanText = text.trim();
   if (!cleanText) return;
+  if (cleanText.toLowerCase() === PATH_DEBUG_TRIGGER) {
+    userInput.value = "";
+    transcript.textContent = "";
+    openPathLogModal();
+    return;
+  }
   lastDialogUserText = cleanText;
   // Очищаем поле только после фиксации текста в истории: пользователь видит,
   // что именно распознал микрофон или что он отправил вручную.
@@ -2533,6 +2591,56 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function openPathLogModal() {
+  const modal = document.getElementById("path-log-modal");
+  const pre = document.getElementById("path-log-modal-content");
+  const title = document.getElementById("path-log-modal-title");
+  if (!modal || !pre) return;
+  const copy = i18n[language];
+  if (title) title.textContent = copy.logModalTitle;
+  const clearBtn = document.getElementById("path-log-clear");
+  const closeBtn = document.getElementById("path-log-close");
+  if (clearBtn) clearBtn.textContent = copy.logModalClear;
+  if (closeBtn) closeBtn.textContent = copy.logModalClose;
+  pre.textContent = pathClientLogs.length ? pathClientLogs.join("\n") : copy.logModalEmpty;
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+  pre.focus();
+}
+
+function closePathLogModal() {
+  const modal = document.getElementById("path-log-modal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+function clearPathClientLogs() {
+  pathClientLogs.length = 0;
+  pathLogAppend("INFO", ["Путь: журнал очищен"]);
+}
+
+function initPathLogModal() {
+  const modal = document.getElementById("path-log-modal");
+  const backdrop = document.getElementById("path-log-modal-backdrop");
+  const closeBtn = document.getElementById("path-log-close");
+  const clearBtn = document.getElementById("path-log-clear");
+  if (backdrop) backdrop.addEventListener("click", closePathLogModal);
+  if (closeBtn) closeBtn.addEventListener("click", closePathLogModal);
+  if (clearBtn)
+    clearBtn.addEventListener("click", () => {
+      clearPathClientLogs();
+      openPathLogModal();
+    });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modal && !modal.classList.contains("hidden")) {
+      closePathLogModal();
+    }
+  });
+}
+
 function runLocalDemoFallback() {
   assistantSay(i18n[language].fallbackError);
   intent = normalizeIntent(
@@ -2601,6 +2709,7 @@ function resetScenario(announce = true) {
   setTextInputPanelOpen(false);
   setStage("initial");
   renderHistory();
+  closePathLogModal();
   if (announce) {
     assistantSay(i18n[language].assistantReady, { addToHistory: false });
   }
