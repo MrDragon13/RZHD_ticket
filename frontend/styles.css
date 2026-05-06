@@ -2122,6 +2122,15 @@ body.ui-interaction-locked #user-input {
   justify-content: center;
 }
 
+.ticket-wagon-features-title {
+  margin: 14px 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .ticket-qr-wrap {
   display: flex;
   justify-content: center;

@@ -228,6 +228,7 @@ const i18n = {
     compartmentFamily: "Семейное",
     compartmentUnknown: "",
     wagonServices: "Услуги вагона",
+    wagonFeatures: "Особенности вагона",
     addSignsLabel: "Код РЖД",
     berthShort: {
       lower: "Н",
@@ -319,6 +320,7 @@ const i18n = {
     compartmentFamily: "Family",
     compartmentUnknown: "",
     wagonServices: "Car services",
+    wagonFeatures: "Carriage features",
     addSignsLabel: "RZD code",
     berthShort: {
       lower: "L",
@@ -1063,6 +1065,55 @@ const amenityLabels = {
     family_car: "family car",
   },
 };
+
+/** Особенности по полю features в demo_trains (если amenities пуст — например live РЖД). */
+const featureLabels = {
+  ru: {
+    night: "ночной поезд",
+    sleep: "удобен для сна",
+    direct: "без пересадок",
+    balanced: "сбалансированный вариант",
+    comfort: "повышенный комфорт",
+  },
+  en: {
+    night: "overnight",
+    sleep: "good for rest",
+    direct: "direct",
+    balanced: "balanced option",
+    comfort: "extra comfort",
+  },
+};
+
+/** Локализация класса обслуживания на билете (backend отдаёт русские подписи). */
+function travelClassForTicket(tc) {
+  const raw = String(tc ?? "").trim();
+  if (language === "ru") return raw;
+  const map = {
+    Купе: "Coupe",
+    СВ: "SV",
+    Плацкарт: "Platzkart",
+  };
+  return map[raw] || raw;
+}
+
+/**
+ * Бейджи для демо-билета: как у карточки поезда (amenities); если их нет — кратко из features.
+ */
+function ticketCarriageBadgesHtml(train) {
+  if (!train) return "";
+  const am = train.amenities || [];
+  if (am.length) {
+    return am
+      .slice(0, 8)
+      .map((item) => `<span class="amenity">${escapeHtml(amenityLabels[language][item] || item)}</span>`)
+      .join("");
+  }
+  const feats = train.features || [];
+  return feats
+    .slice(0, 8)
+    .map((f) => `<span class="amenity">${escapeHtml(featureLabels[language][f] || f)}</span>`)
+    .join("");
+}
 
 let language = "ru";
 
@@ -3296,7 +3347,7 @@ function buildDemoTicketQrPayload() {
     d.route,
     `${d.train_number} · ${d.departure}–${d.arrival}`,
     `${ru ? "Ваг" : "Car"} ${d.car} · ${ru ? "Место" : "Seat"} ${d.seat}`,
-    `${d.berth_type} · ${d.travel_class}`,
+    `${d.berth_type} · ${travelClassForTicket(d.travel_class)}`,
     thanks,
   ].join("\n");
 }
@@ -3431,8 +3482,12 @@ function renderTicket() {
   mapContent.classList.remove("hidden");
   ticketPanel.classList.remove("hidden");
   setStage("ticket");
-  document.querySelector("#ticket-title").textContent = i18n[language].demoTicket;
-  const amenities = selectedTrain ? renderAmenityBadges(selectedTrain.amenities) : "";
+  const copy = i18n[language];
+  document.querySelector("#ticket-title").textContent = copy.demoTicket;
+  const badges = ticketCarriageBadgesHtml(selectedTrain);
+  const badgesBlock = badges
+    ? `<p class="ticket-wagon-features-title">${copy.wagonFeatures}</p><div class="amenity-row">${badges}</div>`
+    : "";
   document.querySelector("#ticket-body").innerHTML = `
     <strong>${demoTicket.route}</strong>
     <span>${language === "ru" ? "Поезд" : "Train"}: ${demoTicket.train_number}</span>
@@ -3441,8 +3496,8 @@ function renderTicket() {
     <span>${language === "ru" ? "Вагон" : "Car"}: ${demoTicket.car}</span>
     <span>${language === "ru" ? "Место" : "Seat"}: ${demoTicket.seat}</span>
     <span>${language === "ru" ? "Полка" : "Berth"}: ${demoTicket.berth_type}</span>
-    <span>${demoTicket.travel_class}</span>
-    <div class="amenity-row">${amenities}</div>
+    <span>${travelClassForTicket(demoTicket.travel_class)}</span>
+    ${badgesBlock}
     <small>${demoTicket.disclaimer}</small>
   `;
   renderTicketQrCanvas(buildDemoTicketQrPayload());
@@ -3664,7 +3719,7 @@ function initThemeToggle() {
   } catch {
     stored = null;
   }
-  if (stored !== "neon" && stored !== "rzd") stored = "neon";
+  if (stored !== "neon" && stored !== "rzd") stored = "rzd";
   html.dataset.theme = stored;
 
   const btn = document.getElementById("theme-toggle");
