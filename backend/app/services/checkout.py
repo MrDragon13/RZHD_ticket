@@ -83,6 +83,20 @@ def create_demo_ticket(request: DemoCheckoutRequest) -> DemoTicket:
         if request.language == "ru"
         else "Demo ticket. Not valid for travel. No payment is processed."
     )
+
+    pn = (request.passenger_full_name or "").strip()
+    pp = (request.passenger_phone or "").strip()
+    pd = (request.passenger_document or "").strip()
+    if not pn or not pp or not pd:
+        if request.language == "en":
+            pn = pn or "Ivan Ivanovich Ivanov"
+            pp = pp or "+7 (903) 123-45-67"
+            pd = pd or "4510 123456"
+        else:
+            pn = pn or "Иван Иванович Иванов"
+            pp = pp or "+7 (903) 123-45-67"
+            pd = pd or "4510 123456"
+
     payload_seats = []
     if request.selected_seats:
         fb = f"{random.randint(1, 12):02d}"
@@ -104,6 +118,9 @@ def create_demo_ticket(request: DemoCheckoutRequest) -> DemoTicket:
         "seat_label": seat_s,
         "berth_type": berth_type,
         "status": "not_valid_for_travel",
+        "passenger_full_name": pn,
+        "passenger_phone": pp,
+        "passenger_document": pd,
     }
 
     return DemoTicket(
@@ -118,6 +135,9 @@ def create_demo_ticket(request: DemoCheckoutRequest) -> DemoTicket:
         berth_type=berth_type,
         travel_class=travel_class,
         disclaimer=warning,
+        passenger_full_name=pn,
+        passenger_phone=pp,
+        passenger_document=pd,
     )
 
 

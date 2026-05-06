@@ -18,6 +18,8 @@ def test_app_js_has_dialog_abort_and_message_cap():
     assert "orbRecognition" in src
     assert "normalizeCarriageServiceChip" in src
     assert "ticketAllFeatures" in src
+    assert "sessionIdleTrackingActive" in src
+    assert "transitionLanguageToAuth" in src
 
 
 def test_index_html_loads_api_client_before_app_js():
@@ -42,3 +44,10 @@ def test_app_js_delegates_http_to_api_client():
     src = _app_js()
     assert "async function fetchApi" not in src
     assert "api-client.js" in Path(__file__).resolve().parents[2].joinpath("frontend/index.html").read_text(encoding="utf-8")
+
+
+def test_index_html_has_auth_and_idle_warning():
+    root = Path(__file__).resolve().parents[2]
+    html = (root / "frontend" / "index.html").read_text(encoding="utf-8")
+    assert 'id="auth-screen"' in html
+    assert 'id="session-idle-warning"' in html

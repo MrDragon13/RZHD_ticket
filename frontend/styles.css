@@ -420,15 +420,239 @@ button {
 }
 
 .screen-stage > .language-screen,
-.screen-stage > .terminal-screen {
+.screen-stage > .terminal-screen,
+.screen-stage > .auth-screen {
   grid-area: 1 / 1;
   align-self: stretch;
 }
 
-.topbar {
+.session-user-strip {
+  grid-column: 2;
+  justify-self: center;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  max-width: min(520px, 92vw);
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.28);
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.session-user-strip.hidden {
+  display: none;
+}
+
+.session-user-strip strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 42vw;
+}
+
+.session-idle-warning {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 120;
+  max-width: min(560px, 94vw);
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 106, 61, 0.55);
+  background: rgba(24, 12, 8, 0.92);
+  color: #ffe8df;
+  font-size: 15px;
+  line-height: 1.35;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+
+.session-idle-warning.hidden {
+  display: none;
+}
+
+.auth-screen {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  padding: 24px 16px 32px;
+  min-height: 0;
+}
+
+.auth-screen-inner {
+  width: min(520px, 100%);
+}
+
+.glass-panel-auth {
+  padding: 22px 22px 26px;
+}
+
+.auth-panel-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  letter-spacing: 0.06em;
+}
+
+.auth-muted {
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.auth-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.auth-phone-display {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.22);
+  margin-bottom: 10px;
+  min-height: 52px;
+}
+
+.auth-hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.auth-otp-message {
+  margin: 0 0 14px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.auth-otp-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 22px;
+  letter-spacing: 0.18em;
+  text-align: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.vkeyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.vkeyboard-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.vkeyboard-row--narrow {
+  grid-template-columns: 1fr 1fr;
+  max-width: 68%;
+  margin: 0 auto;
+}
+
+.vkeyboard-key {
+  min-height: 52px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.08s ease;
+}
+
+.vkeyboard-key:active {
+  transform: scale(0.97);
+}
+
+.auth-secondary-btn,
+.auth-primary-btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.auth-step.hidden {
+  display: none;
+}
+
+html[data-theme="rzd"] .session-user-strip {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(227, 6, 19, 0.22);
+  box-shadow: 0 8px 28px rgba(21, 101, 192, 0.12);
+  color: rgba(28, 36, 51, 0.72);
+}
+
+html[data-theme="rzd"] .session-user-strip strong {
+  color: #1c2433;
+}
+
+html[data-theme="rzd"] .auth-phone-display,
+html[data-theme="rzd"] .auth-otp-input {
+  background: #fff;
+  border-color: rgba(28, 36, 51, 0.14);
+}
+
+.ticket-passenger-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.18);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+html[data-theme="rzd"] .ticket-passenger-block {
+  border-top-color: rgba(28, 36, 51, 0.15);
+}
+
+html[data-theme="rzd"] .vkeyboard-key {
+  background: #f4f6fb;
+  border-color: rgba(28, 36, 51, 0.12);
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar .brand {
+  justify-self: start;
+}
+
+.topbar .top-actions {
+  justify-self: end;
+  grid-column: 3;
 }
 
 .top-actions {

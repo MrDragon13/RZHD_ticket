@@ -402,7 +402,10 @@ class DemoCheckoutRequest(BaseModel):
 
     language: Language
     train: TrainOption
-    passenger_label: str | None = None
+    passenger_label: str | None = Field(default=None, description="Устарело; использовать passenger_full_name.")
+    passenger_full_name: str | None = Field(default=None, description="ФИО для демо-билета (имитация паспортной связки).")
+    passenger_phone: str | None = Field(default=None, description="Телефон в демо-билете.")
+    passenger_document: str | None = Field(default=None, description="Условный номер документа в демо-билете.")
     selected_carriage: str | None = Field(
         default=None,
         description="Устаревший общий номер вагона; если в каждом месте указан carriage, поле игнорируется.",
@@ -433,6 +436,9 @@ class DemoTicket(BaseModel):
     berth_type: str
     travel_class: str
     disclaimer: str
+    passenger_full_name: str | None = Field(default=None, description="ФИО на демо-билете.")
+    passenger_phone: str | None = Field(default=None, description="Телефон на демо-билете.")
+    passenger_document: str | None = Field(default=None, description="Условный документ на демо-билете.")
 
 
 class HealthResponse(BaseModel):

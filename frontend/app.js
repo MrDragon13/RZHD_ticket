@@ -159,6 +159,24 @@ const i18n = {
     themeToggleAria: "Переключить тему оформления: неон или корпоративная палитра РЖД",
     themeNeonShort: "Неон",
     themeRzdShort: "РЖД",
+    authTitle: "Вход",
+    authSubtitle:
+      "Укажите номер телефона для подтверждения — это демонстрация, данные не сохраняются на сервере.",
+    authPhoneLabel: "Мобильный телефон",
+    authPhoneHint: "Формат: +7 (___) ___-__-__",
+    authClear: "Очистить",
+    authContinue: "Продолжить",
+    authOtpSending: "Отправляем код…",
+    authOtpSent: "Код отправлен на ваш номер.",
+    authOtpLabel: "Код из SMS",
+    authOtpHint: "Код подставится автоматически через несколько секунд.",
+    authLogin: "Войти",
+    sessionUserLabel: "Пассажир",
+    idleLogoutWarning:
+      "Нет действий — через несколько секунд произойдёт выход и возврат к выбору языка. Коснитесь экрана, чтобы остаться.",
+    ticketPassenger: "Пассажир",
+    ticketPassengerDoc: "Документ",
+    ticketPassengerPhone: "Телефон",
     assistantRole: "Путь",
     userRole: "Пассажир",
     stages: {
@@ -260,6 +278,24 @@ const i18n = {
     themeToggleAria: "Switch color theme: neon or RZD corporate palette",
     themeNeonShort: "Neon",
     themeRzdShort: "RZD",
+    authTitle: "Sign in",
+    authSubtitle:
+      "Enter your mobile phone number to continue — this is a demo; nothing is stored on the server.",
+    authPhoneLabel: "Mobile phone",
+    authPhoneHint: "Format: +7 (___) ___-__-__",
+    authClear: "Clear",
+    authContinue: "Continue",
+    authOtpSending: "Sending code…",
+    authOtpSent: "Code sent to your number.",
+    authOtpLabel: "SMS code",
+    authOtpHint: "The code will appear automatically in a few seconds.",
+    authLogin: "Sign in",
+    sessionUserLabel: "Passenger",
+    idleLogoutWarning:
+      "No activity — you will be signed out and returned to the language screen shortly. Touch the screen to stay.",
+    ticketPassenger: "Passenger",
+    ticketPassengerDoc: "ID",
+    ticketPassengerPhone: "Phone",
     assistantRole: "Path",
     userRole: "Passenger",
     stages: {
@@ -1531,14 +1567,36 @@ let lastDialogUserText = "";
 let lastSuccessfulSearchKey = null;
 let lastSelectedTrainId = null;
 
+/** Уведомление за 5 с до возврата на экран языка */
+const GLOBAL_IDLE_MS = 60_000;
+const GLOBAL_IDLE_WARN_BEFORE_MS = 5000;
+
 /** Должны быть объявлены до первого вызова startLanguageScreenAmbient() (иначе TDZ). */
 let languageAmbientTimer = null;
 let languageAmbientAbort = null;
-/** Таймер возврата на экран выбора языка после показа демо-билета */
-let ticketReturnToLanguageTimer = null;
+/** Таймеры бездействия: предупреждение и выход на экран языка */
+let globalIdleWarningTimer = null;
+let globalIdleLogoutTimer = null;
+/** После выбора языка отслеживаем активность до возврата на старт */
+let sessionIdleTrackingActive = false;
+
+const passengerDemoProfile = {
+  ru: { fullName: "Иван Иванович Иванов", document: "4510 123456" },
+  en: { fullName: "Ivan Ivanovich Ivanov", document: "4510 123456" },
+};
+
+const sessionPassenger = {
+  isAuthenticated: false,
+  fullName: "",
+  phoneDisplay: "",
+  document: "",
+};
+
+let authPhoneDigits = [];
 
 const screens = {
   language: document.querySelector("#language-screen"),
+  auth: document.querySelector("#auth-screen"),
   terminal: document.querySelector("#terminal-screen"),
 };
 const assistantText = document.querySelector("#assistant-text");
@@ -1568,6 +1626,24 @@ const dialogHistory = document.querySelector("#dialog-history");
 const newSessionButton = document.querySelector("#new-session-button");
 const textInputPanel = document.querySelector("#text-input-panel");
 const textInputToggle = document.querySelector("#text-input-toggle");
+
+const sessionUserStrip = document.querySelector("#session-user-strip");
+const sessionUserLabelEl = document.querySelector("#session-user-label");
+const sessionUserNameEl = document.querySelector("#session-user-name");
+const sessionIdleWarningEl = document.querySelector("#session-idle-warning");
+
+const authScreen = document.querySelector("#auth-screen");
+const authStepPhone = document.querySelector("#auth-step-phone");
+const authStepOtp = document.querySelector("#auth-step-otp");
+const authPhoneDisplay = document.querySelector("#auth-phone-display");
+const authVkeyboard = document.querySelector("#auth-vkeyboard");
+const authPhoneClearBtn = document.querySelector("#auth-phone-clear");
+const authPhoneContinueBtn = document.querySelector("#auth-phone-continue");
+const authOtpMessage = document.querySelector("#auth-otp-message");
+const authOtpInput = document.querySelector("#auth-otp-input");
+const authOtpDoneBtn = document.querySelector("#auth-otp-done");
+const authPanelTitle = document.querySelector("#auth-panel-title");
+const authPanelSubtitle = document.querySelector("#auth-panel-subtitle");
 
 const terminalStatusStrip = document.querySelector("#terminal-status-strip");
 const dataSourceBanner = document.querySelector("#data-source-banner");
@@ -1645,19 +1721,245 @@ function waitTransitionEnd(el, fallbackMs) {
   });
 }
 
-async function transitionLanguageToTerminal() {
+function clearGlobalIdleTimers() {
+  if (globalIdleWarningTimer) {
+    clearTimeout(globalIdleWarningTimer);
+    globalIdleWarningTimer = null;
+  }
+  if (globalIdleLogoutTimer) {
+    clearTimeout(globalIdleLogoutTimer);
+    globalIdleLogoutTimer = null;
+  }
+}
+
+function hideIdleWarning() {
+  sessionIdleWarningEl?.classList.add("hidden");
+  if (sessionIdleWarningEl) sessionIdleWarningEl.textContent = "";
+}
+
+function showIdleWarning() {
+  if (!sessionIdleWarningEl || !sessionIdleTrackingActive) return;
+  sessionIdleWarningEl.textContent = i18n[language].idleLogoutWarning;
+  sessionIdleWarningEl.classList.remove("hidden");
+}
+
+function scheduleGlobalIdleTimers() {
+  clearGlobalIdleTimers();
+  if (!sessionIdleTrackingActive) return;
+  globalIdleWarningTimer = setTimeout(() => {
+    globalIdleWarningTimer = null;
+    showIdleWarning();
+  }, GLOBAL_IDLE_MS - GLOBAL_IDLE_WARN_BEFORE_MS);
+  globalIdleLogoutTimer = setTimeout(() => {
+    globalIdleLogoutTimer = null;
+    hideIdleWarning();
+    void performIdleLogout();
+  }, GLOBAL_IDLE_MS);
+}
+
+function touchGlobalIdle() {
+  if (!sessionIdleTrackingActive) return;
+  hideIdleWarning();
+  scheduleGlobalIdleTimers();
+}
+
+async function performIdleLogout() {
+  sessionIdleTrackingActive = false;
+  clearGlobalIdleTimers();
+  await returnToLanguageIdleScreen();
+}
+
+function formatPhoneMaskDisplay(digits) {
+  const d = digits.slice(0, 10);
+  const g = (i) => (i < d.length ? d[i] : "_");
+  return `+7 (${g(0)}${g(1)}${g(2)}) ${g(3)}${g(4)}${g(5)}-${g(6)}${g(7)}-${g(8)}${g(9)}`;
+}
+
+function updateAuthPhoneChrome() {
+  if (authPhoneDisplay) authPhoneDisplay.textContent = formatPhoneMaskDisplay(authPhoneDigits);
+  if (authPhoneContinueBtn) authPhoneContinueBtn.disabled = authPhoneDigits.length !== 10;
+}
+
+function authPhoneInputDigit(d) {
+  if (authPhoneDigits.length >= 10) return;
+  authPhoneDigits.push(d);
+  updateAuthPhoneChrome();
+  touchGlobalIdle();
+}
+
+function authPhoneBackspace() {
+  authPhoneDigits.pop();
+  updateAuthPhoneChrome();
+  touchGlobalIdle();
+}
+
+function applyAuthScreenI18n() {
+  const copy = i18n[language];
+  if (authPanelTitle) authPanelTitle.textContent = copy.authTitle;
+  if (authPanelSubtitle) authPanelSubtitle.textContent = copy.authSubtitle;
+  const phoneLab = document.querySelector("#auth-phone-label");
+  if (phoneLab) phoneLab.textContent = copy.authPhoneLabel;
+  document.querySelector("#auth-phone-hint")?.textContent = copy.authPhoneHint;
+  document.querySelector("#auth-otp-label")?.textContent = copy.authOtpLabel;
+  document.querySelector("#auth-otp-hint")?.textContent = copy.authOtpHint;
+  if (authPhoneClearBtn) authPhoneClearBtn.textContent = copy.authClear;
+  if (authPhoneContinueBtn) authPhoneContinueBtn.textContent = copy.authContinue;
+  if (authOtpDoneBtn) authOtpDoneBtn.textContent = copy.authLogin;
+}
+
+function resetAuthFlow() {
+  authPhoneDigits = [];
+  authStepPhone?.classList.remove("hidden");
+  authStepOtp?.classList.add("hidden");
+  if (authOtpInput) {
+    authOtpInput.value = "";
+    authOtpInput.disabled = true;
+  }
+  if (authOtpDoneBtn) authOtpDoneBtn.disabled = true;
+  updateAuthPhoneChrome();
+}
+
+function renderSessionUserStrip() {
+  if (!sessionUserStrip || !sessionUserNameEl) return;
+  if (!sessionPassenger.fullName) {
+    sessionUserStrip.classList.add("hidden");
+    return;
+  }
+  const copy = i18n[language];
+  if (sessionUserLabelEl) sessionUserLabelEl.textContent = copy.sessionUserLabel;
+  sessionUserNameEl.textContent = sessionPassenger.fullName;
+  sessionUserStrip.classList.remove("hidden");
+}
+
+function clearSessionPassenger() {
+  sessionPassenger.isAuthenticated = false;
+  sessionPassenger.fullName = "";
+  sessionPassenger.phoneDisplay = "";
+  sessionPassenger.document = "";
+  authPhoneDigits = [];
+  sessionUserStrip?.classList.add("hidden");
+  if (sessionUserNameEl) sessionUserNameEl.textContent = "";
+}
+
+function buildAuthVirtualKeyboard() {
+  if (!authVkeyboard || authVkeyboard.dataset.built === "1") return;
+  authVkeyboard.dataset.built = "1";
+  authVkeyboard.innerHTML = "";
+  const rows = [
+    ["1", "2", "3"],
+    ["4", "5", "6"],
+    ["7", "8", "9"],
+    ["⌫", "0"],
+  ];
+  rows.forEach((row, idx) => {
+    const wrap = document.createElement("div");
+    wrap.className = idx === rows.length - 1 ? "vkeyboard-row vkeyboard-row--narrow" : "vkeyboard-row";
+    row.forEach((key) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "vkeyboard-key";
+      btn.textContent = key;
+      btn.addEventListener("click", () => {
+        if (key === "⌫") authPhoneBackspace();
+        else authPhoneInputDigit(key);
+      });
+      wrap.append(btn);
+    });
+    authVkeyboard.append(wrap);
+  });
+}
+
+async function completeAuthFlow() {
+  if (sessionPassenger.isAuthenticated) return;
+  if (!sessionIdleTrackingActive) return;
+  const profile = passengerDemoProfile[language] || passengerDemoProfile.ru;
+  const digits = authPhoneDigits.join("");
+  if (digits.length !== 10) return;
+  sessionPassenger.fullName = profile.fullName;
+  sessionPassenger.document = profile.document;
+  sessionPassenger.phoneDisplay = `+7 (${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 8)}-${digits.slice(8, 10)}`;
+
+  await transitionAuthToTerminal();
+  sessionPassenger.isAuthenticated = true;
+  renderSessionUserStrip();
+  resetScenario(false);
+  newSessionButton?.classList.remove("hidden");
+  textInputToggle?.classList.remove("hidden");
+  updateTextInputToggleLabels();
+  refreshThemeToggleLabels();
+  assistantSay(i18n[language].assistantReady, { addToHistory: true });
+  void pingBackendHealth();
+  touchGlobalIdle();
+}
+
+async function runAuthOtpPhase() {
+  if (authPhoneDigits.length !== 10) return;
+  if (!authStepPhone || authStepPhone.classList.contains("hidden")) return;
+  if (authPhoneContinueBtn) authPhoneContinueBtn.disabled = true;
+  const copy = i18n[language];
+  authStepPhone?.classList.add("hidden");
+  authStepOtp?.classList.remove("hidden");
+  if (authOtpMessage) authOtpMessage.textContent = copy.authOtpSending;
+  if (authOtpInput) {
+    authOtpInput.value = "";
+    authOtpInput.disabled = true;
+  }
+  if (authOtpDoneBtn) authOtpDoneBtn.disabled = true;
+  touchGlobalIdle();
+  await sleep(1600);
+  if (!sessionIdleTrackingActive) return;
+  if (authOtpMessage) authOtpMessage.textContent = copy.authOtpSent;
+  await sleep(900);
+  if (!sessionIdleTrackingActive) return;
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  if (authOtpInput) {
+    authOtpInput.value = code;
+    authOtpInput.disabled = false;
+  }
+  if (authOtpDoneBtn) authOtpDoneBtn.disabled = false;
+  touchGlobalIdle();
+  await sleep(400);
+  if (!sessionIdleTrackingActive) return;
+  await completeAuthFlow();
+}
+
+async function transitionLanguageToAuth() {
   const lang = screens.language;
+  const auth = screens.auth;
   const term = screens.terminal;
-  if (!lang || !term) return;
+  if (!lang || !auth) return;
+  if (term) term.classList.add("hidden");
   if (prefersReducedMotion()) {
     lang.classList.add("hidden");
-    term.classList.remove("hidden");
+    auth.classList.remove("hidden");
     return;
   }
   lang.classList.add("screen-motion-leave-out-up");
   await waitTransitionEnd(lang, SCREEN_MOTION_MS + 140);
   lang.classList.add("hidden");
   lang.classList.remove("screen-motion-leave-out-up");
+  auth.classList.remove("hidden");
+  auth.classList.add("screen-motion-enter-from-below");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      auth.classList.remove("screen-motion-enter-from-below");
+    });
+  });
+}
+
+async function transitionAuthToTerminal() {
+  const auth = screens.auth;
+  const term = screens.terminal;
+  if (!auth || !term) return;
+  if (prefersReducedMotion()) {
+    auth.classList.add("hidden");
+    term.classList.remove("hidden");
+    return;
+  }
+  auth.classList.add("screen-motion-leave-out-up");
+  await waitTransitionEnd(auth, SCREEN_MOTION_MS + 140);
+  auth.classList.add("hidden");
+  auth.classList.remove("screen-motion-leave-out-up");
   term.classList.remove("hidden");
   term.classList.add("screen-motion-enter-from-below");
   requestAnimationFrame(() => {
@@ -1667,19 +1969,23 @@ async function transitionLanguageToTerminal() {
   });
 }
 
-async function transitionTerminalToLanguage() {
+async function transitionAnyToLanguage() {
   const lang = screens.language;
   const term = screens.terminal;
-  if (!lang || !term) return;
+  const auth = screens.auth;
+  if (!lang || !term || !auth) return;
+  const leaving = !term.classList.contains("hidden") ? term : auth;
   if (prefersReducedMotion()) {
     term.classList.add("hidden");
+    auth.classList.add("hidden");
     lang.classList.remove("hidden");
     return;
   }
-  term.classList.add("screen-motion-leave-out-down");
-  await waitTransitionEnd(term, SCREEN_MOTION_MS + 140);
+  leaving.classList.add("screen-motion-leave-out-down");
+  await waitTransitionEnd(leaving, SCREEN_MOTION_MS + 140);
   term.classList.add("hidden");
-  term.classList.remove("screen-motion-leave-out-down");
+  auth.classList.add("hidden");
+  leaving.classList.remove("screen-motion-leave-out-down");
   lang.classList.remove("hidden");
   lang.classList.add("screen-motion-enter-from-above");
   requestAnimationFrame(() => {
@@ -1742,6 +2048,18 @@ function updateTextInputToggleLabels() {
 updateTextInputToggleLabels();
 initThemeToggle();
 initPathLogModal();
+
+if (authPhoneClearBtn) {
+  authPhoneClearBtn.addEventListener("click", () => {
+    resetAuthFlow();
+    touchGlobalIdle();
+  });
+}
+if (authPhoneContinueBtn) authPhoneContinueBtn.addEventListener("click", () => void runAuthOtpPhase());
+if (authOtpDoneBtn) authOtpDoneBtn.addEventListener("click", () => void completeAuthFlow());
+
+document.addEventListener("pointerdown", touchGlobalIdle, true);
+document.addEventListener("keydown", touchGlobalIdle, true);
 try {
   startLanguageScreenAmbient();
 } catch (ambientBootErr) {
@@ -1774,21 +2092,18 @@ document.querySelector("#chips")?.addEventListener("click", (event) => {
   handleUserText(event.target.textContent);
 });
 
-function clearTicketReturnToLanguageTimer() {
-  if (ticketReturnToLanguageTimer) {
-    clearTimeout(ticketReturnToLanguageTimer);
-    ticketReturnToLanguageTimer = null;
-  }
-}
-
 async function returnToLanguageIdleScreen() {
-  clearTicketReturnToLanguageTimer();
+  sessionIdleTrackingActive = false;
+  clearGlobalIdleTimers();
+  hideIdleWarning();
+  clearSessionPassenger();
   stopAssistantSpeech();
   resetScenario(false);
+  resetAuthFlow();
   newSessionButton?.classList.add("hidden");
   textInputToggle?.classList.add("hidden");
   setTextInputPanelOpen(false);
-  await transitionTerminalToLanguage();
+  await transitionAnyToLanguage();
   try {
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch {
@@ -1825,14 +2140,17 @@ async function setLanguage(nextLanguage) {
     document.querySelector("#seat-picker-title").textContent = copy.seatPickerTitle;
     document.querySelector("#seat-picker-hint").textContent = copy.seatPickerHint;
     if (confirmSeatsButton) confirmSeatsButton.textContent = copy.seatPickerConfirm;
-    await transitionLanguageToTerminal();
-    newSessionButton?.classList.remove("hidden");
-    textInputToggle?.classList.remove("hidden");
+    sessionIdleTrackingActive = true;
+    touchGlobalIdle();
+    await transitionLanguageToAuth();
     resetScenario(false);
+    applyAuthScreenI18n();
+    resetAuthFlow();
+    buildAuthVirtualKeyboard();
+    newSessionButton?.classList.add("hidden");
+    textInputToggle?.classList.add("hidden");
     updateTextInputToggleLabels();
     refreshThemeToggleLabels();
-    assistantSay(copy.assistantReady, { addToHistory: true });
-    void pingBackendHealth();
   } finally {
     languageScreenBusy = false;
     document.querySelector(".language-actions")?.classList.remove("language-actions--busy");
@@ -3729,6 +4047,9 @@ async function confirmSeatSelection() {
       language,
       train: selectedTrain,
       selected_seats: seatsPayload,
+      passenger_full_name: sessionPassenger.fullName || undefined,
+      passenger_phone: sessionPassenger.phoneDisplay || undefined,
+      passenger_document: sessionPassenger.document || undefined,
     });
     seatPickerPanel.classList.add("hidden");
     renderTicket();
@@ -3752,14 +4073,24 @@ function buildDemoTicketQrPayload() {
   if (!d) return "";
   const thanks = copy.ticketThanks;
   const ru = language === "ru";
-  return [
+  const lines = [
     `${copy.demoTicket} · ${d.ticket_id}`,
     d.route,
     `${d.train_number} · ${d.departure}–${d.arrival}`,
     `${ru ? "Ваг" : "Car"} ${d.car} · ${ru ? "Место" : "Seat"} ${d.seat}`,
     `${d.berth_type} · ${travelClassForTicket(d.travel_class)}`,
-    thanks,
-  ].join("\n");
+  ];
+  if (d.passenger_full_name) {
+    lines.push(`${ru ? "Пассажир" : "Passenger"}: ${d.passenger_full_name}`);
+  }
+  if (d.passenger_document) {
+    lines.push(`${ru ? "Документ" : "ID"}: ${d.passenger_document}`);
+  }
+  if (d.passenger_phone) {
+    lines.push(`${ru ? "Телефон" : "Phone"}: ${d.passenger_phone}`);
+  }
+  lines.push(thanks);
+  return lines.join("\n");
 }
 
 function qrColorsFromTheme() {
@@ -3888,7 +4219,6 @@ function renderTicketQrCanvas(payloadText) {
 }
 
 function renderTicket() {
-  clearTicketReturnToLanguageTimer();
   seatPickerPanel.classList.add("hidden");
   mapContent.classList.remove("hidden");
   ticketPanel.classList.remove("hidden");
@@ -3896,6 +4226,17 @@ function renderTicket() {
   const copy = i18n[language];
   document.querySelector("#ticket-title").textContent = copy.demoTicket;
   const featuresBlock = ticketUnifiedFeaturesHtml(selectedTrain, demoTicket?.car, demoTicket);
+  const pf = demoTicket?.passenger_full_name || "";
+  const pp = demoTicket?.passenger_phone || "";
+  const pd = demoTicket?.passenger_document || "";
+  const passBlock =
+    pf || pp || pd
+      ? `<div class="ticket-passenger-block">
+    ${pf ? `<span><strong>${copy.ticketPassenger}:</strong> ${pf}</span>` : ""}
+    ${pd ? `<span><strong>${copy.ticketPassengerDoc}:</strong> ${pd}</span>` : ""}
+    ${pp ? `<span><strong>${copy.ticketPassengerPhone}:</strong> ${pp}</span>` : ""}
+  </div>`
+      : "";
   document.querySelector("#ticket-body").innerHTML = `
     <strong>${demoTicket.route}</strong>
     <span>${language === "ru" ? "Поезд" : "Train"}: ${demoTicket.train_number}</span>
@@ -3905,16 +4246,14 @@ function renderTicket() {
     <span>${language === "ru" ? "Место" : "Seat"}: ${demoTicket.seat}</span>
     <span>${language === "ru" ? "Полка" : "Berth"}: ${demoTicket.berth_type}</span>
     <span>${travelClassForTicket(demoTicket.travel_class)}</span>
+    ${passBlock}
     ${featuresBlock}
     <small>${demoTicket.disclaimer}</small>
   `;
   renderTicketQrCanvas(buildDemoTicketQrPayload());
   assistantSay(language === "ru" ? "Демонстрационный билет готов." : "Your demo ticket is ready.");
   document.querySelector("#checkout-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  ticketReturnToLanguageTimer = setTimeout(() => {
-    ticketReturnToLanguageTimer = null;
-    returnToLanguageIdleScreen();
-  }, 60_000);
+  touchGlobalIdle();
 }
 
 function stopAssistantSpeech() {
@@ -4232,7 +4571,6 @@ function runLocalDemoFallback() {
 }
 
 function resetScenario(announce = true) {
-  clearTicketReturnToLanguageTimer();
   abortDialogRequests();
   state = {};
   intent = null;

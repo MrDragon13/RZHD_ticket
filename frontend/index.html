@@ -16,6 +16,10 @@
             <h1 id="terminal-title" class="brand-title">ПУТЬ</h1>
           </div>
         </div>
+        <div id="session-user-strip" class="session-user-strip hidden" role="status" aria-live="polite">
+          <span id="session-user-label">Пассажир</span>
+          <strong id="session-user-name"></strong>
+        </div>
         <div class="top-actions">
           <button id="new-session-button" class="ghost-button hidden">Новый запрос</button>
           <div class="theme-toggle-host">
@@ -145,6 +149,54 @@
             <div class="language-actions">
               <button type="button" data-language="ru">Русский</button>
               <button type="button" data-language="en">English</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="auth-screen" class="screen auth-screen hidden" aria-labelledby="auth-panel-title">
+        <div class="auth-screen-inner">
+          <div class="auth-panel glass-panel-auth">
+            <h2 id="auth-panel-title" class="auth-panel-title">Вход</h2>
+            <p id="auth-panel-subtitle" class="auth-muted">
+              Укажите номер телефона для подтверждения — это демонстрация, данные не сохраняются на сервере.
+            </p>
+
+            <div id="auth-step-phone" class="auth-step">
+              <label id="auth-phone-label" class="auth-label" for="auth-phone-display">Мобильный телефон</label>
+              <div
+                id="auth-phone-display"
+                class="auth-phone-display"
+                tabindex="0"
+                role="textbox"
+                aria-readonly="true"
+                aria-describedby="auth-phone-hint"
+              ></div>
+              <p id="auth-phone-hint" class="auth-hint">Формат: +7 (___) ___-__-__</p>
+              <div id="auth-vkeyboard" class="vkeyboard" aria-label="Экранная клавиатура"></div>
+              <button type="button" id="auth-phone-clear" class="ghost-button auth-secondary-btn">Очистить</button>
+              <button type="button" id="auth-phone-continue" class="primary-button auth-primary-btn" disabled>
+                Продолжить
+              </button>
+            </div>
+
+            <div id="auth-step-otp" class="auth-step hidden">
+              <p id="auth-otp-message" class="auth-otp-message">Отправляем код…</p>
+              <label id="auth-otp-label" class="auth-label" for="auth-otp-input">Код из SMS</label>
+              <input
+                id="auth-otp-input"
+                class="auth-otp-input"
+                type="text"
+                inputmode="numeric"
+                maxlength="6"
+                autocomplete="one-time-code"
+                disabled
+                aria-describedby="auth-otp-hint"
+              />
+              <p id="auth-otp-hint" class="auth-hint">Код подставится автоматически через несколько секунд.</p>
+              <button type="button" id="auth-otp-done" class="primary-button auth-primary-btn" disabled>
+                Войти
+              </button>
             </div>
           </div>
         </div>
@@ -349,9 +401,11 @@
       </div>
     </div>
 
+    <div id="session-idle-warning" class="session-idle-warning hidden" role="alert" aria-live="assertive"></div>
+
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
-    <script src="./api-client.js?v=202605063"></script>
-    <script src="./app.js?v=202605063"></script>
+    <script src="./api-client.js?v=202605064"></script>
+    <script src="./app.js?v=202605064"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>
