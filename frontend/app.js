@@ -1842,9 +1842,12 @@ function applyAuthScreenI18n() {
   if (authPanelSubtitle) authPanelSubtitle.textContent = copy.authSubtitle;
   const phoneLab = document.querySelector("#auth-phone-label");
   if (phoneLab) phoneLab.textContent = copy.authPhoneLabel;
-  document.querySelector("#auth-phone-hint")?.textContent = copy.authPhoneHint;
-  document.querySelector("#auth-otp-label")?.textContent = copy.authOtpLabel;
-  document.querySelector("#auth-otp-hint")?.textContent = copy.authOtpHint;
+  const authPhoneHintEl = document.querySelector("#auth-phone-hint");
+  if (authPhoneHintEl) authPhoneHintEl.textContent = copy.authPhoneHint;
+  const authOtpLabelEl = document.querySelector("#auth-otp-label");
+  if (authOtpLabelEl) authOtpLabelEl.textContent = copy.authOtpLabel;
+  const authOtpHintEl = document.querySelector("#auth-otp-hint");
+  if (authOtpHintEl) authOtpHintEl.textContent = copy.authOtpHint;
   if (authPhoneClearBtn) authPhoneClearBtn.textContent = copy.authClear;
   if (authPhoneContinueBtn) authPhoneContinueBtn.textContent = copy.authContinue;
   if (authOtpDoneBtn) authOtpDoneBtn.textContent = copy.authLogin;
