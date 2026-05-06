@@ -27,6 +27,8 @@ from app.models import (
     HealthResponse,
     RecommendRequest,
     RecommendResponse,
+    SupportChatRequest,
+    SupportChatResponse,
     TicketSearchRequest,
     TicketSearchResponse,
     TrainCarriageDetailsRequest,
@@ -323,6 +325,19 @@ async def fun_fact(request: FunFactRequest) -> FunFactResponse:
         request.destination,
     )
     return FunFactResponse(fact=fact, source=source)
+
+
+@app.post("/api/support-chat", response_model=SupportChatResponse)
+async def support_chat(request: SupportChatRequest) -> SupportChatResponse:
+    """Имитация чата с техподдержкой; ответ генерирует DeepSeek или локальный fallback."""
+
+    prior = [(t.role, t.text) for t in request.conversation[-14:]]
+    reply, source = await deepseek_client.generate_support_reply(
+        request.language,
+        request.message,
+        prior_messages=prior,
+    )
+    return SupportChatResponse(reply=reply, source=source)
 
 
 @app.post("/api/checkout/demo", response_model=DemoTicket)

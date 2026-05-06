@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Путь — умный билетный терминал</title>
-    <link rel="stylesheet" href="./styles.css?v=202605083" />
+    <link rel="stylesheet" href="./styles.css?v=202605084" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -42,6 +42,9 @@
             </button>
           </div>
           <button id="new-session-button" class="ghost-button hidden">Новый запрос</button>
+          <button type="button" id="help-support-button" class="ghost-button hidden" aria-haspopup="dialog">
+            Помощь
+          </button>
           <button
             type="button"
             id="session-logout-button"
@@ -384,6 +387,40 @@
     </main>
 
     <div
+      id="support-chat-modal"
+      class="support-chat-modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="support-chat-title"
+      aria-hidden="true"
+    >
+      <div id="support-chat-backdrop" class="support-chat-backdrop"></div>
+      <div class="support-chat-sheet">
+        <header class="support-chat-header">
+          <div>
+            <h2 id="support-chat-title">Техподдержка</h2>
+            <p id="support-chat-disclaimer" class="support-chat-disclaimer"></p>
+          </div>
+          <button type="button" id="support-chat-close" class="ghost-button support-chat-close-btn">Закрыть</button>
+        </header>
+        <div id="support-chat-messages" class="support-chat-messages" tabindex="-1"></div>
+        <div class="support-chat-compose">
+          <textarea id="support-chat-input" maxlength="2000" rows="2"></textarea>
+          <div class="support-chat-compose-actions">
+            <button type="button" id="support-chat-mic" class="ghost-button support-chat-mic-btn" aria-label="Голосовой ввод">
+              <svg class="support-chat-mic-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V20h2v-2.08A7 7 0 0 0 19 11h-2z"
+                />
+              </svg>
+            </button>
+            <button type="button" id="support-chat-send" class="primary-button support-chat-send-btn">Отправить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
       id="path-log-modal"
       class="path-log-modal hidden"
       role="dialog"
@@ -410,8 +447,8 @@
     <div id="session-idle-warning" class="session-idle-warning hidden" role="alert" aria-live="assertive"></div>
 
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
-    <script src="./api-client.js?v=202605083"></script>
-    <script src="./app.js?v=202605083"></script>
+    <script src="./api-client.js?v=202605084"></script>
+    <script src="./app.js?v=202605084"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>
