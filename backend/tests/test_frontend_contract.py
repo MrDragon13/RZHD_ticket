@@ -40,6 +40,12 @@ def test_api_client_has_fetch_wrappers():
     assert "X-Request-Id" in api
 
 
+def test_app_js_no_optional_chain_assignment():
+    """Выражение obj?.prop = val недопустимо как LHS — SyntaxError в браузере."""
+    src = _app_js()
+    assert "?.textContent =" not in src
+
+
 def test_app_js_delegates_http_to_api_client():
     src = _app_js()
     assert "async function fetchApi" not in src
