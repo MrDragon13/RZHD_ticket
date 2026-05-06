@@ -674,7 +674,15 @@ html[data-theme="rzd"] .vkeyboard-key {
   gap: clamp(8px, 1.5vmin, 12px);
 }
 
-.top-actions .ghost-button {
+.top-actions .ghost-button,
+.top-actions .theme-toggle,
+.top-actions .text-input-toggle.topbar-text-toggle,
+.top-actions .ghost-button.ghost-button--badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
   min-height: clamp(42px, 8vmin, 48px);
   padding: clamp(8px, 1.6vmin, 10px) clamp(12px, 2.2vmin, 14px);
   border-radius: 999px;
@@ -692,8 +700,21 @@ html[data-theme="rzd"] .vkeyboard-key {
     box-shadow 0.2s ease;
 }
 
-.top-actions .ghost-button:hover {
+.top-actions .ghost-button:hover,
+.top-actions .theme-toggle:hover,
+.top-actions .text-input-toggle.topbar-text-toggle:hover {
   border-color: var(--cyan);
+}
+
+.top-actions .ghost-button--badge {
+  pointer-events: none;
+  cursor: default;
+  user-select: none;
+}
+
+.top-actions .ghost-button--badge:hover {
+  border-color: var(--border);
+  box-shadow: 0 4px 20px var(--panel-glow);
 }
 
 .terminal-status-strip {
@@ -1493,26 +1514,13 @@ body.ui-interaction-locked #user-input {
     background 0.2s ease;
 }
 
-/* Кнопка «Текст» в шапке (рядом с RU) */
+/* Кнопка «Текст» в шапке (единый стиль с остальными pill в top-actions) */
 .top-actions .text-input-toggle.topbar-text-toggle {
   align-self: center;
   margin: 0;
-  min-height: 48px;
-  padding: 10px 14px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  box-shadow: 0 4px 20px var(--panel-glow);
-  backdrop-filter: blur(10px);
-  -webkit-tap-highlight-color: transparent;
   opacity: 1;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  cursor: pointer;
 }
 
 .top-actions .text-input-toggle.topbar-text-toggle:hover,
@@ -2810,38 +2818,17 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
   box-shadow: inset 0 0 0 1px rgba(0, 255, 156, 0.06);
 }
 
-/* --- Переключатель темы (шапка, рядом с RU) --- */
+/* --- Переключатель темы (шапка) --- */
 .theme-toggle-host {
   display: flex;
   align-items: center;
   flex-shrink: 0;
 }
 
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
+.top-actions .theme-toggle {
   gap: 6px;
-  padding: 10px 14px;
-  min-height: 48px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 4px 20px var(--panel-glow);
-  backdrop-filter: blur(10px);
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.theme-toggle:hover {
-  border-color: var(--cyan);
 }
 
 .theme-toggle__sep {

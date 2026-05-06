@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Путь — умный билетный терминал</title>
-    <link rel="stylesheet" href="./styles.css?v=202605070" />
+    <link rel="stylesheet" href="./styles.css?v=202605071" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -21,15 +21,13 @@
           <strong id="session-user-name"></strong>
         </div>
         <div class="top-actions">
-          <button id="new-session-button" class="ghost-button hidden">Новый запрос</button>
           <button
             type="button"
-            id="session-logout-button"
-            class="ghost-button session-logout-button hidden"
-            aria-label="Выход"
-          >
-            Выход
-          </button>
+            id="text-input-toggle"
+            class="text-input-toggle topbar-text-toggle hidden"
+            aria-expanded="false"
+            aria-controls="text-input-panel"
+          ></button>
           <div class="theme-toggle-host">
             <button
               type="button"
@@ -43,14 +41,18 @@
               <span class="theme-toggle__rzd theme-toggle__opt">РЖД</span>
             </button>
           </div>
-          <div id="language-badge" class="status-pill">RU</div>
+          <button id="new-session-button" class="ghost-button hidden">Новый запрос</button>
           <button
             type="button"
-            id="text-input-toggle"
-            class="text-input-toggle topbar-text-toggle hidden"
-            aria-expanded="false"
-            aria-controls="text-input-panel"
-          ></button>
+            id="session-logout-button"
+            class="ghost-button session-logout-button hidden"
+            aria-label="Выход"
+          >
+            Выход
+          </button>
+          <div id="language-badge" class="ghost-button ghost-button--badge" role="status" aria-live="polite">
+            RU
+          </div>
         </div>
       </header>
 
@@ -413,8 +415,8 @@
     <div id="session-idle-warning" class="session-idle-warning hidden" role="alert" aria-live="assertive"></div>
 
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
-    <script src="./api-client.js?v=202605070"></script>
-    <script src="./app.js?v=202605070"></script>
+    <script src="./api-client.js?v=202605071"></script>
+    <script src="./app.js?v=202605071"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>
