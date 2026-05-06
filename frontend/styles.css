@@ -2133,20 +2133,19 @@ body.ui-interaction-locked #user-input {
   box-shadow: inset 0 0 0 1px rgba(0, 255, 156, 0.06);
 }
 
-/* --- Переключатель темы (фиксированный угол) --- */
+/* --- Переключатель темы (шапка, рядом с RU) --- */
 .theme-toggle-host {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 50;
-  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .theme-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 10px 14px;
+  min-height: 48px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--panel);
