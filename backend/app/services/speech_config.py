@@ -13,11 +13,11 @@ TtsMode = Literal["piper", "legacy"]
 
 
 def _env_stt_requested() -> SttMode:
-    raw = os.getenv("SPEECH_STT_ENGINE", "vosk").strip().lower()
+    raw = os.getenv("SPEECH_STT_ENGINE", "legacy").strip().lower()
     if raw in ("vosk", "legacy"):
         return raw  # type: ignore[return-value]
-    logger.warning("SPEECH_STT_ENGINE=%r invalid, using vosk", raw)
-    return "vosk"
+    logger.warning("SPEECH_STT_ENGINE=%r invalid, using legacy", raw)
+    return "legacy"
 
 
 def _env_tts_requested() -> TtsMode:

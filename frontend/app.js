@@ -957,7 +957,7 @@ function formatRoutePair(origin, destination, lang = language) {
 }
 
 /** Режимы STT/TTS с сервера (по умолчанию Vosk + Piper). */
-let speechSettings = { stt_engine: "vosk", tts_engine: "piper" };
+let speechSettings = { stt_engine: "legacy", tts_engine: "piper" };
 let pathSpeechAudio = null;
 let voskMimeType = "audio/webm";
 let voskMediaRecorder = null;

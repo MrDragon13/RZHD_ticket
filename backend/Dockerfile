@@ -40,8 +40,8 @@ COPY app ./app
 
 EXPOSE 8000
 
-# По умолчанию серверный лёгкий STT/TTS; legacy = Web Speech API в браузере (отдельные флаги).
-ENV SPEECH_STT_ENGINE=vosk
+# STT по умолчанию — браузер (legacy); TTS — Piper на сервере (можно переключить через ENV).
+ENV SPEECH_STT_ENGINE=legacy
 ENV SPEECH_TTS_ENGINE=piper
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
