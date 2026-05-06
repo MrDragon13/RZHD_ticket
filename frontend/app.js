@@ -3255,7 +3255,6 @@ function renderTrains() {
   }
   syncCheckoutPanelPlacement();
   updateRouteMapForSelectedTrain();
-  scrollRecommendedTrainCardIntoView();
 }
 
 /** Сразу после поиска: рекомендованный поезд считается выбранным — «Оформить» под его карточкой без клика. Этап UI остаётся results. */
@@ -3280,20 +3279,30 @@ async function prepareRecommendedCheckoutUi() {
   updateRouteMapForSelectedTrain();
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      const behavior = prefersReducedMotion() ? "auto" : "smooth";
-      checkoutPanel.scrollIntoView({ behavior, block: "nearest" });
+      scrollRecommendedTrainCardIntoView();
     });
   });
 }
 
-/** После выдачи списка — прокрутить к рекомендованной карточке сразу под закреплённым assistant-core. */
+/** Прокрутка только контейнера `.control-panel-scroll`, чтобы карточка оказалась у верхней границы области под закреплённым assistant-core (scrollIntoView часто трогает неверного предка). */
 function scrollRecommendedTrainCardIntoView() {
   const card = document.querySelector("#trains-list .train-card-best");
-  if (!card) return;
+  const scrollRoot = document.querySelector(".control-panel-scroll");
+  if (!card || !scrollRoot) return;
   const behavior = prefersReducedMotion() ? "auto" : "smooth";
+  const align = () => {
+    const c = document.querySelector("#trains-list .train-card-best");
+    const root = document.querySelector(".control-panel-scroll");
+    if (!c || !root) return;
+    const cardRect = c.getBoundingClientRect();
+    const rootRect = root.getBoundingClientRect();
+    const deltaTop = cardRect.top - rootRect.top;
+    const nextTop = Math.max(0, root.scrollTop + deltaTop - 4);
+    root.scrollTo({ top: nextTop, behavior });
+  };
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      card.scrollIntoView({ block: "start", behavior });
+      align();
     });
   });
 }
