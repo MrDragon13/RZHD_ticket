@@ -214,51 +214,56 @@
           </section>
 
           <aside class="control-panel">
-            <div class="assistant-core">
-              <button id="orb-button" class="orb" aria-label="Запустить голосовой ввод"></button>
-              <div class="assistant-text" aria-live="polite" aria-atomic="true">
-                <h2 id="listen-label">Слушать</h2>
-                <p id="assistant-text">Добро пожаловать. Куда направимся?</p>
-                <p id="start-prompt" class="orb-hint">Коснитесь сферы и скажите, куда вы хотите поехать</p>
+            <div class="control-panel-head">
+              <div class="assistant-core">
+                <button id="orb-button" class="orb" aria-label="Запустить голосовой ввод"></button>
+                <div class="assistant-text" aria-live="polite" aria-atomic="true">
+                  <h2 id="listen-label">Слушать</h2>
+                  <p id="assistant-text">Добро пожаловать. Куда направимся?</p>
+                  <p id="start-prompt" class="orb-hint">Коснитесь сферы и скажите, куда вы хотите поехать</p>
+                </div>
               </div>
+
+              <section class="history-panel">
+                <p class="brand-subtitle" id="history-title">История диалога</p>
+                <div id="dialog-history" class="dialog-history"></div>
+              </section>
+
+              <button
+                type="button"
+                id="text-input-toggle"
+                class="text-input-toggle"
+                aria-expanded="false"
+                aria-controls="text-input-panel"
+              ></button>
+              <div id="text-input-panel" class="text-input-panel hidden">
+                <div class="input-row">
+                  <input id="user-input" autocomplete="off" placeholder="Например: хочу приехать в Казань к началу рабочего дня 6 мая" />
+                  <button id="send-button" type="button" class="primary-button">Отправить</button>
+                </div>
+              </div>
+
+              <div id="chips" class="chips"></div>
             </div>
 
-            <section class="history-panel">
-              <p class="brand-subtitle" id="history-title">История диалога</p>
-              <div id="dialog-history" class="dialog-history"></div>
-            </section>
+            <div class="control-panel-body">
+              <p id="transcript" class="brand-subtitle"></p>
 
-            <button
-              type="button"
-              id="text-input-toggle"
-              class="text-input-toggle"
-              aria-expanded="false"
-              aria-controls="text-input-panel"
-            ></button>
-            <div id="text-input-panel" class="text-input-panel hidden">
-              <div class="input-row">
-                <input id="user-input" autocomplete="off" placeholder="Например: хочу приехать в Казань к началу рабочего дня 6 мая" />
-                <button id="send-button" class="primary-button">Отправить</button>
-              </div>
+              <section id="intent-panel" class="hidden">
+                <h2 id="intent-title">Я понял запрос</h2>
+                <div id="intent-grid" class="intent-grid"></div>
+              </section>
+
+              <section id="trains-panel" class="hidden" aria-busy="false">
+                <h2 id="trains-title">Рекомендованные поезда</h2>
+                <div id="trains-list" class="train-list"></div>
+              </section>
+
+              <section id="checkout-panel" class="hidden">
+                <button id="checkout-button" type="button" class="primary-button">Оформить демо-билет</button>
+                <div id="checkout-steps"></div>
+              </section>
             </div>
-
-            <div id="chips" class="chips"></div>
-            <p id="transcript" class="brand-subtitle"></p>
-
-            <section id="intent-panel" class="hidden">
-              <h2 id="intent-title">Я понял запрос</h2>
-              <div id="intent-grid" class="intent-grid"></div>
-            </section>
-
-            <section id="trains-panel" class="hidden" aria-busy="false">
-              <h2 id="trains-title">Рекомендованные поезда</h2>
-              <div id="trains-list" class="train-list"></div>
-            </section>
-
-            <section id="checkout-panel" class="hidden">
-              <button id="checkout-button" type="button" class="primary-button">Оформить демо-билет</button>
-              <div id="checkout-steps"></div>
-            </section>
           </aside>
         </div>
 

@@ -769,6 +769,33 @@ body.ui-interaction-locked #user-input {
   padding: 26px;
 }
 
+.control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 24px;
+  overflow: hidden;
+}
+
+.control-panel-head {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.control-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 6px;
+}
+
 .checkout-train-summary {
   flex-shrink: 0;
   padding: 18px 20px;
@@ -1045,15 +1072,6 @@ body.ui-interaction-locked #user-input {
   margin-bottom: 8px;
   color: var(--green);
   letter-spacing: 0.12em;
-}
-
-.control-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 24px;
-  overflow: auto;
-  scrollbar-gutter: stable;
 }
 
 .text-input-toggle {
