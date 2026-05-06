@@ -3080,6 +3080,20 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
   border-radius: 999px;
 }
 
+.support-chat-clear-btn {
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: clamp(12px, 2.05vmin, 14px);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.support-chat-clear-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
 .support-chat-mic-icon {
   width: 22px;
   height: 22px;
