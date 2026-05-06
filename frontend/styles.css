@@ -300,6 +300,28 @@ button {
   gap: 12px;
 }
 
+.top-actions .ghost-button {
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--panel);
+  box-shadow: 0 4px 20px var(--panel-glow);
+  backdrop-filter: blur(10px);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.top-actions .ghost-button:hover {
+  border-color: var(--cyan);
+}
+
 .terminal-status-strip {
   padding: 0 28px 10px;
 }
