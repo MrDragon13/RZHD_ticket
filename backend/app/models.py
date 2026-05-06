@@ -136,6 +136,13 @@ class SeatDetails(BaseModel):
 CompartmentKind = Literal["unknown", "female", "male", "mixed", "children", "family"]
 
 
+class CompartmentSeatHint(BaseModel):
+    """Сопоставление индекса отсека на схеме (0-based) и пола из строки seats[] РЖД."""
+
+    compartment_index: int = Field(..., ge=0, le=48)
+    kind: CompartmentKind
+
+
 class CarriageDetail(BaseModel):
     """Метаданные одного вагона из слоя РЖД (5764): номер, тип, пол купе, услуги."""
 
@@ -145,6 +152,10 @@ class CarriageDetail(BaseModel):
     add_signs_raw: str | None = Field(default=None, description="Сырой код addSigns с сайта РЖД.")
     service_summary: str | None = Field(default=None, description="Краткий текст из clsName без HTML.")
     services_short: list[str] = Field(default_factory=list, description="Подписи услуг (биотуалет, кондиционер…).")
+    compartment_seat_hints: list[CompartmentSeatHint] = Field(
+        default_factory=list,
+        description="Пол отдельных отсеков, если в seats[] удалось извлечь номер купе и признак.",
+    )
     berth_totals: SeatDetails | None = Field(
         default=None,
         description="Вместимость по категориям полок из seats[] вагона (РЖД).",

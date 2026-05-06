@@ -81,14 +81,17 @@ const i18n = {
     seatPickerCarriage: "Вагон",
     seatPickerZoneOpen: "Открытая часть вагона (места 1–36)",
     seatPickerZoneSide: "Боковые места у окна (места 37–54)",
-    seatPickerKindFemale:
-      "По данным РЖД весь выбранный вагон — женское купе; блоки мест подсвечены розовым.",
-    seatPickerKindMale:
-      "По данным РЖД весь вагон — мужское купе; блоки мест подсвечены голубым.",
-    seatPickerKindMixed:
-      "По данным РЖД вагон со смешанным купе; блоки мест слегка подсвечены.",
-    seatPickerKindChildren: "По данным РЖД детское купе в этом вагоне.",
-    seatPickerKindFamily: "По данным РЖД семейное купе в этом вагоне.",
+    seatPickerKindFromSeatRows:
+      "Подсветка по строкам seats РЖД: видны отдельные отсеки, где удалось сопоставить номер купе и пол.",
+    seatPickerKindFemaleSingleFallback:
+      "Вагон помечен как женский без разбивки по отсекам — один блок на схеме выделен как условное женское купе.",
+    seatPickerKindMaleSingleFallback:
+      "Вагон помечен как мужской без разбивки по отсекам — один блок выделен как условное мужское купе.",
+    seatPickerKindMixed: "По данным РЖД — смешанное купе (метаданные вагона).",
+    seatPickerKindChildren:
+      "Детское купе по данным РЖД без номера отсека — один блок выделен условно.",
+    seatPickerKindFamily:
+      "Семейное купе по данным РЖД без номера отсека — один блок выделен условно.",
     selectedTrainHeading: "Выбранный поезд",
     carClassPlatzkart: "Плацкарт",
     carClassCoupe: "Купе",
@@ -165,12 +168,17 @@ const i18n = {
     seatPickerCarriage: "Car",
     seatPickerZoneOpen: "Open section (seats 1–36)",
     seatPickerZoneSide: "Side berths by the window (seats 37–54)",
-    seatPickerKindFemale:
-      "RZD lists this whole car as a female compartment; seat blocks are tinted pink.",
-    seatPickerKindMale: "RZD lists this whole car as a male compartment; seat blocks are tinted blue.",
-    seatPickerKindMixed: "RZD lists mixed compartments in this car (light tint on blocks).",
-    seatPickerKindChildren: "RZD indicates children compartments in this car.",
-    seatPickerKindFamily: "RZD indicates family compartments in this car.",
+    seatPickerKindFromSeatRows:
+      "Seat rows from RZD: highlighted compartments where coupe index and gender could be parsed.",
+    seatPickerKindFemaleSingleFallback:
+      "RZD marked the car as female without per-compartment split — one block is highlighted as an illustrative female coupe.",
+    seatPickerKindMaleSingleFallback:
+      "RZD marked the car as male without per-compartment split — one block is highlighted as an illustrative male coupe.",
+    seatPickerKindMixed: "RZD metadata: mixed compartment car.",
+    seatPickerKindChildren:
+      "Children compartment per RZD without coupe index — one block highlighted illustratively.",
+    seatPickerKindFamily:
+      "Family compartment per RZD without coupe index — one block highlighted illustratively.",
     selectedTrainHeading: "Selected train",
     carClassPlatzkart: "Platzkart",
     carClassCoupe: "Coupe",
@@ -948,15 +956,58 @@ function compartmentKindLabel(kind) {
   }
 }
 
-/** Класс для подсветки купе на схеме: РЖД отдаёт пол сегмента на уровне вагона, не отдельного купе. */
-function compartmentCubeToneClass(train, car) {
+function cubeToneClassFromKind(kind) {
+  if (kind === "female") return "compartment-cube--female";
+  if (kind === "male") return "compartment-cube--male";
+  if (kind === "mixed") return "compartment-cube--mixed";
+  if (kind === "children") return "compartment-cube--children";
+  if (kind === "family") return "compartment-cube--family";
+  return "";
+}
+
+function deterministicFallbackCompartmentIndex(train, car, salt, compartmentCount) {
+  if (!compartmentCount || compartmentCount <= 0) return 0;
+  const seed = hashSeed(`${train?.id || ""}|${String(car)}|${salt}`);
+  const rng = mulberry32(seed);
+  return Math.floor(rng() * compartmentCount);
+}
+
+/**
+ * Подсветка одного блока купе: сначала compartment_seat_hints из разбора seats[] на бэкенде;
+ * иначе для вагона с «жен/муж/дет/сем» без отсеков — один детерминированно выбранный отсек.
+ */
+function compartmentToneClassForCube(train, car, compartmentIndex, compartmentCount) {
   const det = train && car ? carriageDetailForTab(train, car) : null;
-  const k = det?.compartment_kind;
-  if (k === "female") return "compartment-cube--female";
-  if (k === "male") return "compartment-cube--male";
-  if (k === "mixed") return "compartment-cube--mixed";
-  if (k === "children") return "compartment-cube--children";
-  if (k === "family") return "compartment-cube--family";
+  if (!det) return "";
+  const hints = det.compartment_seat_hints;
+  if (Array.isArray(hints) && hints.length > 0) {
+    const row = hints.find((h) => Number(h.compartment_index) === Number(compartmentIndex));
+    if (row && row.kind && row.kind !== "unknown") {
+      return cubeToneClassFromKind(row.kind);
+    }
+    return "";
+  }
+  const wk = det.compartment_kind;
+  if (wk === "female") {
+    const pick = deterministicFallbackCompartmentIndex(train, car, "female-coupe", compartmentCount);
+    return pick === compartmentIndex ? "compartment-cube--female" : "";
+  }
+  if (wk === "male") {
+    const pick = deterministicFallbackCompartmentIndex(train, car, "male-coupe", compartmentCount);
+    return pick === compartmentIndex ? "compartment-cube--male" : "";
+  }
+  if (wk === "children") {
+    const pick = deterministicFallbackCompartmentIndex(train, car, "children-coupe", compartmentCount);
+    return pick === compartmentIndex ? "compartment-cube--children" : "";
+  }
+  if (wk === "family") {
+    const pick = deterministicFallbackCompartmentIndex(train, car, "family-coupe", compartmentCount);
+    return pick === compartmentIndex ? "compartment-cube--family" : "";
+  }
+  if (wk === "mixed") {
+    const pick = deterministicFallbackCompartmentIndex(train, car, "mixed-coupe", compartmentCount);
+    return pick === compartmentIndex ? "compartment-cube--mixed" : "";
+  }
   return "";
 }
 
@@ -964,11 +1015,15 @@ function seatPickerCompartmentKindHint(train, car) {
   const det = train && car ? carriageDetailForTab(train, car) : null;
   if (!det) return "";
   const copy = i18n[language];
+  const hints = det.compartment_seat_hints;
+  if (Array.isArray(hints) && hints.length > 0) {
+    return copy.seatPickerKindFromSeatRows;
+  }
   switch (det.compartment_kind) {
     case "female":
-      return copy.seatPickerKindFemale;
+      return copy.seatPickerKindFemaleSingleFallback;
     case "male":
-      return copy.seatPickerKindMale;
+      return copy.seatPickerKindMaleSingleFallback;
     case "mixed":
       return copy.seatPickerKindMixed;
     case "children":
@@ -2361,7 +2416,7 @@ function renderCarriageTabs() {
   });
 }
 
-function appendStandardCoupeCube(grid, car, compSeats, cubeExtraClass = "") {
+function appendStandardCoupeCube(grid, car, compSeats, train, compartmentCount) {
   const byPair = new Map();
   compSeats.forEach((seat) => {
     const pi = seat.pairIndex ?? 0;
@@ -2371,8 +2426,10 @@ function appendStandardCoupeCube(grid, car, compSeats, cubeExtraClass = "") {
     else slot.lower = seat;
   });
   const pairIndices = [...byPair.keys()].sort((a, b) => a - b);
+  const ci = compSeats[0]?.compartmentIndex ?? 0;
+  const tone = compartmentToneClassForCube(train, car, ci, compartmentCount);
   const cube = document.createElement("div");
-  cube.className = ["compartment-cube", cubeExtraClass].filter(Boolean).join(" ");
+  cube.className = ["compartment-cube", tone].filter(Boolean).join(" ");
   pairIndices.forEach((pairIdx) => {
     const slot = byPair.get(pairIdx);
     const col = document.createElement("div");
@@ -2410,8 +2467,8 @@ function renderSeatGrid() {
     byCompartment.get(ci).push(seat);
   });
   const cls = carriageClassKey(car);
-  const toneCls = compartmentCubeToneClass(selectedTrain, car);
   const compIndices = [...byCompartment.keys()].sort((a, b) => a - b);
+  const compartmentCount = compIndices.length ? Math.max(...compIndices) + 1 : 1;
   const isPlatzkartClassic =
     cls === "platzkart" && seats.some((s) => s.zone === "open") && seats.some((s) => s.zone === "side");
   if (isPlatzkartClassic) {
@@ -2432,7 +2489,7 @@ function renderSeatGrid() {
     const openFlex = document.createElement("div");
     openFlex.className = "car-platz-open-cubes";
     for (let compIdx = 0; compIdx < 9; compIdx += 1) {
-      appendStandardCoupeCube(openFlex, car, openByComp.get(compIdx) || [], toneCls);
+      appendStandardCoupeCube(openFlex, car, openByComp.get(compIdx) || [], selectedTrain, 9);
     }
     secOpen.append(openFlex);
     grid.append(secOpen);
@@ -2481,7 +2538,7 @@ function renderSeatGrid() {
       const flex0 = document.createElement("div");
       flex0.className = "car-deck-cubes";
       d0.forEach((compIdx) => {
-        appendStandardCoupeCube(flex0, car, byCompartment.get(compIdx) || [], toneCls);
+        appendStandardCoupeCube(flex0, car, byCompartment.get(compIdx) || [], selectedTrain, compartmentCount);
       });
       row0.append(flex0);
       grid.append(row0);
@@ -2496,7 +2553,7 @@ function renderSeatGrid() {
       const flex1 = document.createElement("div");
       flex1.className = "car-deck-cubes";
       d1.forEach((compIdx) => {
-        appendStandardCoupeCube(flex1, car, byCompartment.get(compIdx) || [], toneCls);
+        appendStandardCoupeCube(flex1, car, byCompartment.get(compIdx) || [], selectedTrain, compartmentCount);
       });
       row1.append(flex1);
       grid.append(row1);
@@ -2507,7 +2564,8 @@ function renderSeatGrid() {
     const compSeats = byCompartment.get(compIdx) || [];
     if (cls === "sv") {
       const cube = document.createElement("div");
-      cube.className = ["compartment-cube", "compartment-cube--sv", toneCls].filter(Boolean).join(" ");
+      const tone = compartmentToneClassForCube(selectedTrain, car, compIdx, compartmentCount);
+      cube.className = ["compartment-cube", "compartment-cube--sv", tone].filter(Boolean).join(" ");
       [...compSeats]
         .sort((a, b) => parseInt(a.displayNum, 10) - parseInt(b.displayNum, 10))
         .forEach((seat) => {
@@ -2516,7 +2574,7 @@ function renderSeatGrid() {
       grid.append(cube);
       return;
     }
-    appendStandardCoupeCube(grid, car, compSeats, toneCls);
+    appendStandardCoupeCube(grid, car, compSeats, selectedTrain, compartmentCount);
   });
 }
 

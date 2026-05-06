@@ -6,7 +6,7 @@ import html
 import re
 from typing import Any
 
-from app.models import CarriageDetail, CompartmentKind, SeatDetails
+from app.models import CarriageDetail, CompartmentKind, CompartmentSeatHint, SeatDetails
 
 
 def _strip_html(text: str) -> str:
@@ -42,6 +42,100 @@ def parse_compartment_kind(add_signs: str | None, cls_name: str | None) -> Compa
     if "смешан" in blob or "общ" in blob and "купе" in blob:
         return "mixed"
     return "unknown"
+
+
+_COMP_IDX_KEY_CANDIDATES = (
+    "compartmentIndex",
+    "compartment",
+    "compartmentNumber",
+    "compartmentNo",
+    "section",
+    "sectionNo",
+    "coupeNum",
+    "kupeNum",
+    "compIdx",
+    "compartmentIdx",
+    "compart",
+)
+
+
+def _extract_compartment_index_for_hint(seat_row: dict, blob: str) -> int | None:
+    """Пытаемся вытащить индекс отсека (0-based) из полей строки seats[] или из подписи."""
+
+    for key in _COMP_IDX_KEY_CANDIDATES:
+        raw = seat_row.get(key)
+        if raw is None or raw == "":
+            continue
+        try:
+            n = int(float(str(raw).strip().replace(",", ".")))
+        except (TypeError, ValueError):
+            continue
+        if 1 <= n <= 36:
+            return n - 1
+        if 0 <= n <= 35:
+            return n
+    b = _norm(blob)
+    for pat in (
+        r"(?:купе|комп(?:арт)?|отсек|сек(?:ция)?|бокс)[^\d]{0,16}(\d{1,2})\b",
+        r"\b(\d{1,2})(?:-?[еоыиaяь])?\s*(?:купе|комп|отсек)\b",
+    ):
+        m = re.search(pat, b, re.I)
+        if m:
+            n = int(m.group(1))
+            if 1 <= n <= 36:
+                return n - 1
+            if 0 <= n <= 35:
+                return n
+    return None
+
+
+def _merge_compartment_kinds(a: CompartmentKind, b: CompartmentKind) -> CompartmentKind:
+    if a == b:
+        return a
+    if {a, b} == {"female", "male"}:
+        return "mixed"
+    rank = {"unknown": 0, "family": 1, "children": 2, "mixed": 4, "male": 5, "female": 5}
+    return a if rank.get(a, 0) >= rank.get(b, 0) else b
+
+
+def infer_compartment_seat_hints(car: dict) -> list[CompartmentSeatHint]:
+    """Разбор seats[]: если в строке есть и пол, и номер отсека — добавляем hint."""
+
+    seats = car.get("seats")
+    if not isinstance(seats, list) or not seats:
+        return []
+    by_idx: dict[int, CompartmentKind] = {}
+    for s in seats:
+        if not isinstance(s, dict):
+            continue
+        parts = [
+            str(s.get("label") or ""),
+            str(s.get("typeLoc") or ""),
+            str(s.get("title") or ""),
+            str(s.get("name") or ""),
+            str(s.get("clsName") or ""),
+            str(s.get("catLabelLoc") or ""),
+            str(s.get("description") or ""),
+        ]
+        blob_raw = " ".join(parts)
+        blob = _norm(_strip_html(blob_raw))
+        if len(blob) < 4:
+            continue
+        kind = parse_compartment_kind(None, blob_raw)
+        if kind == "unknown":
+            continue
+        ci = _extract_compartment_index_for_hint(s, blob)
+        if ci is None:
+            continue
+        ci = max(0, min(ci, 48))
+        if ci in by_idx:
+            by_idx[ci] = _merge_compartment_kinds(by_idx[ci], kind)
+        else:
+            by_idx[ci] = kind
+    return [
+        CompartmentSeatHint(compartment_index=k, kind=v)
+        for k, v in sorted(by_idx.items(), key=lambda x: x[0])
+    ]
 
 
 def _service_labels(services: Any, limit: int = 12) -> list[str]:
@@ -99,6 +193,7 @@ def carriage_detail_from_rzd_car(car: dict) -> CarriageDetail | None:
 
     berth_totals = seat_details_totals_from_car_row_nested(car)
     berth_available = seat_details_available_from_car_row_nested(car)
+    compartment_seat_hints = infer_compartment_seat_hints(car)
 
     return CarriageDetail(
         number=number,
@@ -107,6 +202,7 @@ def carriage_detail_from_rzd_car(car: dict) -> CarriageDetail | None:
         add_signs_raw=add_raw,
         service_summary=summary,
         services_short=services_short,
+        compartment_seat_hints=compartment_seat_hints,
         berth_totals=_clean_seat_details(berth_totals),
         berth_available=_clean_seat_details(berth_available),
     )
