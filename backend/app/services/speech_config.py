@@ -47,7 +47,7 @@ def piper_voice_path(lang: str) -> str:
         ).strip()
     return os.getenv(
         "PIPER_VOICE_RU",
-        "/models/piper/ru_RU-irina-low.onnx",
+        "/models/piper/ru_RU-irina-medium.onnx",
     ).strip()
 
 

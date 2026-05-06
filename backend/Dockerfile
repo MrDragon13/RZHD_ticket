@@ -18,7 +18,7 @@ RUN mkdir -p /models/vosk && \
 
 # Piper CLI + лёгкие голоса RU/EN (CPU)
 ENV PIPER_BINARY=/usr/local/bin/piper
-ENV PIPER_VOICE_RU=/models/piper/ru_RU-irina-low.onnx
+ENV PIPER_VOICE_RU=/models/piper/ru_RU-irina-medium.onnx
 ENV PIPER_VOICE_EN=/models/piper/en_US-lessac-low.onnx
 
 RUN wget -q https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_amd64.tar.gz -O /tmp/piper.tgz && \
@@ -28,8 +28,8 @@ RUN wget -q https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_amd6
     rm -f /tmp/piper.tgz && rm -rf /tmp/piper
 
 RUN mkdir -p /models/piper && \
-    wget -q "https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/low/ru_RU-irina-low.onnx" -O /models/piper/ru_RU-irina-low.onnx && \
-    wget -q "https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/low/ru_RU-irina-low.onnx.json" -O /models/piper/ru_RU-irina-low.onnx.json && \
+    wget -q "https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx" -O /models/piper/ru_RU-irina-medium.onnx && \
+    wget -q "https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json" -O /models/piper/ru_RU-irina-medium.onnx.json && \
     wget -q "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/en_US-lessac-low.onnx" -O /models/piper/en_US-lessac-low.onnx && \
     wget -q "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/en_US-lessac-low.onnx.json" -O /models/piper/en_US-lessac-low.onnx.json
 
