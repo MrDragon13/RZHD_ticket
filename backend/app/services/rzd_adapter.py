@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import time as time_monotonic
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 
@@ -140,15 +141,31 @@ class RzdDataAdapter:
         day_end = datetime.combine(travel_date, time(23, 59, 59))
 
         enrich = _env_truthy_default_on("RZD_CARRIAGE_ENRICH")
-        route_stops_on_search = _env_truthy_default_on("RZD_ROUTE_STOPS_ON_SEARCH")
-        route_stops_max = int(os.getenv("RZD_ROUTE_STOPS_MAX_TRAINS", "40") or "40")
+        route_stops_on_search = _env_explicit_on("RZD_ROUTE_STOPS_ON_SEARCH")
+        route_stops_max = int(os.getenv("RZD_ROUTE_STOPS_MAX_TRAINS", "15") or "15")
         route_stops_max = max(1, min(route_stops_max, 40))
         carriage_max = int(os.getenv("RZD_CARRIAGE_ENRICH_MAX_TRAINS", "15") or "15")
         carriage_max = max(1, min(carriage_max, 40))
 
+        t_search0 = time_monotonic.monotonic()
+        logging.info(
+            "RZD search_live start origin=%r destination=%r date=%s route_stops_on_search=%s route_max=%s carriage_max=%s",
+            origin,
+            destination,
+            travel_date.isoformat(),
+            route_stops_on_search,
+            route_stops_max,
+            carriage_max,
+        )
+
         async with RzdFetcher() as fetcher:
             trains_iter = await fetcher.trains(origin, destination, TimeRange(day_start, day_end))
             trains_list = list(trains_iter)
+            logging.info(
+                "RZD search_live trains_layer dt=%.2fs raw_trains=%s",
+                time_monotonic.monotonic() - t_search0,
+                len(trains_list),
+            )
 
             # Слой 5827 уже даёт места в cars[] — можно отсеять поезда без мест до тяжёлых запросов.
             light: list[TrainOption] = []
@@ -233,6 +250,13 @@ class RzdDataAdapter:
                 tasks.extend(carriage_one(i) for i in carriage_idx)
                 if tasks:
                     await asyncio.gather(*tasks)
+                    logging.info(
+                        "RZD search_live secondary_RZD_done dt=%.2fs basicRoute_ok=%s carriage_ok=%s tasks=%s",
+                        time_monotonic.monotonic() - t_search0,
+                        len(basic_stops_by_index),
+                        len(carriage_by_index),
+                        len(tasks),
+                    )
                     if route_stops_on_search:
                         logging.info(
                             "RZD route stops on search: basicRoute_ok=%s eligible=%s cap=%s",
@@ -255,7 +279,14 @@ class RzdDataAdapter:
                 ),
             )
 
+        t_seg0 = time_monotonic.monotonic()
         enriched = await self._enrich_route_segments(request, mapped)
+        logging.info(
+            "RZD search_live done mapped=%s enrich_segments_dt=%.2fs total_dt=%.2fs",
+            len(mapped),
+            time_monotonic.monotonic() - t_seg0,
+            time_monotonic.monotonic() - t_search0,
+        )
 
         return TicketSearchResponse(
             source="live-cache",
@@ -314,6 +345,15 @@ def _env_truthy_default_on(name: str) -> bool:
     if not s:
         return True
     return s not in ("0", "false", "no")
+
+
+def _env_explicit_on(name: str) -> bool:
+    """Только явное включение 1/true/yes/on; по умолчанию выключено (для тяжёлых опций РЖД)."""
+
+    raw = os.getenv(name)
+    if raw is None:
+        return False
+    return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
 def _parse_travel_date(raw: str | None) -> date:
