@@ -284,6 +284,119 @@ function stationMatches(stationName, userHint) {
   return false;
 }
 
+/** Положение точки отправления по умолчанию (совпадает с разметкой до динамической линии). */
+const DEFAULT_ROUTE_ORIGIN = { x: 125, y: 350, labelX: 82, labelY: 386 };
+
+/** Кэш органической линии маршрута: пересчитываем только при смене пары городов. */
+let dynamicRouteCache = { key: "", geom: null };
+
+function hashRoutePairKey(normOrigin, normDest) {
+  const s = `${normOrigin}\u241f${normDest}`;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function mulberry32(seed) {
+  return function next() {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Кубическая Безье между «районом» отправления и прибытия; две контрольные точки — у краёв поля карты.
+ * Детерминировано от пары городов (одинаковый маршрут в рамках сессии).
+ */
+function buildOrganicRouteGeometry(normOrigin, normDest) {
+  const rnd = mulberry32(hashRoutePairKey(normOrigin, normDest));
+  const rx = (a, b) => a + rnd() * (b - a);
+
+  const ox = rx(68, 178);
+  const oy = rx(288, 452);
+  const dx = rx(672, 872);
+  const dy = rx(64, 248);
+
+  const roll = rnd();
+  let cp1x;
+  let cp1y;
+  let cp2x;
+  let cp2y;
+  if (roll < 0.34) {
+    cp1x = rx(36, 240);
+    cp1y = rx(40, 220);
+    cp2x = rx(540, 884);
+    cp2y = rx(96, 420);
+  } else if (roll < 0.67) {
+    cp1x = rx(48, 280);
+    cp1y = rx(300, 508);
+    cp2x = rx(500, 872);
+    cp2y = rx(48, 240);
+  } else {
+    cp1x = rx(180, 480);
+    cp1y = rx(36, 180);
+    cp2x = rx(400, 780);
+    cp2y = rx(260, 504);
+  }
+
+  const q = (n) => n.toFixed(1);
+  const line = `M${q(ox)} ${q(oy)} C${q(cp1x)} ${q(cp1y)} ${q(cp2x)} ${q(cp2y)} ${q(dx)} ${q(dy)}`;
+
+  return {
+    line,
+    origin: {
+      x: ox,
+      y: oy,
+      labelX: ox - 44,
+      labelY: oy + 38,
+    },
+    destination: {
+      x: dx,
+      y: dy,
+      labelX: dx - 58,
+      labelY: dy - 22,
+    },
+  };
+}
+
+function getDynamicRouteGeometry(originRaw, destRaw) {
+  const o = String(originRaw || "").trim();
+  const d = String(destRaw || "").trim();
+  if (!o || !d) return null;
+  const no = normalizeStationName(o);
+  const nd = normalizeStationName(d);
+  if (!no || !nd || no === nd) return null;
+
+  const key = `${no}\u241f${nd}`;
+  if (dynamicRouteCache.key === key && dynamicRouteCache.geom) {
+    return dynamicRouteCache.geom;
+  }
+  const geom = buildOrganicRouteGeometry(no, nd);
+  dynamicRouteCache = { key, geom };
+  return geom;
+}
+
+/** Шаблон из routeVisuals + при наличии пары городов — уникальная линия между ними. */
+function buildRouteVisualBase(destinationKey) {
+  const template = findRouteVisual(destinationKey);
+  const dyn = getDynamicRouteGeometry(intent?.origin, intent?.destination);
+  if (!dyn) {
+    return { ...template, origin: null };
+  }
+  return {
+    ...template,
+    line: dyn.line,
+    origin: dyn.origin,
+    destination: dyn.destination,
+    stops: [],
+  };
+}
+
 /**
  * Доля длины пути SVG до конечной точки сегмента пользователя на полном маршруте поезда.
  * Приоритет: поле route_segment с бэкенда (эвристика + DeepSeek).
@@ -436,7 +549,7 @@ function stopMarkersAlongPath(pathD, names, segmentFraction) {
 
 /** Объединяет шаблон маршрута по направлению с реальными остановками выбранного поезда. */
 function mergeRouteVisualForTrain(destinationKey, train) {
-  const base = findRouteVisual(destinationKey);
+  const base = buildRouteVisualBase(destinationKey);
   if (!train) return { ...base, routeClip: null };
 
   const pathProbe = document.createElementNS("http://www.w3.org/2000/svg", "path");
@@ -1138,15 +1251,25 @@ function updateMapGeometry(visual, labelOverride) {
     intent?.destination ??
     (language === "ru" ? "Казань" : "Kazan");
   const destinationDot = document.querySelector("#destination-dot");
+  const originDot = document.querySelector("#origin-dot");
   const originLabel = document.querySelector("#origin-label");
   const destinationLabel = document.querySelector("#destination-label");
+  const oVis = visual.origin || DEFAULT_ROUTE_ORIGIN;
+  if (originDot) {
+    originDot.setAttribute("cx", String(oVis.x));
+    originDot.setAttribute("cy", String(oVis.y));
+  }
   const { dots: stopDots, labels: stopLabels } = routeMapStopElements();
   [destinationDot, routePulse].forEach((dot) => {
     if (!dot) return;
     dot.setAttribute("cx", visual.destination.x);
     dot.setAttribute("cy", visual.destination.y);
   });
-  if (originLabel) originLabel.textContent = originText;
+  if (originLabel) {
+    originLabel.textContent = originText;
+    originLabel.setAttribute("x", String(oVis.labelX ?? oVis.x - 43));
+    originLabel.setAttribute("y", String(oVis.labelY ?? oVis.y + 36));
+  }
   if (destinationLabel) {
     destinationLabel.textContent = destText;
     destinationLabel.setAttribute("x", visual.destination.labelX);
@@ -2350,6 +2473,7 @@ function resetScenario(announce = true) {
   dialogMessages = [];
   speechQueue = [];
   isSpeaking = false;
+  dynamicRouteCache = { key: "", geom: null };
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   userInput.value = "";
   transcript.textContent = "";
