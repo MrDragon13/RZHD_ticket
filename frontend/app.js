@@ -2553,7 +2553,7 @@ async function searchAndRecommendBody(signal) {
     factText = i18n[language].routeFactUnavailable;
   }
   if (signal.aborted) return;
-  renderRoute(factText);
+  renderRoute(factText, { skipMapUpdate: true });
 
   if (!trains.length) {
     recommendations = [];
@@ -2652,9 +2652,13 @@ function renderIntent(data) {
   document.querySelector("#intent-grid").innerHTML = cards.join("");
 }
 
-function renderRoute(factText) {
-  document.querySelector("#route-fact").textContent = factText;
-  updateRouteMapForSelectedTrain();
+function renderRoute(factText, options = {}) {
+  const { skipMapUpdate = false } = options;
+  const factEl = document.querySelector("#route-fact");
+  if (factEl) factEl.textContent = factText;
+  if (!skipMapUpdate) {
+    updateRouteMapForSelectedTrain();
+  }
 }
 
 function findRouteVisual(destination) {
@@ -3089,6 +3093,34 @@ async function postRecommendWithRetries(payload, options = {}) {
   });
 }
 
+/** Панель оформления — сразу под выбранной карточкой (не внизу всего скролла). */
+function detachCheckoutPanelFromTrainList() {
+  const list = document.querySelector("#trains-list");
+  const panel = checkoutPanel;
+  if (!list || !panel) return;
+  if (panel.parentElement === list) {
+    list.insertAdjacentElement("afterend", panel);
+  }
+}
+
+function syncCheckoutPanelPlacement() {
+  const list = document.querySelector("#trains-list");
+  const panel = checkoutPanel;
+  if (!list || !panel || !trainsPanel) return;
+  if (panel.classList.contains("hidden") || !selectedTrain) {
+    if (panel.parentElement === list) {
+      list.insertAdjacentElement("afterend", panel);
+    }
+    return;
+  }
+  const card = list.querySelector(`.train-card[data-train-id="${selectedTrain.id}"]`);
+  if (card) {
+    card.insertAdjacentElement("afterend", panel);
+  } else if (panel.parentElement === list) {
+    list.insertAdjacentElement("afterend", panel);
+  }
+}
+
 function routeDistanceLabel() {
   const train = trainForRouteMap();
   const distance = train?.route_distance_km;
@@ -3099,6 +3131,7 @@ function routeDistanceLabel() {
 
 function renderTrains() {
   trainsPanel.classList.remove("hidden");
+  detachCheckoutPanelFromTrainList();
   const list = document.querySelector("#trains-list");
   list.innerHTML = "";
   const highlightId = getTrainHighlightId();
@@ -3137,6 +3170,8 @@ function renderTrains() {
     frag.append(card);
   });
   list.append(frag);
+  syncCheckoutPanelPlacement();
+  updateRouteMapForSelectedTrain();
   scrollRecommendedTrainCardIntoView();
 }
 
@@ -3258,7 +3293,8 @@ async function fetchTrainRouteStopsIfNeeded(train, signal) {
  * (без озвучки и без перехода в checkout): тот же поезд, что подсвечен как лучший.
  */
 async function refreshTopRecommendedTrainRouteLikeSelect(signal) {
-  const top = getTrainsForUi()[0];
+  const hid = getTrainHighlightId();
+  const top = hid ? trains.find((t) => t.id === hid) : getTrainsForUi()[0];
   if (!top) return;
   await fetchTrainRouteStopsIfNeeded(top, signal);
   if (signal?.aborted) return;
@@ -3323,6 +3359,7 @@ async function selectTrain(train, options = {}) {
   stopAssistantSpeech();
   selectedTrain = train;
   checkoutPanel.classList.remove("hidden");
+  syncCheckoutPanelPlacement();
   if (!checkoutAnimating && !issuingTicket) {
     checkoutButton.textContent = i18n[language].checkout;
     checkoutButton.disabled = false;
@@ -3341,7 +3378,8 @@ async function selectTrain(train, options = {}) {
   if (flight !== selectTrainSeq) return;
   updateTrainCardHighlight();
   updateRouteMapForSelectedTrain();
-  checkoutPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+  const scrollBehavior = prefersReducedMotion() ? "auto" : "smooth";
+  checkoutPanel.scrollIntoView({ behavior: scrollBehavior, block: "nearest" });
 }
 
 async function createTicket() {
@@ -3362,6 +3400,7 @@ async function createTicket() {
       item.classList.add("checkout-step-done");
     }
     checkoutPanel.classList.add("hidden");
+    syncCheckoutPanelPlacement();
     steps.innerHTML = "";
     let t = selectedTrain;
     if (ticketSearchSource === "live-cache") {
@@ -4746,6 +4785,7 @@ function resetScenario(announce = true) {
   [intentPanel, trainsPanel, checkoutPanel, seatPickerPanel, ticketPanel].forEach((panel) =>
     panel?.classList.add("hidden"),
   );
+  syncCheckoutPanelPlacement();
   hideCheckoutTrainSummary();
   exitCheckoutWorkspaceMode();
   mapContent?.classList.remove("hidden");

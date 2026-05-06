@@ -1899,6 +1899,16 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
   gap: 14px;
 }
 
+.train-list > #checkout-panel {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#trains-panel > #checkout-panel {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .train-card {
   padding: var(--space-md);
   border: 1px solid var(--border-card);
