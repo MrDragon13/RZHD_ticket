@@ -749,6 +749,11 @@ body.ui-interaction-locked #user-input {
   font-weight: 800;
 }
 
+.language-actions.language-actions--busy button {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
 .language-actions button:hover,
 .primary-button:hover,
 .chip:hover {

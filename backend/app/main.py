@@ -36,6 +36,7 @@ from app.models import (
     TripIntent,
     UnderstandRequest,
 )
+from app.rate_limit_middleware import PostApiRateLimitMiddleware
 from app.services.checkout import create_demo_ticket
 from app.services.deepseek_client import DeepSeekClient
 from app.services.recommendations import recommend_trains
@@ -58,6 +59,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_post_rate_limit = max(1, int(os.getenv("PATH_POST_RATE_LIMIT_PER_MINUTE", "180")))
+app.add_middleware(PostApiRateLimitMiddleware, limit_per_minute=_post_rate_limit)
 
 
 @app.middleware("http")

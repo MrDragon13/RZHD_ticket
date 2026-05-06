@@ -144,6 +144,7 @@ flowchart LR
 
 - **Fallback:** demo-данные и локальная логика при недоступности DeepSeek или при отказе live-запроса к РЖД (при включённом `RZD_LIVE_FALLBACK`).
 - **Ключи API** только на backend; браузер получает готовые JSON-ответы.
+- **Ограничение частоты POST к `/api/*`** по IP (память процесса), переменная `PATH_POST_RATE_LIMIT_PER_MINUTE` — защита от флуда при публичном URL.
 - **Доступность:** сочетание голоса и текста, live-области для объявлений ассистента, предсказуемые состояния ожидания (сфера, скелетоны списка поездов).
 
 ---
@@ -353,10 +354,10 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ```bash
 cd backend
-PYTHONPATH=. pytest tests/test_smoke.py -q
+PYTHONPATH=. pytest tests/ -q
 ```
 
-Проверяются `GET /api/health` и заголовок `X-Request-Id`.
+В каталоге `backend/tests/`: **smoke** (`GET /api/health`, заголовок `X-Request-Id`, контракт `/api/checkout-voice-intent`), **лимит POST** (`PostApiRateLimitMiddleware`) и **контрактные строки** во `frontend/app.js` (abort диалога, защита языка/поезда/STT, лимит сообщения, `maxlength` в разметке), чтобы регрессии ловились без браузера.
 
 ## Локальный запуск frontend без Docker
 

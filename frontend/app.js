@@ -1643,6 +1643,44 @@ const backendHealthBanner = document.querySelector("#backend-health-banner");
 /** Блокировка двойных отправок диалога / поиска */
 let uiInteractionLocked = false;
 
+/** Максимум символов в одном сообщении пользователя (paste / злоупотребление) */
+const MAX_USER_MESSAGE_CHARS = 4000;
+
+/** Отмена цепочки dialog → search при новом запросе или сбросе сценария */
+let dialogAbortController = null;
+
+function takeDialogAbortSignal() {
+  if (dialogAbortController) {
+    try {
+      dialogAbortController.abort();
+    } catch {
+      /* ignore */
+    }
+  }
+  dialogAbortController = new AbortController();
+  return dialogAbortController.signal;
+}
+
+function abortDialogRequests() {
+  if (dialogAbortController) {
+    try {
+      dialogAbortController.abort();
+    } catch {
+      /* ignore */
+    }
+    dialogAbortController = null;
+  }
+}
+
+/** Двойной клик по языку до завершения перехода экрана */
+let languageScreenBusy = false;
+
+/** Гонки при быстром переключении карточек поездов */
+let selectTrainSeq = 0;
+
+/** Одна активная сессия распознавания речи для сферы */
+let orbRecognition = null;
+
 const SCREEN_MOTION_MS = 340;
 const WORKSPACE_MOTION_MS = 300;
 
@@ -1782,6 +1820,7 @@ try {
 document.querySelector("#chips")?.addEventListener("click", (event) => {
   if (!event.target.matches("button")) return;
   const action = event.target.dataset.action;
+  if (uiInteractionLocked && action !== "restart") return;
   if (action === "restart") {
     resetScenario(true);
     return;
@@ -1830,33 +1869,41 @@ async function returnToLanguageIdleScreen() {
 }
 
 async function setLanguage(nextLanguage) {
-  stopLanguageScreenAmbient();
-  language = nextLanguage;
-  const copy = i18n[language];
-  if (languageBadge) languageBadge.textContent = language.toUpperCase();
-  document.querySelector("#terminal-title").textContent = copy.title;
-  document.querySelector("#start-prompt").textContent = copy.startPrompt;
-  document.querySelector("#send-button").textContent = copy.send;
-  document.querySelector("#listen-label").textContent = copy.listen;
-  document.querySelector("#history-title").textContent = copy.history;
-  userInput.placeholder = copy.textPlaceholder;
-  document.querySelector("#intent-title").textContent = copy.understood;
-  document.querySelector("#route-title").textContent = copy.route;
-  document.querySelector("#fact-title").textContent = copy.fact;
-  document.querySelector("#trains-title").textContent = copy.options;
-  document.querySelector("#restart-button").textContent = copy.restart;
-  newSessionButton.textContent = copy.newSession;
-  document.querySelector("#seat-picker-title").textContent = copy.seatPickerTitle;
-  document.querySelector("#seat-picker-hint").textContent = copy.seatPickerHint;
-  if (confirmSeatsButton) confirmSeatsButton.textContent = copy.seatPickerConfirm;
-  await transitionLanguageToTerminal();
-  newSessionButton?.classList.remove("hidden");
-  textInputToggle?.classList.remove("hidden");
-  resetScenario(false);
-  updateTextInputToggleLabels();
-  refreshThemeToggleLabels();
-  assistantSay(copy.assistantReady, { addToHistory: true });
-  void pingBackendHealth();
+  if (languageScreenBusy) return;
+  languageScreenBusy = true;
+  document.querySelector(".language-actions")?.classList.add("language-actions--busy");
+  try {
+    stopLanguageScreenAmbient();
+    language = nextLanguage;
+    const copy = i18n[language];
+    if (languageBadge) languageBadge.textContent = language.toUpperCase();
+    document.querySelector("#terminal-title").textContent = copy.title;
+    document.querySelector("#start-prompt").textContent = copy.startPrompt;
+    document.querySelector("#send-button").textContent = copy.send;
+    document.querySelector("#listen-label").textContent = copy.listen;
+    document.querySelector("#history-title").textContent = copy.history;
+    userInput.placeholder = copy.textPlaceholder;
+    document.querySelector("#intent-title").textContent = copy.understood;
+    document.querySelector("#route-title").textContent = copy.route;
+    document.querySelector("#fact-title").textContent = copy.fact;
+    document.querySelector("#trains-title").textContent = copy.options;
+    document.querySelector("#restart-button").textContent = copy.restart;
+    newSessionButton.textContent = copy.newSession;
+    document.querySelector("#seat-picker-title").textContent = copy.seatPickerTitle;
+    document.querySelector("#seat-picker-hint").textContent = copy.seatPickerHint;
+    if (confirmSeatsButton) confirmSeatsButton.textContent = copy.seatPickerConfirm;
+    await transitionLanguageToTerminal();
+    newSessionButton?.classList.remove("hidden");
+    textInputToggle?.classList.remove("hidden");
+    resetScenario(false);
+    updateTextInputToggleLabels();
+    refreshThemeToggleLabels();
+    assistantSay(copy.assistantReady, { addToHistory: true });
+    void pingBackendHealth();
+  } finally {
+    languageScreenBusy = false;
+    document.querySelector(".language-actions")?.classList.remove("language-actions--busy");
+  }
 }
 
 function renderChips(stage = uiStage) {
@@ -1886,14 +1933,16 @@ function setStage(nextStage) {
 }
 
 async function handleUserText(text) {
-  const cleanText = text.trim();
+  let cleanText = text.trim();
   if (!cleanText) return;
+  cleanText = cleanText.slice(0, MAX_USER_MESSAGE_CHARS);
   if (cleanText.toLowerCase() === PATH_DEBUG_TRIGGER) {
     if (userInput) userInput.value = "";
     openPathLogModal();
     return;
   }
   if (uiInteractionLocked) return;
+  if (checkoutAnimating) return;
   lastDialogUserText = cleanText;
 
   if (await tryVoiceCheckoutConfirmation(cleanText)) {
@@ -1986,15 +2035,21 @@ async function fetchCheckoutVoiceIntentFromLlm(text) {
 }
 
 async function runDialog(text) {
+  const signal = takeDialogAbortSignal();
   setUiInteractionLocked(true);
   try {
     setStage("searching");
-    const response = await postJson("/api/dialog", {
-      language,
-      text,
-      state,
-      conversation: conversationPayload(),
-    });
+    const response = await postJson(
+      "/api/dialog",
+      {
+        language,
+        text,
+        state,
+        conversation: conversationPayload(),
+      },
+      { signal },
+    );
+    if (signal.aborted) return;
     state = response.state;
     assistantSay(response.assistant_text);
     intent = normalizeIntent(state, response.assistant_text);
@@ -2004,12 +2059,13 @@ async function runDialog(text) {
       if (fp && fp === lastSuccessfulSearchKey) {
         setStage(trains.length ? "results" : "initial");
       } else {
-        await searchAndRecommend();
+        await searchAndRecommend(signal);
       }
     } else {
       setStage("initial");
     }
   } catch (error) {
+    if (error && error.name === "AbortError") return;
     console.error(error);
     runLocalDemoFallback();
   } finally {
@@ -2052,17 +2108,18 @@ function conversationPayload() {
   }));
 }
 
-async function searchAndRecommend() {
+async function searchAndRecommend(signal) {
   trainsPanel?.setAttribute("aria-busy", "true");
   renderTrainListSkeleton();
   try {
-    await searchAndRecommendBody();
+    await searchAndRecommendBody(signal);
   } finally {
     trainsPanel?.setAttribute("aria-busy", "false");
   }
 }
 
-async function searchAndRecommendBody() {
+async function searchAndRecommendBody(signal) {
+  if (signal?.aborted) return;
   const searchRequest = {
     language,
     origin: intent.origin,
@@ -2077,8 +2134,9 @@ async function searchAndRecommendBody() {
 
   let ticketResponse;
   try {
-    ticketResponse = await postJson("/api/tickets/search", searchRequest);
+    ticketResponse = await postJson("/api/tickets/search", searchRequest, { signal });
   } catch (error) {
+    if (error && error.name === "AbortError") return;
     console.error("tickets/search failed", error);
     trains = [];
     recommendations = [];
@@ -2087,6 +2145,8 @@ async function searchAndRecommendBody() {
     setStage("initial");
     return;
   }
+
+  if (signal.aborted) return;
 
   ticketSearchSource = ticketResponse.source || "demo";
   updateDataSourceBanner(ticketSearchSource);
@@ -2098,16 +2158,22 @@ async function searchAndRecommendBody() {
 
   let factText = "";
   try {
-    const factResponse = await postJson("/api/fun-fact", {
-      language,
-      origin: intent.origin,
-      destination: intent.destination,
-    });
+    const factResponse = await postJson(
+      "/api/fun-fact",
+      {
+        language,
+        origin: intent.origin,
+        destination: intent.destination,
+      },
+      { signal },
+    );
     factText = factResponse.fact;
   } catch (error) {
+    if (error && error.name === "AbortError") return;
     console.error("fun-fact failed", error);
     factText = i18n[language].routeFactUnavailable;
   }
+  if (signal.aborted) return;
   renderRoute(factText);
 
   if (!trains.length) {
@@ -2124,21 +2190,26 @@ async function searchAndRecommendBody() {
   }
 
   try {
-    const recommendResponse = await postRecommendWithRetries({
-      language,
-      intent,
-      trains,
-      last_user_message: lastDialogUserText || null,
-      conversation: conversationPayload(),
-    });
+    const recommendResponse = await postRecommendWithRetries(
+      {
+        language,
+        intent,
+        trains,
+        last_user_message: lastDialogUserText || null,
+        conversation: conversationPayload(),
+      },
+      { signal },
+    );
     recommendations = recommendResponse.recommendations;
     assistantSay(recommendResponse.assistant_text);
   } catch (error) {
+    if (error && error.name === "AbortError") return;
     console.error("recommend failed after retries", error);
     recommendations = buildFallbackRecommendationsFromTrains(trains);
     assistantSay(localVoiceExplanationFromTrain(trains[0]));
   }
-  await refreshTopRecommendedTrainRouteLikeSelect();
+  if (signal.aborted) return;
+  await refreshTopRecommendedTrainRouteLikeSelect(signal);
   renderTrains();
   setStage("results");
   lastSuccessfulSearchKey = routeFingerprint(intent);
@@ -2627,11 +2698,13 @@ function renderTrainListSkeleton(count = 3) {
 async function postRecommendWithRetries(payload, options = {}) {
   const timeoutMs = options.timeoutMs ?? 240000;
   const retries = options.retries ?? 2;
+  const signal = options.signal;
   return fetchApi("/api/recommend", {
     method: "POST",
     body: payload,
     timeoutMs,
     retries,
+    signal,
   });
 }
 
@@ -2734,7 +2807,7 @@ async function fetchTrainCarriageDetailsIfNeeded(train) {
   }
 }
 
-async function fetchTrainRouteStops(train) {
+async function fetchTrainRouteStops(train, signal) {
   if (!train || ticketSearchSource !== "live-cache") return train;
   if (routeStopsLoadedIds.has(train.id)) return train;
   const seg = train.route_segment?.intermediate_stops;
@@ -2746,23 +2819,28 @@ async function fetchTrainRouteStops(train) {
     return train;
   }
   try {
-    const res = await postJson("/api/train-route-stops", {
-      language,
-      origin: intent.origin,
-      destination: intent.destination,
-      train_id: train.id,
-      train_number: train.train_number,
-      departure_date_rzd: departureDateRzdFromTrain(train),
-      departure_station: train.departure_station,
-      arrival_station: train.arrival_station,
-      route_terminal_from: train.origin,
-      route_terminal_to: train.destination,
-      fallback_stops: train.stops || [],
-    });
+    const res = await postJson(
+      "/api/train-route-stops",
+      {
+        language,
+        origin: intent.origin,
+        destination: intent.destination,
+        train_id: train.id,
+        train_number: train.train_number,
+        departure_date_rzd: departureDateRzdFromTrain(train),
+        departure_station: train.departure_station,
+        arrival_station: train.arrival_station,
+        route_terminal_from: train.origin,
+        route_terminal_to: train.destination,
+        fallback_stops: train.stops || [],
+      },
+      { signal },
+    );
     mergeTrainRouteData(res.train_id, res.stops, res.route_segment);
     routeStopsLoadedIds.add(train.id);
     return trains.find((t) => t.id === train.id) || train;
   } catch (err) {
+    if (err && err.name === "AbortError") return train;
     console.error("train-route-stops failed", err);
     if (String(err?.message || err).includes("404")) {
       console.warn(
@@ -2773,20 +2851,21 @@ async function fetchTrainRouteStops(train) {
   }
 }
 
-async function fetchTrainRouteStopsIfNeeded(train) {
+async function fetchTrainRouteStopsIfNeeded(train, signal) {
   if (!train || ticketSearchSource !== "live-cache") return;
   if (routeStopsLoadedIds.has(train.id)) return;
-  await fetchTrainRouteStops(train);
+  await fetchTrainRouteStops(train, signal);
 }
 
 /**
  * После рекомендаций обновить маршрут для топ-поезда так же, как при выборе карточки
  * (без озвучки и без перехода в checkout): тот же поезд, что подсвечен как лучший.
  */
-async function refreshTopRecommendedTrainRouteLikeSelect() {
+async function refreshTopRecommendedTrainRouteLikeSelect(signal) {
   const top = getTrainsForUi()[0];
   if (!top) return;
-  await fetchTrainRouteStopsIfNeeded(top);
+  await fetchTrainRouteStopsIfNeeded(top, signal);
+  if (signal?.aborted) return;
   updateRouteMapForSelectedTrain();
 }
 
@@ -2842,6 +2921,8 @@ function renderAmenityBadges(amenities = []) {
 }
 
 async function selectTrain(train, options = {}) {
+  selectTrainSeq += 1;
+  const flight = selectTrainSeq;
   const suppressSelectionSpeech = Boolean(options.suppressSelectionSpeech);
   stopAssistantSpeech();
   selectedTrain = train;
@@ -2861,6 +2942,7 @@ async function selectTrain(train, options = {}) {
   }
   setStage("checkout");
   await fetchTrainRouteStopsIfNeeded(train);
+  if (flight !== selectTrainSeq) return;
   updateTrainCardHighlight();
   updateRouteMapForSelectedTrain();
   checkoutPanel.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -3923,6 +4005,14 @@ function stopAssistantSpeech() {
 function startVoiceRecognition() {
   stopAssistantSpeech();
   playOrbTapSound();
+  if (orbRecognition) {
+    try {
+      orbRecognition.abort();
+    } catch {
+      /* ignore */
+    }
+    orbRecognition = null;
+  }
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     assistantSay(i18n[language].noSpeech);
@@ -3941,6 +4031,7 @@ function startVoiceRecognition() {
     handleUserText(spokenText);
   };
   recognition.onerror = (event) => {
+    orbRecognition = null;
     const code = event && event.error ? String(event.error) : "";
     // Тишина или отмена — не путаем с «нет распознавания в браузере».
     if (code === "no-speech" || code === "aborted") {
@@ -3961,8 +4052,10 @@ function startVoiceRecognition() {
     assistantSay(i18n[language].speechRecognitionGlitch);
   };
   recognition.onend = () => {
+    orbRecognition = null;
     if (uiStage !== "searching") setOrbMode("idle");
   };
+  orbRecognition = recognition;
   recognition.start();
 }
 
@@ -4215,6 +4308,7 @@ function runLocalDemoFallback() {
 
 function resetScenario(announce = true) {
   clearTicketReturnToLanguageTimer();
+  abortDialogRequests();
   state = {};
   intent = null;
   trains = [];
@@ -4235,6 +4329,7 @@ function resetScenario(announce = true) {
   lastDialogUserText = "";
   lastSuccessfulSearchKey = null;
   dialogMessages = [];
+  selectTrainSeq = 0;
   speechQueue = [];
   isSpeaking = false;
   dynamicRouteCache = { key: "", geom: null };
