@@ -892,7 +892,7 @@ function mergeRouteVisualForTrain(destinationKey, train) {
 function trainForRouteMap() {
   if (selectedTrain) return selectedTrain;
   if (!trains.length) return null;
-  if (recommendations.length) return getSortedTrains()[0] || trains[0];
+  if (recommendations.length) return getTrainsForUi()[0] || trains[0];
   return trains[0];
 }
 
@@ -1523,7 +1523,7 @@ document.querySelector("#chips")?.addEventListener("click", (event) => {
     return;
   }
   if (action === "choose-best" && trains.length) {
-    void selectTrain(getSortedTrains()[0]);
+    void selectTrain(getTrainsForUi()[0]);
     return;
   }
   if (action === "repeat-ticket" && demoTicket) {
@@ -1658,8 +1658,16 @@ function hasRequiredTripFields(data) {
 }
 
 async function searchAndRecommend() {
+  trainsPanel?.setAttribute("aria-busy", "true");
   renderTrainListSkeleton();
+  try {
+    await searchAndRecommendBody();
+  } finally {
+    trainsPanel?.setAttribute("aria-busy", "false");
+  }
+}
 
+async function searchAndRecommendBody() {
   const searchRequest = {
     language,
     origin: intent.origin,
@@ -2200,7 +2208,7 @@ function renderTrains() {
   const list = document.querySelector("#trains-list");
   list.innerHTML = "";
   const highlightId = getTrainHighlightId();
-  getSortedTrains().forEach((train) => {
+  getTrainsForUi().forEach((train) => {
     const recommendation = recommendationFor(train.id);
     const card = document.createElement("article");
     card.dataset.trainId = train.id;
@@ -2336,7 +2344,7 @@ async function fetchTrainRouteStopsIfNeeded(train) {
  * (без озвучки и без перехода в checkout): тот же поезд, что подсвечен как лучший.
  */
 async function refreshTopRecommendedTrainRouteLikeSelect() {
-  const top = getSortedTrains()[0];
+  const top = getTrainsForUi()[0];
   if (!top) return;
   await fetchTrainRouteStopsIfNeeded(top);
   updateRouteMapForSelectedTrain();
@@ -2361,8 +2369,15 @@ function getSortedTrains() {
   });
 }
 
-function getTrainHighlightId() {
+/** Карточки и подсветка: скрываем поезда без свободных мест, если есть хотя бы один с местами. */
+function getTrainsForUi() {
   const sorted = getSortedTrains();
+  const withSeats = sorted.filter((t) => trainTotalFreeSeats(t) > 0);
+  return withSeats.length ? withSeats : sorted;
+}
+
+function getTrainHighlightId() {
+  const sorted = getTrainsForUi();
   if (!sorted.length) return null;
   if (selectedTrain && sorted.some((t) => t.id === selectedTrain.id)) {
     return selectedTrain.id;

@@ -143,6 +143,17 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 Если в системе нет `python3-venv`, установите пакет виртуального окружения для вашей версии Python или используйте Docker.
 
+### Smoke-тесты (pytest)
+
+После `pip install -r requirements.txt` в каталоге `backend/`:
+
+```bash
+cd backend
+PYTHONPATH=. pytest tests/test_smoke.py -q
+```
+
+Проверяются `GET /api/health` и заголовок `X-Request-Id`.
+
 ## Локальный запуск frontend без Docker
 
 Frontend можно открыть как статический сайт:

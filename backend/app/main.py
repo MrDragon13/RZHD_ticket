@@ -60,11 +60,12 @@ app.add_middleware(
 
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
-    """Пробрасывает X-Request-Id для связки логов клиента и сервера."""
+    """Пробрасывает X-Request-Id и пишет в лог связку метод + путь + статус + rid."""
 
     rid = request.headers.get("X-Request-Id") or str(uuid.uuid4())
     response = await call_next(request)
     response.headers["X-Request-Id"] = rid
+    logging.info("%s %s -> %s rid=%s", request.method, request.url.path, response.status_code, rid)
     return response
 
 
