@@ -1190,6 +1190,10 @@ let textInputPanelOpen = false;
 let lastDialogUserText = "";
 let lastSelectedTrainId = null;
 
+/** Должны быть объявлены до первого вызова startLanguageScreenAmbient() (иначе TDZ). */
+let languageAmbientTimer = null;
+let languageAmbientAbort = null;
+
 const screens = {
   language: document.querySelector("#language-screen"),
   terminal: document.querySelector("#terminal-screen"),
@@ -1616,9 +1620,6 @@ function updateStopPoint(dot, label, stop) {
   label.setAttribute("y", String(stop.y - 12));
   label.textContent = stop.name;
 }
-
-let languageAmbientTimer = null;
-let languageAmbientAbort = null;
 
 function pickRandomIntroRoutePair() {
   const list = language === "ru" ? INTRO_AMBIENT_CITIES_RU : INTRO_AMBIENT_CITIES_EN;
