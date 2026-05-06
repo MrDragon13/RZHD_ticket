@@ -4,7 +4,8 @@ import asyncio
 import json
 import logging
 import os
-from datetime import date
+import re
+from datetime import date, timedelta
 from typing import Any
 
 import httpx
@@ -187,11 +188,128 @@ class DeepSeekClient:
 
         return json.loads(cleaned[start : end + 1])
 
+    def _base_date(self) -> date:
+        try:
+            return date.fromisoformat(str(self.current_date)[:10])
+        except ValueError:
+            return date.today()
+
+    def _parse_relative_travel_date(self, text: str) -> str | None:
+        """Дата YYYY-MM-DD для «сегодня/завтра/послезавтра» относительно current_date."""
+
+        n = text.lower()
+        base = self._base_date()
+        if re.search(r"(?<![а-яa-z])послезавтра(?![а-яa-z])", n, re.I):
+            return (base + timedelta(days=2)).isoformat()
+        if re.search(r"(?<![а-яa-z])завтра(?![а-яa-z])", n, re.I) or re.search(
+            r"\b(tomorrow|tmrw)\b",
+            n,
+            re.I,
+        ):
+            return (base + timedelta(days=1)).isoformat()
+        if re.search(r"(?<![а-яa-z])сегодня(?![а-яa-z])", n, re.I) or re.search(r"\btoday\b", n, re.I):
+            return base.isoformat()
+        return None
+
+    def _strip_trailing_date_words_ru(self, fragment: str) -> str:
+        s = fragment.strip()
+        s = re.split(
+            r"\s+(?=(?:завтра|послезавтра|сегодня|на\s+завтра|на\s+сегодня)(?:\s|$))",
+            s,
+            maxsplit=1,
+            flags=re.I,
+        )[0]
+        return s.strip().rstrip(",.")
+
+    def _canonical_city_ru(self, fragment: str) -> str | None:
+        """Грубое приведение к именительному падежу для городов РФ по подстроке."""
+
+        f = fragment.strip().lower()
+        f = re.sub(r"[^\w\s\-]", "", f)
+        f = re.sub(r"\s+", " ", f).strip()
+        if not f:
+            return None
+        aliases = (
+            ("воронеж", "Воронеж"),
+            ("липецк", "Липецк"),
+            ("москв", "Москва"),
+            ("казан", "Казань"),
+            ("петербург", "Санкт-Петербург"),
+            ("сочи", "Сочи"),
+            ("нижний новгород", "Нижний Новгород"),
+            ("екатеринбург", "Екатеринбург"),
+            ("новосибирск", "Новосибирск"),
+            ("самар", "Самара"),
+            ("ростов", "Ростов-на-Дону"),
+            ("краснодар", "Краснодар"),
+            ("калининград", "Калининград"),
+            ("мурманск", "Мурманск"),
+            ("архангельск", "Архангельск"),
+            ("тул", "Тула"),
+            ("рязан", "Рязань"),
+            ("туапсе", "Туапсе"),
+            ("адлер", "Адлер"),
+            ("анап", "Анапа"),
+        )
+        for key, name in aliases:
+            if key in f:
+                return name
+        if len(f) >= 2:
+            return fragment.strip()[:48].strip()
+        return None
+
+    def _extract_iz_v_cities(self, text: str) -> tuple[str | None, str | None]:
+        t = text.strip()
+        m = re.search(r"(?i)из\s+(.+?)\s+в\s+(.+)", t)
+        if not m:
+            return None, None
+        a = self._strip_trailing_date_words_ru(m.group(1))
+        b = self._strip_trailing_date_words_ru(m.group(2))
+        o = self._canonical_city_ru(a)
+        d = self._canonical_city_ru(b)
+        return o, d
+
+    def _extract_from_to_en(self, text: str) -> tuple[str | None, str | None]:
+        m = re.search(r"(?i)\bfrom\s+(.+?)\s+to\s+(.+)", text.strip())
+        if not m:
+            return None, None
+        a = m.group(1).strip().rstrip(",")
+        b = m.group(2).strip()
+        b = re.split(r"\s+(?=(?:tomorrow|today|the\s+day)\b)", b, maxsplit=1, flags=re.I)[0].strip()
+        if len(a) >= 2 and len(b) >= 2:
+            return a[:48], b[:48]
+        return None, None
+
+    def _merge_route_heuristics(
+        self,
+        language: str,
+        text: str,
+        origin_hint: str | None,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Дополняет ответ LLM/fallback: «из А в Б завтра», from/to, относительные даты."""
+
+        out = dict(payload)
+        o_ru, d_ru = self._extract_iz_v_cities(text)
+        o_en, d_en = self._extract_from_to_en(text)
+        o, d = o_ru or o_en, d_ru or d_en
+        if o and not out.get("origin"):
+            out["origin"] = o
+        if d and not out.get("destination"):
+            out["destination"] = d
+        dt = self._parse_relative_travel_date(text)
+        if dt and not out.get("date"):
+            out["date"] = dt
+        if not out.get("origin") and origin_hint:
+            out["origin"] = origin_hint
+        return out
+
     async def understand_trip(self, language: str, text: str, origin_hint: str | None) -> dict[str, Any]:
         """Преобразует естественную речь пассажира в JSON-параметры поездки."""
 
         if not self.enabled:
-            return self._fallback_understanding(language, text, origin_hint)
+            base = self._fallback_understanding(language, text, origin_hint)
+            return self._merge_route_heuristics(language, text, origin_hint, base)
 
         system_prompt = (
             "Ты смысловой модуль билетного терминала РЖД «Путь». "
@@ -208,6 +326,8 @@ class DeepSeekClient:
             "«Утром» без уточнения: если речь об отправлении из города отправления — только departure_time_window 06:00-11:00; "
             "если о прибытии в пункт назначения — только arrival_time_window 06:00-11:00. "
             "Фраза про начало рабочего дня / к началу работы: arrival_time_window 07:00-09:00 (если это про время прибытия). "
+            "Примеры: «из Москвы в Казань завтра» → origin Москва, destination Казань, date завтра; "
+            "«Нужен билет из Санкт-Петербурга во Владивосток 12 июня» — заполни три поля города и даты. "
             "Формат JSON (пример значений; подставь свои или null): "
             '{"intent":"search_ticket","language":"ru","origin":"Москва","destination":"Казань","date":"2026-05-06",'
             '"departure_time_window":null,"arrival_time_window":{"start":"07:00","end":"09:00"},'
@@ -240,9 +360,10 @@ class DeepSeekClient:
             ensure_ascii=False,
         )
         try:
-            return await self.chat_json(system_prompt, user_prompt)
+            parsed = await self.chat_json(system_prompt, user_prompt)
         except Exception:
-            return self._fallback_understanding(language, text, origin_hint)
+            parsed = self._fallback_understanding(language, text, origin_hint)
+        return self._merge_route_heuristics(language, text, origin_hint, parsed)
 
     def _fallback_understanding(self, language: str, text: str, origin_hint: str | None) -> dict[str, Any]:
         """Простой локальный разбор для демо-режима без DeepSeek API.
@@ -259,6 +380,8 @@ class DeepSeekClient:
             destination = "Санкт-Петербург"
         if "сочи" in normalized or "sochi" in normalized:
             destination = "Сочи"
+        if "воронеж" in normalized or "voronezh" in normalized:
+            destination = "Воронеж" if language == "ru" else "Voronezh"
 
         preferences: list[str] = []
         if any(word in normalized for word in ["спать", "высп", "sleep", "overnight"]):
@@ -327,6 +450,10 @@ class DeepSeekClient:
         if not departure_window and not arrival_window and workday_arrival:
             arrival_window = {"start": "07:00", "end": "09:00"}
 
+        trip_date = self._parse_relative_travel_date(text)
+        if trip_date is None and ("6" in normalized or "шест" in normalized or "may 6" in normalized):
+            trip_date = "2026-05-06"
+
         assistant_text = (
             (
                 f"Понял. Ищу подходящие поезда в город {destination}."
@@ -346,7 +473,7 @@ class DeepSeekClient:
             "language": language,
             "origin": origin_hint or ("Москва" if language == "ru" else "Moscow"),
             "destination": destination,
-            "date": "2026-05-06" if ("6" in normalized or "шест" in normalized or "may 6" in normalized) else None,
+            "date": trip_date,
             "departure_time_window": departure_window,
             "arrival_time_window": arrival_window,
             "preferences": preferences,
