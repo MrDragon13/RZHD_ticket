@@ -69,7 +69,8 @@ const i18n = {
   ru: {
     title: "ПУТЬ",
     subtitle: "Интеллектуальный терминал РЖД",
-    startPrompt: "Коснитесь сферы и скажите, куда вы хотите поехать",
+    startPrompt:
+      "Коснитесь сферы и скажите: откуда едете, куда и когда (дату или период можно уточнить голосом)",
     assistantReady: "Добро пожаловать. Куда направимся?",
     listen: "Слушать",
     textPlaceholder: "Например: хочу приехать в Казань к началу рабочего дня 6 мая и выспаться",
@@ -172,7 +173,8 @@ const i18n = {
   en: {
     title: "PATH",
     subtitle: "Smart Railway Terminal",
-    startPrompt: "Touch the sphere and say where you want to go",
+    startPrompt:
+      "Touch the sphere and say where you're leaving from, where you're going, and when (you can refine the date by voice)",
     assistantReady: "Welcome. Where are we heading?",
     listen: "Listen",
     textPlaceholder: "Example: I want to arrive in Kazan before the workday starts on May 6 and sleep",
