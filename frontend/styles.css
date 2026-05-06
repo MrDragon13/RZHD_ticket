@@ -1596,7 +1596,7 @@ button {
   justify-content: center;
   align-items: center;
   margin-top: 22px;
-  min-height: 224px;
+  min-height: 308px;
 }
 
 .ticket-qr-wrap canvas,

@@ -8,6 +8,12 @@ const PATH_DEBUG_TRIGGER = "logloglog";
 const PATH_LOG_CAP = 600;
 const pathClientLogs = [];
 
+/**
+ * Размер отрисовки QR на демо-билете (px). Исходно 220; при росте полезной нагрузки
+ * крупная матрица читается лучше. Верхняя граница по макету — до ~×2 (440); 300 — компромисс.
+ */
+const TICKET_QR_RENDER_PX = 300;
+
 function pathFormatLogArg(a) {
   if (a instanceof Error) return a.stack || a.message;
   if (typeof a === "object" && a !== null) {
@@ -2680,8 +2686,8 @@ function renderTicketQrCanvas(payloadText) {
   }
 
   const baseOpts = {
-    width: 220,
-    height: 220,
+    width: TICKET_QR_RENDER_PX,
+    height: TICKET_QR_RENDER_PX,
     colorDark: "#071018",
     colorLight: "#ffffff",
   };
