@@ -1371,6 +1371,9 @@ button {
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 18px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .car-deck-row {
@@ -1395,22 +1398,20 @@ button {
 
 .car-deck-cubes {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: flex-start;
-  overflow-x: auto;
-  padding-bottom: 6px;
+  justify-content: center;
+  align-content: flex-start;
   width: 100%;
-  scrollbar-width: thin;
-}
-
-.car-deck-cubes::-webkit-scrollbar {
-  height: 6px;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .platz-zone {
   flex: 1 1 100%;
   margin-bottom: 14px;
+  min-width: 0;
 }
 
 .platz-zone-label {
@@ -1427,18 +1428,14 @@ button {
 
 .car-platz-open-cubes {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: clamp(8px, 2vw, 12px);
   align-items: flex-start;
-  justify-content: flex-start;
-  overflow-x: auto;
+  justify-content: center;
+  align-content: flex-start;
   width: 100%;
-  padding-bottom: 8px;
-  scrollbar-width: thin;
-}
-
-.car-platz-open-cubes::-webkit-scrollbar {
-  height: 6px;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .platz-zone--side .car-side-bay-row {
