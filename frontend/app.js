@@ -381,23 +381,54 @@ function intermediateStopDisplayNames(train) {
 }
 
 /**
- * Точки остановок на линии маршрута: координаты по доле длины пути (интервал пользователя).
+ * Точки остановок на линии маршрута.
+ * Раньше брали долю длины дуги — у кривой Безье большая часть длины часто «спрятана» в первых сегментах,
+ * из‑за этого все точки оказывались у начала. Сейчас: равномерно по отрезку между началом и концом
+ * видимого сегмента (хорда), затем ближайшая точка на том же участке контура path (проекция на линию).
  */
 function stopMarkersAlongPath(pathD, names, segmentFraction) {
   const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
   path.setAttribute("d", pathD);
   const totalLen = path.getTotalLength();
   if (!Number.isFinite(totalLen) || totalLen <= 0) return null;
-  let segLen = totalLen;
+
+  let visibleLen = totalLen;
   if (segmentFraction != null && Number.isFinite(segmentFraction)) {
     const f = Math.min(1, Math.max(0.08, segmentFraction));
-    segLen = f * totalLen;
+    visibleLen = f * totalLen;
   }
+
   const n = names.length;
+  if (!n) return null;
+
+  const pStart = path.getPointAtLength(0);
+  const pEnd = path.getPointAtLength(visibleLen);
+
+  /** Ищем ближайший к (qx,qy) контур на участке [0, visibleLen]. */
+  function nearestOnPathSegment(qx, qy) {
+    const steps = 72;
+    let bestX = pStart.x;
+    let bestY = pStart.y;
+    let bestD = Infinity;
+    for (let k = 0; k <= steps; k += 1) {
+      const s = (k / steps) * visibleLen;
+      const p = path.getPointAtLength(s);
+      const d = (p.x - qx) ** 2 + (p.y - qy) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        bestX = p.x;
+        bestY = p.y;
+      }
+    }
+    return { x: bestX, y: bestY };
+  }
+
   const markers = [];
   for (let i = 0; i < n; i += 1) {
-    const t = ((i + 1) / (n + 1)) * segLen;
-    const pt = path.getPointAtLength(t);
+    const u = (i + 1) / (n + 1);
+    const tx = pStart.x + u * (pEnd.x - pStart.x);
+    const ty = pStart.y + u * (pEnd.y - pStart.y);
+    const pt = nearestOnPathSegment(tx, ty);
     markers.push({ name: names[i], x: pt.x, y: pt.y });
   }
   return markers;
@@ -422,7 +453,8 @@ function mergeRouteVisualForTrain(destinationKey, train) {
   let routeClip = null;
 
   if (frac != null && Number.isFinite(totalLen) && totalLen > 0) {
-    const visibleLen = frac * totalLen;
+    const fClip = Math.min(1, Math.max(0.08, frac));
+    const visibleLen = fClip * totalLen;
     const pt = pathProbe.getPointAtLength(visibleLen);
     dest = {
       x: pt.x,
