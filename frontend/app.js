@@ -1520,6 +1520,7 @@ function renderAmenityBadges(amenities = []) {
 }
 
 async function selectTrain(train) {
+  stopAssistantSpeech();
   selectedTrain = train;
   checkoutPanel.classList.remove("hidden");
   if (!checkoutAnimating && !issuingTicket) {
