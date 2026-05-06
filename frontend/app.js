@@ -87,6 +87,12 @@ const i18n = {
     checkout: "Оформить демо-билет",
     checkoutBusy: "Оформление…",
     checkoutFinalizing: "Отправка на сервер и получение билета…",
+    checkoutPreparingTitle: "Готовим выбор мест…",
+    checkoutPreparingHintLive:
+      "Загружаем данные вагонов с сервера — обычно несколько секунд. Пожалуйста, подождите.",
+    checkoutPreparingHintDemo: "Формируем демо-схему рассадки…",
+    checkoutPrepareError:
+      "Не удалось подготовить выбор мест. Проверьте соединение и нажмите «Оформить демо-билет» ещё раз.",
     checkoutError:
       "Не удалось выдать демо-билет. Проверьте соединение и нажмите кнопку ещё раз.",
     demoFlow: ["Проверка маршрута", "Подготовка выбора мест", "Загрузка схемы вагона", "Готово"],
@@ -223,6 +229,12 @@ const i18n = {
     checkout: "Create demo ticket",
     checkoutBusy: "Processing…",
     checkoutFinalizing: "Sending request and receiving your ticket…",
+    checkoutPreparingTitle: "Preparing seat selection…",
+    checkoutPreparingHintLive:
+      "Loading carriage data from the server — this usually takes a few seconds. Please wait.",
+    checkoutPreparingHintDemo: "Building the demo seating layout…",
+    checkoutPrepareError:
+      "Could not prepare seat selection. Check your connection and tap «Create demo ticket» again.",
     checkoutError: "Could not issue the demo ticket. Check your connection and tap the button again.",
     demoFlow: ["Checking route", "Preparing seat selection", "Loading car layout", "Done"],
     seatPickerTitle: "Choose car and seats",
@@ -1666,6 +1678,7 @@ const checkoutTrainSummary = document.querySelector("#checkout-train-summary");
 const checkoutTrainSummaryBody = document.querySelector("#checkout-train-summary-body");
 const checkoutTrainSummaryLabel = document.querySelector("#checkout-train-summary-label");
 const checkoutButton = document.querySelector("#checkout-button");
+const checkoutLoadingEl = document.querySelector("#checkout-loading");
 const confirmSeatsButton = document.querySelector("#confirm-seats-button");
 const wagonMetaPanel = document.querySelector("#wagon-meta-panel");
 const orbButton = document.querySelector("#orb-button");
@@ -2060,6 +2073,7 @@ async function completeAuthFlow() {
   updateTextInputToggleLabels();
   refreshThemeToggleLabels();
   applySupportChatChrome();
+  applyCheckoutLoadingTexts();
   assistantSay(i18n[language].assistantReady, { addToHistory: true });
   void pingBackendHealth();
   touchGlobalIdle();
@@ -2220,6 +2234,7 @@ function updateTextInputToggleLabels() {
 
 updateTextInputToggleLabels();
 applySupportChatChrome();
+applyCheckoutLoadingTexts();
 initThemeToggle();
 initSupportChatModal();
 initPathLogModal();
@@ -2341,6 +2356,7 @@ async function setLanguage(nextLanguage) {
     updateTextInputToggleLabels();
     refreshThemeToggleLabels();
     applySupportChatChrome();
+    applyCheckoutLoadingTexts();
   } finally {
     languageScreenBusy = false;
     document.querySelector(".language-actions")?.classList.remove("language-actions--busy");
@@ -3477,6 +3493,17 @@ async function selectTrain(train, options = {}) {
   checkoutPanel.scrollIntoView({ behavior: scrollBehavior, block: "nearest" });
 }
 
+function applyCheckoutLoadingTexts() {
+  const titleEl = document.querySelector("#checkout-loading-title");
+  const hintEl = document.querySelector("#checkout-loading-hint");
+  const copy = i18n[language];
+  if (titleEl) titleEl.textContent = copy.checkoutPreparingTitle;
+  if (hintEl) {
+    hintEl.textContent =
+      ticketSearchSource === "live-cache" ? copy.checkoutPreparingHintLive : copy.checkoutPreparingHintDemo;
+  }
+}
+
 async function createTicket() {
   if (checkoutAnimating || issuingTicket || uiInteractionLocked || !selectedTrain) return;
   setUiInteractionLocked(true);
@@ -3494,16 +3521,40 @@ async function createTicket() {
       await sleep(260);
       item.classList.add("checkout-step-done");
     }
-    checkoutPanel.classList.add("hidden");
-    syncCheckoutPanelPlacement();
     steps.innerHTML = "";
+    applyCheckoutLoadingTexts();
+    checkoutLoadingEl?.classList.remove("hidden");
+    checkoutButton.classList.add("hidden");
+    checkoutPanel.setAttribute("aria-busy", "true");
+    setOrbMode("thinking");
+
     let t = selectedTrain;
     if (ticketSearchSource === "live-cache") {
       t = await fetchTrainCarriageDetailsIfNeeded(selectedTrain);
       selectedTrain = t;
     }
     buildSeatPickerModel(selectedTrain);
+
+    checkoutLoadingEl?.classList.add("hidden");
+    checkoutButton.classList.remove("hidden");
+    checkoutPanel.removeAttribute("aria-busy");
+    checkoutPanel.classList.add("hidden");
+    syncCheckoutPanelPlacement();
+
     await showSeatPicker();
+  } catch (err) {
+    try {
+      console.error("[createTicket]", err);
+    } catch {
+      /* ignore */
+    }
+    const copy = i18n[language];
+    checkoutLoadingEl?.classList.add("hidden");
+    checkoutButton.classList.remove("hidden");
+    checkoutPanel.removeAttribute("aria-busy");
+    checkoutPanel.classList.remove("hidden");
+    syncCheckoutPanelPlacement();
+    assistantSay(copy.checkoutPrepareError);
   } finally {
     checkoutAnimating = false;
     checkoutButton.disabled = false;
@@ -5058,6 +5109,8 @@ function resetScenario(announce = true) {
   mapContent?.classList.remove("hidden");
   const checkoutSteps = document.querySelector("#checkout-steps");
   if (checkoutSteps) checkoutSteps.innerHTML = "";
+  checkoutLoadingEl?.classList.add("hidden");
+  checkoutButton?.classList.remove("hidden");
   const routeMeta = document.querySelector("#route-meta");
   const routeFactEl = document.querySelector("#route-fact");
   if (routeMeta)

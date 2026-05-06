@@ -2174,6 +2174,60 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
   color: var(--green);
 }
 
+.checkout-loading {
+  margin-top: 14px;
+  padding: clamp(14px, 2.6vmin, 22px);
+  border-radius: clamp(16px, 2.8vmin, 22px);
+  border: 1px solid var(--picker-step-border);
+  background: var(--picker-step-bg);
+  text-align: center;
+}
+
+.checkout-loading.hidden {
+  display: none !important;
+}
+
+.checkout-loading-spinner {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  border: 3px solid rgba(0, 229, 255, 0.18);
+  border-top-color: var(--cyan);
+  animation: checkout-spin 0.85s linear infinite;
+}
+
+@keyframes checkout-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.checkout-loading-title {
+  margin: 0;
+  font-size: clamp(15px, 2.5vmin, 18px);
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.checkout-loading-hint {
+  margin: 8px 0 0;
+  font-size: clamp(13px, 2.1vmin, 15px);
+  line-height: 1.45;
+  color: var(--muted);
+  max-width: 38ch;
+  margin-inline: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkout-loading-spinner {
+    animation: none;
+    border-top-color: rgba(0, 229, 255, 0.45);
+    opacity: 0.85;
+  }
+}
+
 .seat-picker-column .glass-panel {
   width: 100%;
   max-width: none;
