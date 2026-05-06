@@ -117,7 +117,8 @@ async function getJson(path, options = {}) {
 
 /** Ввод в поле текста и «Отправить» открывает журнал с этой точной строкой (без учёта регистра). */
 const PATH_DEBUG_TRIGGER = "logloglog";
-const THEME_STORAGE_KEY = "path-theme-v1";
+/** Новый ключ: дефолт РЖД для первого визита; старый path-theme-v1 игнорируется (миграция без переноса «неона»). */
+const THEME_STORAGE_KEY = "path-theme-v2-default-rzd";
 const PATH_LOG_CAP = 600;
 const pathClientLogs = [];
 
