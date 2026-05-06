@@ -14,6 +14,16 @@ const pathClientLogs = [];
  */
 const TICKET_QR_RENDER_PX = 300;
 
+/** Обрезка по лимиту байт UTF-8 (для кириллицы длина строки ≠ размер в байтах). */
+function utf8ByteSlice(str, maxBytes) {
+  const enc = new TextEncoder();
+  const buf = enc.encode(str);
+  if (buf.length <= maxBytes) return str;
+  let cut = maxBytes;
+  while (cut > 0 && (buf[cut] & 0xc0) === 0x80) cut--;
+  return new TextDecoder("utf-8", { fatal: false }).decode(buf.slice(0, cut));
+}
+
 function pathFormatLogArg(a) {
   if (a instanceof Error) return a.stack || a.message;
   if (typeof a === "object" && a !== null) {
@@ -2644,8 +2654,8 @@ async function confirmSeatSelection() {
 }
 
 /**
- * Полезная нагрузка QR: простой текст UTF-8 (кириллица), Byte mode в qrcode.js.
- * Версия матрицы выбирается автоматически; для печати ~3×3 см оставьте тихую зону ≥4 модулей.
+ * Текст для QR (Byte mode, UTF-8). Режимы Numeric/Alphanumeric в QR не содержат кириллицу;
+ * компактные строки помещаются в матрицу с EC-M/L. На экране билета остаётся полная развёрнутая вёрстка.
  */
 function buildDemoTicketQrPayload() {
   const copy = i18n[language];
@@ -2654,16 +2664,11 @@ function buildDemoTicketQrPayload() {
   const thanks = copy.ticketThanks;
   const ru = language === "ru";
   return [
-    copy.demoTicket,
-    `${ru ? "Маршрут" : "Route"}: ${d.route}`,
-    `${ru ? "Поезд" : "Train"}: ${d.train_number}`,
-    `${ru ? "Отправление" : "Departure"}: ${d.departure}`,
-    `${ru ? "Прибытие" : "Arrival"}: ${d.arrival}`,
-    `${ru ? "Вагон" : "Car"}: ${d.car}`,
-    `${ru ? "Место" : "Seat"}: ${d.seat}`,
-    `${ru ? "Полка" : "Berth"}: ${d.berth_type}`,
-    d.travel_class,
-    `${ru ? "Идентификатор" : "Ticket ID"}: ${d.ticket_id}`,
+    `${copy.demoTicket} · ${d.ticket_id}`,
+    d.route,
+    `${d.train_number} · ${d.departure}–${d.arrival}`,
+    `${ru ? "Ваг" : "Car"} ${d.car} · ${ru ? "Место" : "Seat"} ${d.seat}`,
+    `${d.berth_type} · ${d.travel_class}`,
     thanks,
   ].join("\n");
 }
@@ -2700,22 +2705,29 @@ function renderTicketQrCanvas(payloadText) {
   }
 
   /**
-   * Длинный UTF-8 текст на кириллице может не поместиться в максимальную матрицу при EC-M.
-   * Сначала полный текст + M (предпочтение), затем полный + L (больше полезной нагрузки), потом укороченные варианты.
+   * Цепочка попыток: полный компактный текст, затем усечение по UTF-8 байтам (лимит QR Ver.40 ~2953 B в Byte),
+   * в конце только ticket_id. Менять «тип» QR на Numeric нельзя — без кириллицы.
    */
   function buildQrAttempts(fullText) {
     const t = String(fullText);
     const out = [];
-    const pushPair = (text) => {
-      out.push({ text, ec: QR.CorrectLevel.M });
-      out.push({ text, ec: QR.CorrectLevel.L });
+    const seen = new Set();
+    const addBothEc = (text) => {
+      const s = String(text);
+      if (!s.trim() || seen.has(s)) return;
+      seen.add(s);
+      out.push({ text: s, ec: QR.CorrectLevel.M });
+      out.push({ text: s, ec: QR.CorrectLevel.L });
     };
-    pushPair(t);
-    if (t.length > 1400) pushPair(t.slice(0, 1400));
-    if (t.length > 1000) pushPair(t.slice(0, 1000));
-    if (t.length > 700) pushPair(t.slice(0, 700));
-    out.push({ text: qrMinimalIdPayload(), ec: QR.CorrectLevel.M });
-    out.push({ text: qrMinimalIdPayload(), ec: QR.CorrectLevel.L });
+    addBothEc(t);
+    for (const maxB of [2880, 2400, 1800, 1200, 600]) {
+      addBothEc(utf8ByteSlice(t, maxB));
+    }
+    const minId = qrMinimalIdPayload();
+    if (!seen.has(minId)) {
+      out.push({ text: minId, ec: QR.CorrectLevel.M });
+      out.push({ text: minId, ec: QR.CorrectLevel.L });
+    }
     return out;
   }
 
