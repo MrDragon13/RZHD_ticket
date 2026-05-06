@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import secrets
 import time as time_monotonic
 from datetime import date, datetime, time, timezone
 from pathlib import Path
@@ -45,8 +46,10 @@ class RzdDataAdapter:
         self.live_enabled = _env_truthy_default_on("RZD_LIVE_ENABLED")
         self.live_fallback = os.getenv("RZD_LIVE_FALLBACK", "1").strip().lower() not in ("0", "false", "no")
         self._deepseek = deepseek_client
-        # Один поток на вторичные запросы РЖД (basicRoute, carriages), чтобы реже ловить капчу.
-        self._rzd_io_sem = asyncio.Semaphore(1)
+        # Ограничение параллелизма вторичных запросов РЖД (basicRoute, carriages). Больше 1 — быстрее,
+        # но выше риск капчи; см. RZD_SECONDARY_CONCURRENCY.
+        self._rzd_secondary_concurrency = _clamp_secondary_concurrency()
+        self._rzd_secondary_sem = asyncio.Semaphore(self._rzd_secondary_concurrency)
 
     async def search(self, request: TicketSearchRequest) -> TicketSearchResponse:
         if self.live_enabled:
@@ -70,13 +73,20 @@ class RzdDataAdapter:
         if self.live_enabled and date_rzd and req.train_number.strip():
             from app.vendor.aiorzd import RzdFetcher
 
+            t_lazy0 = time_monotonic.monotonic()
             async with RzdFetcher() as fetcher:
-                async with self._rzd_io_sem:
+                async with self._rzd_secondary_sem:
                     try:
                         stops_live = await fetcher.get_basic_route_stops(req.train_number.strip(), date_rzd)
                     except Exception:
                         logging.exception("lazy basicRoute failed train=%s", req.train_number)
                         stops_live = []
+            logging.info(
+                "RZD perf phase=lazy_basicRoute train=%s dt=%.3fs stop_count=%s",
+                req.train_number.strip(),
+                time_monotonic.monotonic() - t_lazy0,
+                len(stops_live),
+            )
 
         stops = stops_live if len(stops_live) >= 2 else list(req.fallback_stops or [])
         if stops_live and len(stops_live) < 2:
@@ -127,12 +137,13 @@ class RzdDataAdapter:
         return TicketSearchResponse(
             source="demo",
             updated_at=datetime.now(timezone.utc).isoformat(),
-            trains=await self._enrich_route_segments(request, matched),
+            trains=await self._enrich_route_segments(request, matched, perf_sid=None),
         )
 
     async def _search_live(self, request: TicketSearchRequest) -> TicketSearchResponse:
         from app.vendor.aiorzd import RzdFetcher, TimeRange
 
+        sid = secrets.token_hex(4)
         origin = (request.origin or "Москва").strip()
         destination = request.destination.strip()
         travel_date = _parse_travel_date(request.date)
@@ -149,25 +160,35 @@ class RzdDataAdapter:
 
         t_search0 = time_monotonic.monotonic()
         logging.info(
-            "RZD search_live start origin=%r destination=%r date=%s route_stops_on_search=%s route_max=%s carriage_max=%s",
+            "RZD perf sid=%s phase=search_start origin=%r destination=%r date=%s "
+            "secondary_concurrency=%s route_stops_on_search=%s route_max=%s carriage_max=%s",
+            sid,
             origin,
             destination,
             travel_date.isoformat(),
+            self._rzd_secondary_concurrency,
             route_stops_on_search,
             route_stops_max,
             carriage_max,
         )
 
+        trains_list: list = []
+        eligible_idx: list[int] = []
+        carriage_by_index: dict[int, dict] = {}
+        basic_stops_by_index: dict[int, list[str]] = {}
+
+        t_trains0 = time_monotonic.monotonic()
         async with RzdFetcher() as fetcher:
             trains_iter = await fetcher.trains(origin, destination, TimeRange(day_start, day_end))
             trains_list = list(trains_iter)
             logging.info(
-                "RZD search_live trains_layer dt=%.2fs raw_trains=%s",
-                time_monotonic.monotonic() - t_search0,
+                "RZD perf sid=%s phase=trains_layer dt=%.3fs raw_trains=%s",
+                sid,
+                time_monotonic.monotonic() - t_trains0,
                 len(trains_list),
             )
 
-            # Слой 5827 уже даёт места в cars[] — можно отсеять поезда без мест до тяжёлых запросов.
+            t_light0 = time_monotonic.monotonic()
             light: list[TrainOption] = []
             for index, train_obj in enumerate(trains_list):
                 light.append(
@@ -181,6 +202,11 @@ class RzdDataAdapter:
                         basic_route_stops=None,
                     ),
                 )
+            logging.info(
+                "RZD perf sid=%s phase=map_light dt=%.3fs",
+                sid,
+                time_monotonic.monotonic() - t_light0,
+            )
 
             eligible_idx = [
                 i
@@ -189,6 +215,19 @@ class RzdDataAdapter:
             ]
             route_idx = eligible_idx[:route_stops_max] if route_stops_on_search else []
             carriage_idx = eligible_idx[:carriage_max] if enrich else []
+            n_route_tasks = len(route_idx)
+            n_carriage_tasks = len(carriage_idx)
+            logging.info(
+                "RZD perf sid=%s phase=filter raw_trains=%s eligible_with_seats=%s "
+                "secondary_schedule basicRoute_tasks=%s carriages_tasks=%s (cap route=%s carriage=%s)",
+                sid,
+                len(trains_list),
+                len(eligible_idx),
+                n_route_tasks,
+                n_carriage_tasks,
+                route_stops_max,
+                carriage_max,
+            )
 
             if route_stops_on_search and len(eligible_idx) > route_stops_max:
                 skipped_slice = eligible_idx[route_stops_max : route_stops_max + 20]
@@ -197,38 +236,50 @@ class RzdDataAdapter:
                     for si in skipped_slice
                 ]
                 logging.warning(
-                    "RZD route stops on search capped: max=%s eligible=%s skipped_sample=%s",
+                    "RZD perf sid=%s route_stops_capped max=%s eligible=%s skipped_sample=%s",
+                    sid,
                     route_stops_max,
                     len(eligible_idx),
                     skipped_nums,
                 )
 
-            carriage_by_index: dict[int, dict] = {}
-            basic_stops_by_index: dict[int, list[str]] = {}
+            perf_rows: list[tuple[str, str, float]] = []
+
             if trains_list and eligible_idx:
-                src_code = await fetcher.get_city_code(origin)
-                dst_code = await fetcher.get_city_code(destination)
+                t_cc0 = time_monotonic.monotonic()
+                src_code, dst_code = await asyncio.gather(
+                    fetcher.get_city_code(origin),
+                    fetcher.get_city_code(destination),
+                )
+                logging.info(
+                    "RZD perf sid=%s phase=city_codes_parallel dt=%.3fs",
+                    sid,
+                    time_monotonic.monotonic() - t_cc0,
+                )
 
                 async def carriage_one(idx: int) -> None:
                     t = trains_list[idx]
                     num = str(getattr(t, "number", "") or (t.content or {}).get("number") or "")
-                    if not num:
-                        return
                     dep = getattr(t, "departure_time", None)
-                    if dep is None:
+                    if not num or dep is None:
                         return
-                    async with self._rzd_io_sem:
-                        try:
+                    t0 = time_monotonic.monotonic()
+                    try:
+                        async with self._rzd_secondary_sem:
                             raw = await fetcher.get_train_carriages(src_code, dst_code, dep, num)
-                        except Exception:
-                            logging.debug("carriages enrich failed for train %s", num, exc_info=True)
-                            return
                         if isinstance(raw, dict) and raw.get("result") == "OK":
                             carriage_by_index[idx] = raw
+                    except Exception:
+                        logging.debug(
+                            "RZD perf sid=%s carriages_failed train=%s",
+                            sid,
+                            num,
+                            exc_info=True,
+                        )
+                    finally:
+                        perf_rows.append(("carriages", num, time_monotonic.monotonic() - t0))
 
                 async def route_stops_one(idx: int) -> None:
-                    if not route_stops_on_search:
-                        return
                     t = trains_list[idx]
                     content = t.content or {}
                     num = str(getattr(t, "number", "") or content.get("number") or "")
@@ -237,33 +288,63 @@ class RzdDataAdapter:
                         dep_date = _dep_date_dmY_from_train_id(light[idx].id)
                     if not num or not dep_date:
                         return
-                    async with self._rzd_io_sem:
-                        try:
+                    t0 = time_monotonic.monotonic()
+                    try:
+                        async with self._rzd_secondary_sem:
                             route_names = await fetcher.get_basic_route_stops(num, dep_date)
-                        except Exception:
-                            logging.debug("basicRoute on search failed for train %s", num, exc_info=True)
-                            return
                         if len(route_names) >= 2:
                             basic_stops_by_index[idx] = route_names
+                    except Exception:
+                        logging.debug(
+                            "RZD perf sid=%s basicRoute_failed train=%s",
+                            sid,
+                            num,
+                            exc_info=True,
+                        )
+                    finally:
+                        perf_rows.append(("basicRoute", num, time_monotonic.monotonic() - t0))
 
                 tasks = [route_stops_one(i) for i in route_idx]
                 tasks.extend(carriage_one(i) for i in carriage_idx)
                 if tasks:
+                    t_sec0 = time_monotonic.monotonic()
                     await asyncio.gather(*tasks)
+                    dt_sec = time_monotonic.monotonic() - t_sec0
+                    sum_task = sum(r[2] for r in perf_rows)
+                    slow = sorted(perf_rows, key=lambda x: -x[2])[:8]
+                    slow_s = " ".join(f"{k}:{n}={d:.2f}s" for k, n, d in slow)
+                    par_hint = (sum_task / dt_sec) if dt_sec > 0 else 0.0
                     logging.info(
-                        "RZD search_live secondary_RZD_done dt=%.2fs basicRoute_ok=%s carriage_ok=%s tasks=%s",
-                        time_monotonic.monotonic() - t_search0,
+                        "RZD perf sid=%s phase=secondary_rzd dt_wall=%.3fs concurrency=%s "
+                        "tasks_run=%s perf_samples=%s sum_task_time=%.3fs parallelism_vs_wall=%.2fx "
+                        "basicRoute_ok=%s carriages_ok=%s slowest=[%s]",
+                        sid,
+                        dt_sec,
+                        self._rzd_secondary_concurrency,
+                        len(tasks),
+                        len(perf_rows),
+                        sum_task,
+                        par_hint,
                         len(basic_stops_by_index),
                         len(carriage_by_index),
-                        len(tasks),
+                        slow_s,
                     )
                     if route_stops_on_search:
                         logging.info(
-                            "RZD route stops on search: basicRoute_ok=%s eligible=%s cap=%s",
-                            len(basic_stops_by_index),
+                            "RZD perf sid=%s route_stops_on_search_detail eligible=%s cap=%s basic_ok=%s",
+                            sid,
                             len(eligible_idx),
                             route_stops_max,
+                            len(basic_stops_by_index),
                         )
+            else:
+                logging.info(
+                    "RZD perf sid=%s phase=secondary_rzd skipped reason=%s raw_trains=%s eligible=%s",
+                    sid,
+                    "no_trains" if not trains_list else "no_seats",
+                    len(trains_list),
+                    len(eligible_idx),
+                )
 
         mapped: list[TrainOption] = []
         for index in eligible_idx:
@@ -280,9 +361,10 @@ class RzdDataAdapter:
             )
 
         t_seg0 = time_monotonic.monotonic()
-        enriched = await self._enrich_route_segments(request, mapped)
+        enriched = await self._enrich_route_segments(request, mapped, perf_sid=sid)
         logging.info(
-            "RZD search_live done mapped=%s enrich_segments_dt=%.2fs total_dt=%.2fs",
+            "RZD perf sid=%s phase=search_done mapped=%s enrich_route_segments_wall=%.3fs total_wall=%.3fs",
+            sid,
             len(mapped),
             time_monotonic.monotonic() - t_seg0,
             time_monotonic.monotonic() - t_search0,
@@ -303,13 +385,18 @@ class RzdDataAdapter:
         self,
         request: TicketSearchRequest,
         trains: list[TrainOption],
+        *,
+        perf_sid: str | None = None,
     ) -> list[TrainOption]:
         """Добавляет route_segment с промежуточными остановками и логирует шаги."""
 
         origin = (request.origin or "").strip()
         destination = (request.destination or "").strip()
 
-        async def one_train(t: TrainOption) -> TrainOption:
+        t_en0 = time_monotonic.monotonic()
+
+        async def one_train(t: TrainOption) -> tuple[TrainOption, float, str]:
+            t0 = time_monotonic.monotonic()
             seg = await resolve_route_segment(
                 stops=list(t.stops),
                 search_origin=origin,
@@ -330,9 +417,45 @@ class RzdDataAdapter:
                 destination_index=seg.destination_index,
                 debug_steps=seg.debug_steps[:30],
             )
-            return t.model_copy(update={"route_segment": info})
+            dt = time_monotonic.monotonic() - t0
+            return (t.model_copy(update={"route_segment": info}), dt, seg.method)
 
-        return list(await asyncio.gather(*(one_train(t) for t in trains)))
+        rows = await asyncio.gather(*(one_train(t) for t in trains))
+        out = [r[0] for r in rows]
+        dt_wall = time_monotonic.monotonic() - t_en0
+        if perf_sid and trains:
+            timings = [(tr.train_number, r[1], r[2]) for tr, r in zip(trains, rows)]
+            slow = sorted(timings, key=lambda x: -x[1])[:6]
+            sum_r = sum(x[1] for x in timings)
+            mx = max((x[1] for x in timings), default=0.0)
+            slow_s = ", ".join(f"{n}={d:.2f}s/{m}" for n, d, m in slow)
+            logging.info(
+                "RZD perf sid=%s phase=enrich_route_segments dt_wall=%.3fs trains=%s "
+                "sum_resolve_time=%.3fs max_single=%.3fs slowest=[%s]",
+                perf_sid,
+                dt_wall,
+                len(trains),
+                sum_r,
+                mx,
+                slow_s,
+            )
+        elif perf_sid:
+            logging.info(
+                "RZD perf sid=%s phase=enrich_route_segments dt_wall=%.3fs trains=0",
+                perf_sid,
+                dt_wall,
+            )
+        return out
+
+
+def _clamp_secondary_concurrency() -> int:
+    """Параллельные вторичные запросы к pass.rzd.ru (1 по умолчанию — ниже риск капчи)."""
+
+    try:
+        raw = int(os.getenv("RZD_SECONDARY_CONCURRENCY", "1") or "1")
+    except ValueError:
+        raw = 1
+    return max(1, min(raw, 8))
 
 
 def _env_truthy_default_on(name: str) -> bool:
