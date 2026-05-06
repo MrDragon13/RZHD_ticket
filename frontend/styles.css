@@ -361,6 +361,7 @@ html[data-theme="rzd"] {
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
   color: var(--text);
   font-family: Inter, "Segoe UI", Arial, sans-serif;
@@ -396,9 +397,16 @@ button {
   z-index: 1;
   display: grid;
   grid-template-rows: auto 1fr;
-  gap: 20px;
+  gap: clamp(12px, 2.2vmin, 20px);
   height: 100vh;
-  padding: 28px;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  box-sizing: border-box;
+  padding-top: max(clamp(12px, 2.5vmin, 28px), env(safe-area-inset-top, 0px));
+  padding-right: max(clamp(12px, 2.5vmin, 28px), env(safe-area-inset-right, 0px));
+  padding-bottom: max(clamp(12px, 2.5vmin, 28px), env(safe-area-inset-bottom, 0px));
+  padding-left: max(clamp(12px, 2.5vmin, 28px), env(safe-area-inset-left, 0px));
 }
 
 /* Единая колонка под статус-полосу (если видна) и экраны: иначе при [hidden] у strip
@@ -431,14 +439,14 @@ button {
   justify-self: center;
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  max-width: min(520px, 92vw);
-  padding: 8px 18px;
+  gap: clamp(6px, 1.5vmin, 10px);
+  max-width: min(520px, min(92vw, calc(100vw - 24px)));
+  padding: clamp(6px, 1.4vmin, 10px) clamp(12px, 2.8vmin, 18px);
   border-radius: 999px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.06);
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.28);
-  font-size: 14px;
+  font-size: clamp(12px, 2.2vmin, 14px);
   color: var(--muted);
 }
 
@@ -447,29 +455,29 @@ button {
 }
 
 .session-user-strip strong {
-  font-size: 15px;
+  font-size: clamp(13px, 2.4vmin, 15px);
   font-weight: 800;
   color: var(--text);
   letter-spacing: 0.02em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 42vw;
+  max-width: min(42vw, 28rem);
 }
 
 .session-idle-warning {
   position: fixed;
   left: 50%;
-  bottom: 28px;
+  bottom: max(18px, env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: 120;
-  max-width: min(560px, 94vw);
-  padding: 14px 18px;
-  border-radius: 14px;
+  max-width: min(560px, min(94vw, calc(100vw - 24px)));
+  padding: clamp(10px, 2vmin, 14px) clamp(14px, 2.8vmin, 18px);
+  border-radius: clamp(12px, 2vmin, 14px);
   border: 1px solid rgba(255, 106, 61, 0.55);
   background: rgba(24, 12, 8, 0.92);
   color: #ffe8df;
-  font-size: 15px;
+  font-size: clamp(13px, 2.4vmin, 15px);
   line-height: 1.35;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
   text-align: center;
@@ -483,27 +491,27 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px 16px 32px;
+  padding: clamp(16px, 4vmin, 28px) clamp(12px, 3.5vmin, 20px) max(clamp(20px, 4vmin, 36px), env(safe-area-inset-bottom, 0px));
   min-height: 0;
 }
 
 .auth-screen-inner {
-  width: min(520px, 100%);
+  width: min(520px, min(100%, 92vw));
 }
 
 .glass-panel-auth {
-  padding: 22px 22px 26px;
+  padding: clamp(16px, 3.2vmin, 24px) clamp(16px, 3vmin, 22px) clamp(18px, 3.5vmin, 28px);
 }
 
 .auth-panel-title {
   margin: 0 0 8px;
-  font-size: 22px;
+  font-size: clamp(1.1rem, 3.4vmin, 1.375rem);
   letter-spacing: 0.06em;
 }
 
 .auth-muted {
   margin: 0 0 18px;
-  font-size: 14px;
+  font-size: clamp(13px, 2.4vmin, 14px);
   line-height: 1.45;
   color: var(--muted);
 }
@@ -520,14 +528,14 @@ button {
 
 .auth-phone-display {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 22px;
+  font-size: clamp(1rem, 3.2vmin, 1.375rem);
   letter-spacing: 0.04em;
-  padding: 14px 16px;
+  padding: clamp(10px, 2.2vmin, 14px) clamp(12px, 2.5vmin, 16px);
   border-radius: 12px;
   border: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.22);
   margin-bottom: 10px;
-  min-height: 52px;
+  min-height: clamp(46px, 10vmin, 52px);
 }
 
 .auth-hint {
@@ -546,10 +554,10 @@ button {
   width: 100%;
   box-sizing: border-box;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 22px;
+  font-size: clamp(1rem, 3.2vmin, 1.375rem);
   letter-spacing: 0.18em;
   text-align: center;
-  padding: 12px 14px;
+  padding: clamp(10px, 2vmin, 12px) clamp(12px, 2.2vmin, 14px);
   border-radius: 12px;
   border: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.22);
@@ -560,35 +568,37 @@ button {
 .vkeyboard {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: clamp(8px, 1.6vmin, 10px);
   margin-bottom: 16px;
 }
 
 .vkeyboard-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: clamp(8px, 1.6vmin, 10px);
 }
 
 .vkeyboard-spacer {
-  min-height: 52px;
+  min-height: clamp(46px, 10vmin, 52px);
   visibility: hidden;
   pointer-events: none;
 }
 
-.vkeyboard-key[data-vkey-role="erase"] {
-  font-size: 15px;
-  letter-spacing: 0.02em;
-}
-  min-height: 52px;
+.vkeyboard-key {
+  min-height: clamp(46px, 10vmin, 52px);
   border-radius: 12px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-  font-size: 20px;
+  font-size: clamp(1rem, 2.8vmin, 1.25rem);
   font-weight: 700;
   cursor: pointer;
   transition: background 0.15s ease, transform 0.08s ease;
+}
+
+.vkeyboard-key[data-vkey-role="erase"] {
+  font-size: clamp(12px, 2.4vmin, 15px);
+  letter-spacing: 0.02em;
 }
 
 .vkeyboard-key:active {
@@ -646,7 +656,7 @@ html[data-theme="rzd"] .vkeyboard-key {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: clamp(8px, 1.8vmin, 14px);
 }
 
 .topbar .brand {
@@ -661,16 +671,16 @@ html[data-theme="rzd"] .vkeyboard-key {
 .top-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: clamp(8px, 1.5vmin, 12px);
 }
 
 .top-actions .ghost-button {
-  min-height: 48px;
-  padding: 10px 14px;
+  min-height: clamp(42px, 8vmin, 48px);
+  padding: clamp(8px, 1.6vmin, 10px) clamp(12px, 2.2vmin, 14px);
   border-radius: 999px;
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 12px;
+  font-size: clamp(11px, 2vmin, 12px);
   font-weight: 700;
   letter-spacing: 0.04em;
   background: var(--panel);
@@ -687,7 +697,7 @@ html[data-theme="rzd"] .vkeyboard-key {
 }
 
 .terminal-status-strip {
-  padding: 0 28px 10px;
+  padding: 0 clamp(16px, 3vmin, 28px) clamp(8px, 1.5vmin, 10px);
   flex-shrink: 0;
 }
 
@@ -732,19 +742,19 @@ body.ui-interaction-locked #user-input {
 
 .brand {
   display: flex;
-  gap: 16px;
+  gap: clamp(10px, 2.2vmin, 16px);
   align-items: center;
 }
 
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 64px;
+  width: clamp(44px, 9vmin, 64px);
+  height: clamp(44px, 9vmin, 64px);
   border: 1px solid var(--border);
-  border-radius: 22px;
+  border-radius: clamp(16px, 2.8vmin, 22px);
   color: var(--cyan);
-  font-size: 28px;
+  font-size: clamp(1.1rem, 3.2vmin, 1.75rem);
   font-weight: 900;
   background: linear-gradient(135deg, var(--brand-mark-grad-a), var(--brand-mark-grad-b));
   box-shadow: 0 0 34px var(--brand-mark-shadow);
@@ -752,7 +762,7 @@ body.ui-interaction-locked #user-input {
 
 .brand-title {
   margin: 0;
-  font-size: 34px;
+  font-size: clamp(1.25rem, 3.8vmin, 2.125rem);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -874,6 +884,10 @@ body.ui-interaction-locked #user-input {
   display: grid;
   place-items: center;
   overflow: hidden;
+  /* Плавная шкала без «ступеней»: смесь vw/vh/vmin даёт стабильный вид на любых DPI и форматах. */
+  --lang-title: clamp(1.85rem, 2.5vw + 2.1vh + 1.35vmin, 3.625rem);
+  --lang-lead: clamp(0.875rem, 1vw + 0.85vh + 0.7vmin, 1.375rem);
+  --lang-map-heading: clamp(1.2rem, 1.8vw + 1.4vh + 1vmin, 2rem);
 }
 
 .language-screen-bg {
@@ -887,7 +901,11 @@ body.ui-interaction-locked #user-input {
 .language-map-shell {
   position: absolute;
   inset: 0;
-  padding: clamp(6px, 1.2vmin, 12px) clamp(10px, 2vmin, 14px) clamp(72px, 14vmin, 108px);
+  padding:
+    max(clamp(6px, 1.2vmin, 12px), env(safe-area-inset-top, 0px))
+    max(clamp(10px, 2vmin, 14px), env(safe-area-inset-right, 0px))
+    max(clamp(64px, 12vmin, 108px), env(safe-area-inset-bottom, 0px))
+    max(clamp(10px, 2vmin, 14px), env(safe-area-inset-left, 0px));
 }
 
 .language-map-title {
@@ -899,16 +917,16 @@ body.ui-interaction-locked #user-input {
 }
 
 .language-screen .map-title h2 {
-  font-size: clamp(22px, 4vmin, 32px);
+  font-size: var(--lang-map-heading);
   line-height: 1.15;
 }
 
 .language-ambient-badge {
   align-self: start;
-  padding: 8px 14px;
+  padding: clamp(6px, 1.3vmin, 9px) clamp(10px, 2.2vmin, 14px);
   border: 1px solid var(--route-pill-border);
   border-radius: 999px;
-  font-size: 13px;
+  font-size: clamp(11px, 2vmin, 13px);
   letter-spacing: 0.06em;
   color: var(--pill-label);
   background: var(--route-pill-bg);
@@ -916,20 +934,22 @@ body.ui-interaction-locked #user-input {
 
 .language-route-map {
   width: 100%;
-  height: calc(100% - clamp(132px, 26vmin, 168px));
+  height: calc(100% - clamp(104px, 18vmin + 5vh, 176px));
   min-height: min(260px, 36vh);
+  min-height: min(260px, 36dvh);
 }
 
 .language-intro-fact.fact-card {
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  left: max(12px, env(safe-area-inset-left, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
   z-index: 1;
   max-height: min(148px, 28vh);
+  max-height: min(148px, 28dvh);
   overflow-y: auto;
-  font-size: clamp(14px, 2.4vmin, 16px);
+  font-size: clamp(13px, 2.2vmin, 16px);
   line-height: 1.55;
-  padding: 16px 18px;
+  padding: clamp(12px, 2.2vmin, 16px) clamp(14px, 2.5vmin, 18px);
   background: var(--fact-card-bg);
   backdrop-filter: blur(8px);
 }
@@ -943,6 +963,8 @@ body.ui-interaction-locked #user-input {
   place-items: center;
   align-self: stretch;
   padding: clamp(8px, 2vmin, 16px);
+  padding-left: max(clamp(8px, 2vmin, 16px), env(safe-area-inset-left, 0px));
+  padding-right: max(clamp(8px, 2vmin, 16px), env(safe-area-inset-right, 0px));
   box-sizing: border-box;
 }
 
@@ -952,34 +974,34 @@ body.ui-interaction-locked #user-input {
 
 .language-card {
   box-sizing: border-box;
-  width: min(720px, min(92vw, 68vmin));
+  width: min(880px, max(288px, min(94vw, 76vmin + 2vw)));
   max-width: 100%;
-  padding: clamp(26px, 4.8vmin, 56px) clamp(22px, 4vw, 56px);
+  padding: clamp(22px, 3.8vmin + 1.2vh, 56px) clamp(18px, 3.5vw + 0.8vmin, 56px);
   border: 1px solid var(--border);
-  border-radius: clamp(24px, 3.8vmin, 38px);
+  border-radius: clamp(22px, 3.4vmin + 0.6vh, 38px);
   text-align: center;
   background: linear-gradient(145deg, var(--language-card-a), var(--language-card-b));
-  box-shadow: 0 0 clamp(36px, 7vmin, 80px) var(--language-card-glow);
+  box-shadow: 0 0 clamp(32px, 5.5vmin + 2vh, 80px) var(--language-card-glow);
 }
 
 .language-card .brand-mark {
-  width: clamp(46px, 9.5vmin, 64px);
-  height: clamp(46px, 9.5vmin, 64px);
+  width: clamp(46px, 9vmin, 64px);
+  height: clamp(46px, 9vmin, 64px);
   margin: 0 auto;
-  border-radius: clamp(15px, 2.8vmin, 22px);
-  font-size: clamp(19px, 4vmin, 28px);
+  border-radius: clamp(15px, 2.6vmin, 22px);
+  font-size: clamp(1.1rem, 3.6vmin, 1.75rem);
 }
 
 .language-card h2 {
   margin: 0;
-  font-size: clamp(32px, 7.5vmin, 58px);
+  font-size: var(--lang-title);
   letter-spacing: 0.02em;
 }
 
 .language-card p {
   margin: 0.55em 0 0;
   color: var(--muted);
-  font-size: clamp(14px, 2.35vmin, 22px);
+  font-size: var(--lang-lead);
   line-height: 1.45;
 }
 
@@ -1022,57 +1044,6 @@ body.ui-interaction-locked #user-input {
   box-shadow: 0 0 38px var(--cta-hover-shadow);
 }
 
-/* Узкие / невысокие окна: ещё воздуха карте */
-@media (max-height: 780px) {
-  .language-map-shell {
-    padding-bottom: clamp(64px, 11vmin, 96px);
-  }
-
-  .language-route-map {
-    min-height: min(220px, 32vh);
-  }
-}
-
-/* Широкий высокий монитор — прежняя «киношная» карточка без потери читаемости на ноутбуках */
-@media (min-width: 1680px) and (min-height: 980px) {
-  .language-card {
-    width: min(880px, 92vw);
-    padding: 56px;
-    border-radius: 38px;
-    box-shadow: 0 0 80px var(--language-card-glow);
-  }
-
-  .language-card .brand-mark {
-    width: 64px;
-    height: 64px;
-    font-size: 28px;
-    border-radius: 22px;
-  }
-
-  .language-card h2 {
-    font-size: 58px;
-  }
-
-  .language-card p {
-    font-size: 22px;
-  }
-
-  .language-actions {
-    gap: 24px;
-    margin-top: 38px;
-  }
-
-  .language-actions button {
-    font-size: 28px;
-    min-height: 72px;
-    border-radius: 24px;
-  }
-
-  .language-screen .map-title h2 {
-    font-size: 32px;
-  }
-}
-
 .terminal-screen {
   display: grid;
   grid-template-rows: 1fr;
@@ -1083,14 +1054,14 @@ body.ui-interaction-locked #user-input {
 .main-workspace {
   display: grid;
   grid-template-columns: 1.12fr 0.88fr;
-  gap: 22px;
+  gap: clamp(14px, 2.5vmin, 22px);
   min-height: 0;
 }
 
 .checkout-workspace {
   display: none;
   grid-template-columns: 1.12fr 0.88fr;
-  gap: 22px;
+  gap: clamp(14px, 2.5vmin, 22px);
   min-height: 0;
 }
 
@@ -2704,6 +2675,7 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
   .app {
     height: auto;
     min-height: 100vh;
+    min-height: 100dvh;
   }
 
   .terminal-screen {
