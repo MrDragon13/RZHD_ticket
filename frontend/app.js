@@ -1929,19 +1929,27 @@ async function searchAndRecommendBody() {
 function renderIntent(data) {
   if (!intentPanel) return;
   intentPanel.classList.remove("hidden");
-  const arrText = data.arrival_time_window
-    ? `${data.arrival_time_window.start}-${data.arrival_time_window.end}`
-    : "-";
-  const depText = data.departure_time_window
-    ? `${data.departure_time_window.start}-${data.departure_time_window.end}`
-    : "-";
-  document.querySelector("#intent-grid").innerHTML = `
-    <div class="glass-card"><span>${language === "ru" ? "Откуда" : "From"}</span><strong>${data.origin || "-"}</strong></div>
-    <div class="glass-card"><span>${language === "ru" ? "Куда" : "To"}</span><strong>${data.destination || "-"}</strong></div>
-    <div class="glass-card"><span>${language === "ru" ? "Дата" : "Date"}</span><strong>${data.date || "-"}</strong></div>
-    <div class="glass-card"><span>${language === "ru" ? "Отправление" : "Departure"}</span><strong>${depText}</strong></div>
-    <div class="glass-card"><span>${language === "ru" ? "Прибытие" : "Arrival"}</span><strong>${arrText}</strong></div>
-  `;
+  const depWin = data.departure_time_window;
+  const arrWin = data.arrival_time_window;
+  const showDepartureWindow = Boolean(depWin && depWin.start && depWin.end);
+  const showArrivalWindow = Boolean(arrWin && arrWin.start && arrWin.end);
+
+  const cards = [
+    `<div class="glass-card"><span>${language === "ru" ? "Откуда" : "From"}</span><strong>${data.origin || "-"}</strong></div>`,
+    `<div class="glass-card"><span>${language === "ru" ? "Куда" : "To"}</span><strong>${data.destination || "-"}</strong></div>`,
+    `<div class="glass-card"><span>${language === "ru" ? "Дата" : "Date"}</span><strong>${data.date || "-"}</strong></div>`,
+  ];
+  if (showDepartureWindow) {
+    cards.push(
+      `<div class="glass-card"><span>${language === "ru" ? "Отправление" : "Departure"}</span><strong>${depWin.start}-${depWin.end}</strong></div>`,
+    );
+  }
+  if (showArrivalWindow) {
+    cards.push(
+      `<div class="glass-card"><span>${language === "ru" ? "Прибытие" : "Arrival"}</span><strong>${arrWin.start}-${arrWin.end}</strong></div>`,
+    );
+  }
+  document.querySelector("#intent-grid").innerHTML = cards.join("");
 }
 
 function renderRoute(factText) {
