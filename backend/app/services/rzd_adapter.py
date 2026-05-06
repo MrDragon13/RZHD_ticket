@@ -19,6 +19,22 @@ from app.services.route_segment import resolve_route_segment
 from app.services.rzd_live import train_option_from_aiorzd
 
 
+def _dep_date_dmY_from_train_id(train_id: str) -> str:
+    """Дата dd.mm.yyyy из id вида rzd-<номер>-YYYYMMDDHHMM-<idx>, если date0 не пришёл с РЖД."""
+
+    parts = str(train_id or "").split("-")
+    if len(parts) < 4:
+        return ""
+    mid = parts[-2]
+    if len(mid) < 8 or not mid[:8].isdigit():
+        return ""
+    try:
+        dt = datetime.strptime(mid[:8], "%Y%m%d").date()
+        return dt.strftime("%d.%m.%Y")
+    except ValueError:
+        return ""
+
+
 # RZD Data Adapter отделяет остальную систему от конкретного источника данных.
 # Живой режим (по умолчанию): vendored aiorzd → pass.rzd.ru; выключить: RZD_LIVE_ENABLED=0.
 # При ошибке upstream — откат на demo при RZD_LIVE_FALLBACK=1 (по умолчанию).
@@ -47,7 +63,7 @@ class RzdDataAdapter:
 
         origin = (req.origin or "").strip()
         destination = (req.destination or "").strip()
-        date_rzd = (req.departure_date_rzd or "").strip()
+        date_rzd = (req.departure_date_rzd or "").strip() or _dep_date_dmY_from_train_id(req.train_id)
 
         stops_live: list[str] = []
         if self.live_enabled and date_rzd and req.train_number.strip():
@@ -124,6 +140,9 @@ class RzdDataAdapter:
         day_end = datetime.combine(travel_date, time(23, 59, 59))
 
         enrich = _env_truthy_default_on("RZD_CARRIAGE_ENRICH")
+        route_stops_on_search = _env_truthy_default_on("RZD_ROUTE_STOPS_ON_SEARCH")
+        route_stops_max = int(os.getenv("RZD_ROUTE_STOPS_MAX_TRAINS", "40") or "40")
+        route_stops_max = max(1, min(route_stops_max, 40))
         carriage_max = int(os.getenv("RZD_CARRIAGE_ENRICH_MAX_TRAINS", "15") or "15")
         carriage_max = max(1, min(carriage_max, 40))
 
@@ -151,9 +170,24 @@ class RzdDataAdapter:
                 for i, t in enumerate(light)
                 if t.available_seats.platzkart + t.available_seats.coupe + t.available_seats.sv > 0
             ]
+            route_idx = eligible_idx[:route_stops_max] if route_stops_on_search else []
             carriage_idx = eligible_idx[:carriage_max] if enrich else []
 
+            if route_stops_on_search and len(eligible_idx) > route_stops_max:
+                skipped_slice = eligible_idx[route_stops_max : route_stops_max + 20]
+                skipped_nums = [
+                    str(getattr(trains_list[si], "number", "") or (trains_list[si].content or {}).get("number") or "?")
+                    for si in skipped_slice
+                ]
+                logging.warning(
+                    "RZD route stops on search capped: max=%s eligible=%s skipped_sample=%s",
+                    route_stops_max,
+                    len(eligible_idx),
+                    skipped_nums,
+                )
+
             carriage_by_index: dict[int, dict] = {}
+            basic_stops_by_index: dict[int, list[str]] = {}
             if trains_list and eligible_idx:
                 src_code = await fetcher.get_city_code(origin)
                 dst_code = await fetcher.get_city_code(destination)
@@ -175,9 +209,37 @@ class RzdDataAdapter:
                         if isinstance(raw, dict) and raw.get("result") == "OK":
                             carriage_by_index[idx] = raw
 
-                tasks = [carriage_one(i) for i in carriage_idx]
+                async def route_stops_one(idx: int) -> None:
+                    if not route_stops_on_search:
+                        return
+                    t = trains_list[idx]
+                    content = t.content or {}
+                    num = str(getattr(t, "number", "") or content.get("number") or "")
+                    dep_date = str(content.get("date0") or "").strip()
+                    if not dep_date:
+                        dep_date = _dep_date_dmY_from_train_id(light[idx].id)
+                    if not num or not dep_date:
+                        return
+                    async with self._rzd_io_sem:
+                        try:
+                            route_names = await fetcher.get_basic_route_stops(num, dep_date)
+                        except Exception:
+                            logging.debug("basicRoute on search failed for train %s", num, exc_info=True)
+                            return
+                        if len(route_names) >= 2:
+                            basic_stops_by_index[idx] = route_names
+
+                tasks = [route_stops_one(i) for i in route_idx]
+                tasks.extend(carriage_one(i) for i in carriage_idx)
                 if tasks:
                     await asyncio.gather(*tasks)
+                    if route_stops_on_search:
+                        logging.info(
+                            "RZD route stops on search: basicRoute_ok=%s eligible=%s cap=%s",
+                            len(basic_stops_by_index),
+                            len(eligible_idx),
+                            route_stops_max,
+                        )
 
         mapped: list[TrainOption] = []
         for index in eligible_idx:
@@ -189,7 +251,7 @@ class RzdDataAdapter:
                     dest_hint=destination,
                     language=request.language,
                     carriage_payload=carriage_by_index.get(index),
-                    basic_route_stops=None,
+                    basic_route_stops=basic_stops_by_index.get(index),
                 ),
             )
 

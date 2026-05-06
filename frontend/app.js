@@ -1424,9 +1424,27 @@ function mergeTrainRouteData(trainId, stops, route_segment) {
   }
 }
 
+/** Дата date0 для basicRoute (dd.mm.yyyy): с бэкенда или из id rzd-<номер>-YYYYMMDDHHMM-<idx>. */
+function departureDateRzdFromTrain(train) {
+  if (train?.departure_date_rzd) return train.departure_date_rzd;
+  const id = train?.id || "";
+  const parts = id.split("-");
+  if (parts.length < 4) return null;
+  const mid = parts[parts.length - 2];
+  if (!mid || mid.length < 8) return null;
+  const ymd = mid.slice(0, 8);
+  if (!/^\d{8}$/.test(ymd)) return null;
+  return `${ymd.slice(6, 8)}.${ymd.slice(4, 6)}.${ymd.slice(0, 4)}`;
+}
+
 async function fetchTrainRouteStops(train) {
   if (!train || ticketSearchSource !== "live-cache") return train;
   if (routeStopsLoadedIds.has(train.id)) return train;
+  const seg = train.route_segment?.intermediate_stops;
+  if (Array.isArray(seg) && seg.length > 0) {
+    routeStopsLoadedIds.add(train.id);
+    return train;
+  }
   try {
     const res = await postJson("/api/train-route-stops", {
       language,
@@ -1434,7 +1452,7 @@ async function fetchTrainRouteStops(train) {
       destination: intent.destination,
       train_id: train.id,
       train_number: train.train_number,
-      departure_date_rzd: train.departure_date_rzd ?? null,
+      departure_date_rzd: departureDateRzdFromTrain(train),
       departure_station: train.departure_station,
       arrival_station: train.arrival_station,
       route_terminal_from: train.origin,
@@ -1446,6 +1464,11 @@ async function fetchTrainRouteStops(train) {
     return trains.find((t) => t.id === train.id) || train;
   } catch (err) {
     console.error("train-route-stops failed", err);
+    if (String(err?.message || err).includes("404")) {
+      console.warn(
+        "[route map] POST /api/train-route-stops вернул 404 — на сервере старый backend. Промежуточные точки должны приходить из ответа поиска (RZD_ROUTE_STOPS_ON_SEARCH) после деплоя.",
+      );
+    }
     return train;
   }
 }
