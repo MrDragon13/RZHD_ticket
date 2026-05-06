@@ -240,7 +240,13 @@ const i18n = {
     ticketThanks: "Спасибо, что разделили Путь вместе с нами.",
     restart: "Начать заново",
     newSession: "Новый запрос",
-    noSpeech: "Распознавание речи недоступно в этом браузере. Используйте текстовое поле.",
+    noSpeech:
+      "В этом браузере нет встроенного распознавания речи. Воспользуйтесь кнопкой «Текст» и полем ввода.",
+    speechMicDenied:
+      "Нужен доступ к микрофону — разрешите его в настройках браузера для этого сайта.",
+    speechMicCapture: "Микрофон не найден или недоступен. Проверьте устройство или введите текст.",
+    speechNetworkError: "Сеть не позволила завершить распознавание. Попробуйте ещё раз или введите текст.",
+    speechRecognitionGlitch: "Распознавание не сработало. Повторите или используйте текстовое поле.",
     fallbackError: "Сервер недоступен. Показываю демо-сценарий интерфейса.",
     searchTicketError:
       "Не удалось загрузить поезда с сайта РЖД. Проверьте соединение или попробуйте позже.",
@@ -333,7 +339,12 @@ const i18n = {
     ticketThanks: "Thank you for sharing the Path with us.",
     restart: "Start over",
     newSession: "New request",
-    noSpeech: "Speech recognition is not available in this browser. Use the text field.",
+    noSpeech:
+      "This browser has no built-in speech recognition. Use the Text button and type your request.",
+    speechMicDenied: "Microphone access is blocked — allow it in the browser settings for this site.",
+    speechMicCapture: "No microphone found or it is unavailable. Check the device or type your request.",
+    speechNetworkError: "Network issue interrupted recognition. Try again or use text input.",
+    speechRecognitionGlitch: "Recognition failed. Try again or use the text field.",
     fallbackError: "Server is unavailable. Showing interface demo scenario.",
     searchTicketError:
       "Could not load trains from RZD. Check your connection or try again later.",
@@ -3647,7 +3658,26 @@ function startVoiceRecognition() {
     userInput.value = spokenText;
     handleUserText(spokenText);
   };
-  recognition.onerror = () => assistantSay(i18n[language].noSpeech);
+  recognition.onerror = (event) => {
+    const code = event && event.error ? String(event.error) : "";
+    // Тишина или отмена — не путаем с «нет распознавания в браузере».
+    if (code === "no-speech" || code === "aborted") {
+      return;
+    }
+    if (code === "not-allowed") {
+      assistantSay(i18n[language].speechMicDenied);
+      return;
+    }
+    if (code === "audio-capture") {
+      assistantSay(i18n[language].speechMicCapture);
+      return;
+    }
+    if (code === "network") {
+      assistantSay(i18n[language].speechNetworkError);
+      return;
+    }
+    assistantSay(i18n[language].speechRecognitionGlitch);
+  };
   recognition.onend = () => {
     if (uiStage !== "searching") setOrbMode("idle");
   };
