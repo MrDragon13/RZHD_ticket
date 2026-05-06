@@ -542,6 +542,25 @@ button {
   stroke-dashoffset: 1000;
 }
 
+.route-line-flow {
+  fill: none;
+  pointer-events: none;
+  stroke-linecap: round;
+  opacity: 0.78;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 12px rgba(0, 235, 255, 0.55)) drop-shadow(0 0 26px rgba(0, 255, 180, 0.28));
+}
+
+.route-line-flow.route-line-flow-active {
+  animation: route-flow-travel var(--route-flow-duration, 4.5s) linear infinite;
+}
+
+@keyframes route-flow-travel {
+  to {
+    stroke-dashoffset: calc(-1 * var(--route-flow-period, 1200));
+  }
+}
+
 .route-line.route-line-active {
   animation: draw-route 2.4s ease forwards;
 }
@@ -557,6 +576,11 @@ button {
     animation: none;
     stroke-dashoffset: 0 !important;
     stroke-dasharray: none !important;
+  }
+
+  .route-line-flow.route-line-flow-active {
+    animation: none;
+    opacity: 0.28 !important;
   }
 }
 

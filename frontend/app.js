@@ -782,8 +782,34 @@ function routeMapDestinationKey() {
   return String(intent?.destination || "").trim();
 }
 
+/** Световой «поток» по линии маршрута (нижний слой под основной обводкой). */
+function syncRouteFlowOverlay(flowEl, pathD) {
+  if (!flowEl || !pathD) return;
+  flowEl.setAttribute("d", pathD);
+  flowEl.style.opacity = "";
+  flowEl.classList.remove("route-line-flow-active");
+  void flowEl.getBoundingClientRect();
+  try {
+    const len = flowEl.getTotalLength();
+    const period = Number.isFinite(len) && len > 40 ? len : 1100;
+    flowEl.style.setProperty("--route-flow-period", String(period));
+    const dur = Math.min(7.5, Math.max(3.2, period / 160));
+    flowEl.style.setProperty("--route-flow-duration", `${dur}s`);
+    const dash = Math.round(Math.min(84, Math.max(26, period * 0.052)));
+    const gap = Math.round(Math.max(period * 0.64, dash * 4));
+    flowEl.style.strokeDasharray = `${dash} ${gap}`;
+    flowEl.style.strokeDashoffset = "0";
+  } catch {
+    flowEl.style.strokeDasharray = "52 420";
+    flowEl.style.setProperty("--route-flow-period", "472");
+    flowEl.style.setProperty("--route-flow-duration", "4.5s");
+  }
+  flowEl.classList.add("route-line-flow-active");
+}
+
 function applyRouteGeometry(visual, labelOverride) {
   routeLine.classList.remove("route-line-active");
+  routeLineFlow?.classList.remove("route-line-flow-active");
   routeLine.setAttribute("d", visual.line);
   if (visual.routeClip && Number.isFinite(visual.routeClip.totalLen) && visual.routeClip.totalLen > 0) {
     const L = visual.routeClip.totalLen;
@@ -797,6 +823,16 @@ function applyRouteGeometry(visual, labelOverride) {
   void routeLine.getBoundingClientRect();
   routeLine.classList.add("route-line-active");
   routePulse.classList.add("route-pulse-active");
+  const flowReduced =
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!flowReduced && routeLineFlow) {
+    syncRouteFlowOverlay(routeLineFlow, visual.line);
+  } else if (routeLineFlow) {
+    routeLineFlow.setAttribute("d", visual.line);
+    routeLineFlow.classList.remove("route-line-flow-active");
+    routeLineFlow.style.strokeDasharray = "none";
+    routeLineFlow.style.opacity = "0.22";
+  }
   updateMapGeometry(visual, labelOverride);
 }
 
@@ -1221,6 +1257,7 @@ const confirmSeatsButton = document.querySelector("#confirm-seats-button");
 const wagonMetaPanel = document.querySelector("#wagon-meta-panel");
 const orbButton = document.querySelector("#orb-button");
 const routeLine = document.querySelector("#route-line");
+const routeLineFlow = document.querySelector("#route-line-flow");
 const routePulse = document.querySelector("#route-pulse");
 const dialogHistory = document.querySelector("#dialog-history");
 const newSessionButton = document.querySelector("#new-session-button");
@@ -1723,6 +1760,17 @@ function applyIntroRouteGeometry(visual, labelOverride) {
   }
   if (introPulse) introPulse.classList.add("route-pulse-active");
   updateIntroMapGeometry(visual, labelOverride);
+  const introFlow = document.querySelector("#language-route-line-flow");
+  if (introFlow) {
+    if (!reducedMotion) {
+      syncRouteFlowOverlay(introFlow, visual.line);
+    } else {
+      introFlow.setAttribute("d", visual.line);
+      introFlow.classList.remove("route-line-flow-active");
+      introFlow.style.strokeDasharray = "none";
+      introFlow.style.opacity = "0.22";
+    }
+  }
 }
 
 async function tickLanguageScreenAmbient() {
@@ -3327,9 +3375,12 @@ function resetScenario(announce = true) {
       ? "Факт о маршруте появится после поиска билетов."
       : "A route fact will appear after ticket search.";
   routeLine.classList.remove("route-line-active");
-  routePulse.classList.remove("route-pulse-active");
+  routeLineFlow?.classList.remove("route-line-flow-active");
   routeLine.style.strokeDasharray = "";
   routeLine.style.strokeDashoffset = "";
+  routeLineFlow?.style.strokeDasharray = "";
+  routeLineFlow?.style.strokeDashoffset = "";
+  routeLineFlow?.style.opacity = "";
   updateMapGeometry(routeVisuals.default);
   setTextInputPanelOpen(false);
   setStage("initial");

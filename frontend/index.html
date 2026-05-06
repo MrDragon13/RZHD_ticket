@@ -40,6 +40,13 @@
                   <stop offset="55%" stop-color="#8a2be2" />
                   <stop offset="100%" stop-color="#00ff9c" />
                 </linearGradient>
+                <linearGradient id="languageRouteFlowStroke" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="rgba(180, 255, 255, 0.08)" />
+                  <stop offset="35%" stop-color="rgba(120, 240, 255, 0.35)" />
+                  <stop offset="50%" stop-color="rgba(255, 255, 255, 0.95)" />
+                  <stop offset="65%" stop-color="rgba(160, 255, 220, 0.45)" />
+                  <stop offset="100%" stop-color="rgba(0, 255, 180, 0.12)" />
+                </linearGradient>
                 <filter id="languageGlowFilter">
                   <feGaussianBlur stdDeviation="5" result="coloredBlur" />
                   <feMerge>
@@ -56,6 +63,15 @@
               <path class="map-region-line" d="M330 452 C420 355 498 250 650 76" />
               <path class="map-region-line" d="M178 214 C300 250 438 230 602 168" />
               <path class="rail-background" d="M70 380 C220 320 340 380 510 280 S720 130 840 190" />
+              <path
+                id="language-route-line-flow"
+                class="route-line-flow"
+                d="M125 350 C260 255 390 280 535 210 S700 155 790 115"
+                fill="none"
+                stroke="url(#languageRouteFlowStroke)"
+                stroke-width="12"
+                stroke-linecap="round"
+              />
               <path
                 id="language-route-line"
                 class="route-line"
@@ -126,6 +142,13 @@
                     <stop offset="55%" stop-color="#8a2be2" />
                     <stop offset="100%" stop-color="#00ff9c" />
                   </linearGradient>
+                  <linearGradient id="routeFlowStroke" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="rgba(180, 255, 255, 0.08)" />
+                    <stop offset="35%" stop-color="rgba(120, 240, 255, 0.35)" />
+                    <stop offset="50%" stop-color="rgba(255, 255, 255, 0.95)" />
+                    <stop offset="65%" stop-color="rgba(160, 255, 220, 0.45)" />
+                    <stop offset="100%" stop-color="rgba(0, 255, 180, 0.12)" />
+                  </linearGradient>
                   <filter id="glow">
                     <feGaussianBlur stdDeviation="5" result="coloredBlur" />
                     <feMerge>
@@ -139,6 +162,15 @@
                 <path class="map-region-line" d="M330 452 C420 355 498 250 650 76" />
                 <path class="map-region-line" d="M178 214 C300 250 438 230 602 168" />
                 <path class="rail-background" d="M70 380 C220 320 340 380 510 280 S720 130 840 190" />
+                <path
+                  id="route-line-flow"
+                  class="route-line-flow"
+                  d="M125 350 C260 255 390 280 535 210 S700 155 790 115"
+                  fill="none"
+                  stroke="url(#routeFlowStroke)"
+                  stroke-width="12"
+                  stroke-linecap="round"
+                />
                 <path id="route-line" class="route-line" d="M125 350 C260 255 390 280 535 210 S700 155 790 115" fill="none" stroke="url(#routeGradient)" stroke-width="8" stroke-linecap="round" filter="url(#glow)" />
                 <circle id="origin-dot" class="city-dot" cx="125" cy="350" r="14" fill="#00e5ff" />
                 <circle id="stop-dot-a" class="stop-dot" cx="278" cy="276" r="8" />
