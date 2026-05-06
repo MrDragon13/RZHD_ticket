@@ -6,9 +6,10 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
-from app.models import SeatDetails, SeatInfo, SeatBerthPrices
+from app.models import SeatBerthPrices, SeatDetails, SeatInfo
 
 
 def _norm(s: str) -> str:

@@ -9,7 +9,6 @@ from datetime import date, timedelta
 from typing import Any
 
 import httpx
-
 from app.models import CarriageDetail, TrainOption, TripIntent
 
 

@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 # В этом файле собраны Pydantic-модели, которыми обмениваются API-эндпоинты.
 # Явные модели защищают приложение от произвольного текста LLM: frontend всегда
 # получает структурированные данные, а backend может валидировать ответы.

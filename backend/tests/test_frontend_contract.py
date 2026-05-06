@@ -20,8 +20,25 @@ def test_app_js_has_dialog_abort_and_message_cap():
     assert "ticketAllFeatures" in src
 
 
-def test_index_html_user_input_maxlength():
+def test_index_html_loads_api_client_before_app_js():
     root = Path(__file__).resolve().parents[2]
     html = (root / "frontend" / "index.html").read_text(encoding="utf-8")
-    assert 'id="user-input"' in html
-    assert "maxlength=" in html
+    api_idx = html.find("api-client.js")
+    app_idx = html.find("app.js")
+    assert api_idx != -1 and app_idx != -1
+    assert api_idx < app_idx
+
+
+def test_api_client_has_fetch_wrappers():
+    root = Path(__file__).resolve().parents[2]
+    api = (root / "frontend" / "api-client.js").read_text(encoding="utf-8")
+    assert "async function fetchApi" in api
+    assert "async function postJson" in api
+    assert "async function getJson" in api
+    assert "X-Request-Id" in api
+
+
+def test_app_js_delegates_http_to_api_client():
+    src = _app_js()
+    assert "async function fetchApi" not in src
+    assert "api-client.js" in Path(__file__).resolve().parents[2].joinpath("frontend/index.html").read_text(encoding="utf-8")

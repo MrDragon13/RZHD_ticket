@@ -1,0 +1,2 @@
+# Локальные проверки: pip install -r requirements-dev.txt && ruff check backend backend/tests
+ruff>=0.8.4

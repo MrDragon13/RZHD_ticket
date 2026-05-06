@@ -29,10 +29,10 @@ from app.models import (
     RecommendResponse,
     TicketSearchRequest,
     TicketSearchResponse,
-    TrainRouteStopsRequest,
-    TrainRouteStopsResponse,
     TrainCarriageDetailsRequest,
     TrainCarriageDetailsResponse,
+    TrainRouteStopsRequest,
+    TrainRouteStopsResponse,
     TripIntent,
     UnderstandRequest,
 )
@@ -41,7 +41,6 @@ from app.services.checkout import create_demo_ticket
 from app.services.deepseek_client import DeepSeekClient
 from app.services.recommendations import recommend_trains
 from app.services.rzd_adapter import RzdDataAdapter
-
 
 # FastAPI-приложение является центральной точкой backend. Оно держит ключ DeepSeek
 # на сервере, предоставляет frontend простые endpoint'ы и не раскрывает секреты в

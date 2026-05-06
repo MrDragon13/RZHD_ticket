@@ -357,7 +357,9 @@ cd backend
 PYTHONPATH=. pytest tests/ -q
 ```
 
-В каталоге `backend/tests/`: **smoke** (`GET /api/health`, заголовок `X-Request-Id`, контракт `/api/checkout-voice-intent`), **лимит POST** (`PostApiRateLimitMiddleware`) и **контрактные строки** во `frontend/app.js` (abort диалога, защита языка/поезда/STT, лимит сообщения, `maxlength` в разметке), чтобы регрессии ловились без браузера.
+В каталоге `backend/tests/`: **smoke** (`GET /api/health`, заголовок `X-Request-Id`, контракт `/api/checkout-voice-intent`), **лимит POST** (`PostApiRateLimitMiddleware`), **юнит-хелперы** демо-чекаута и **контракты** фронта (`app.js` / `api-client.js`, порядок скриптов в `index.html`), чтобы регрессии ловились без браузера.
+
+**Линтеры:** из корня репозитория `pip install -r requirements-dev.txt`, затем `ruff check backend/app backend/tests`; в `frontend/` после `npm install` — `npm run lint`. Тот же минимальный контур выполняется в GitHub Actions (`.github/workflows/ci.yml`).
 
 ## Локальный запуск frontend без Docker
 

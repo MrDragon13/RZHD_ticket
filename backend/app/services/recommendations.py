@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from ..models import Recommendation, RecommendRequest, RecommendResponse, TrainOption, TripIntent
 from .deepseek_client import DeepSeekClient
 from .wagon_search_hints import extract_wagon_constraints, train_satisfies_all_wagon_tags
-from ..models import Recommendation, RecommendRequest, RecommendResponse, TrainOption, TripIntent
 
 
 def _total_free_seats(train: TrainOption) -> int:

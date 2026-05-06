@@ -11,9 +11,8 @@ import os
 import re
 from typing import Any
 
-from pydantic import BaseModel, Field
-
 from app.services.deepseek_client import DeepSeekClient
+from pydantic import BaseModel, Field
 
 
 def _norm(s: str) -> str:

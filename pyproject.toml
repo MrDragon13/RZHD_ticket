@@ -1,0 +1,14 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+exclude = ["**/vendor/**"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+ignore = [
+  "E402",  # main.py: настройка логирования до импортов FastAPI
+  "E501",  # длинные строки в промптах/логах — отдельный рефакторинг
+  "B905",  # zip(strict=) в существующем коде — менять поведение не в этом PR
+]
+[tool.ruff.lint.per-file-ignores]
+"**/vendor/**" = ["ALL"]

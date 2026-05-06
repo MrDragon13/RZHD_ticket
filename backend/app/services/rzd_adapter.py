@@ -6,7 +6,7 @@ import logging
 import os
 import secrets
 import time as time_monotonic
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 
 from app.models import (
@@ -208,7 +208,7 @@ class RzdDataAdapter:
         enriched_demo = self._apply_wagon_constraint_filter(request, enriched_demo, sid=None)
         return TicketSearchResponse(
             source="demo",
-            updated_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=datetime.now(UTC).isoformat(),
             trains=enriched_demo,
         )
 
@@ -457,7 +457,7 @@ class RzdDataAdapter:
 
         return TicketSearchResponse(
             source="live-cache",
-            updated_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=datetime.now(UTC).isoformat(),
             trains=enriched,
         )
 

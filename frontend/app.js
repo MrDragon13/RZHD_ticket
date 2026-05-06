@@ -1,119 +1,6 @@
-// Backend URL можно переопределить через window.PATH_API_BASE_URL.
-// По умолчанию используем относительный адрес: Caddy и nginx проксируют /api
-// во внутренний backend-контейнер, а ключ DeepSeek остается только на сервере.
-const API_BASE_URL = window.PATH_API_BASE_URL || "";
+// HTTP: fetchApi, postJson, getJson — в ./api-client.js (грузится в index.html перед этим файлом).
 
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-const DEFAULT_FETCH_TIMEOUT_MS = 55000;
-
-function generateRequestId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `req-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
-}
-
-function shouldRetryFetchError(err) {
-  if (!err) return false;
-  if (err.name === "TypeError") return true;
-  if (err.name === "AbortError") return true;
-  if (String(err.message || "").includes("Failed to fetch")) return true;
-  return false;
-}
-
-function mergeAbortSignals(a, b) {
-  if (!b) return a;
-  if (!a) return b;
-  const controller = new AbortController();
-  const onAbort = () => controller.abort();
-  if (a.aborted || b.aborted) {
-    onAbort();
-    return controller.signal;
-  }
-  a.addEventListener("abort", onAbort, { once: true });
-  b.addEventListener("abort", onAbort, { once: true });
-  return controller.signal;
-}
-
-/**
- * GET/POST к API с таймаутом и одним повтором при сетевой ошибке.
- * @param {string} path путь начиная с /api/...
- * @param {{ method?: string, body?: object, timeoutMs?: number, retries?: number, signal?: AbortSignal }} opts
- */
-async function fetchApi(path, opts = {}) {
-  const method = opts.method || "GET";
-  const body = opts.body;
-  const timeoutMs = opts.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
-  const retries = opts.retries ?? 1;
-  const outerSignal = opts.signal;
-  const url = `${API_BASE_URL}${path}`;
-  let lastErr;
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    if (outerSignal?.aborted) {
-      const e = new Error("Aborted");
-      e.name = "AbortError";
-      throw e;
-    }
-    const rid = generateRequestId();
-    const timeoutController = new AbortController();
-    const timer = setTimeout(() => timeoutController.abort(), timeoutMs);
-    const combined = mergeAbortSignals(timeoutController.signal, outerSignal || null);
-    try {
-      const headers = {
-        Accept: "application/json",
-        "X-Request-Id": rid,
-      };
-      if (body !== undefined) {
-        headers["Content-Type"] = "application/json";
-      }
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: combined,
-      });
-      clearTimeout(timer);
-      if (!response.ok) {
-        throw new Error(`API error ${response.status}`);
-      }
-      const ct = response.headers.get("content-type") || "";
-      if (ct.includes("application/json")) {
-        return response.json();
-      }
-      return null;
-    } catch (err) {
-      clearTimeout(timer);
-      lastErr = err;
-      if (outerSignal?.aborted) throw err;
-      const canRetry = attempt < retries && shouldRetryFetchError(err);
-      if (!canRetry) throw err;
-      await wait(450 * (attempt + 1));
-    }
-  }
-  throw lastErr || new Error("fetchApi failed");
-}
-
-async function postJson(path, payload, options = {}) {
-  return fetchApi(path, {
-    method: "POST",
-    body: payload,
-    timeoutMs: options.timeoutMs,
-    retries: options.retries,
-    signal: options.signal,
-  });
-}
-
-async function getJson(path, options = {}) {
-  return fetchApi(path, {
-    method: "GET",
-    timeoutMs: options.timeoutMs,
-    retries: options.retries,
-    signal: options.signal,
-  });
-}
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Ввод в поле текста и «Отправить» открывает журнал с этой точной строкой (без учёта регистра). */
 const PATH_DEBUG_TRIGGER = "logloglog";
@@ -1427,7 +1314,7 @@ function berthTotalsSum(detail) {
  * Доверять ли сумме berth_totals из РЖД как описанию **целого** вагона (для подстановки вместимости).
  * Ниже порога считаем ответ фрагментом и используем эталонную вместимость класса.
  */
-function berthTotalsLookLikeWholeCarriage(cls, sum, detail) {
+function berthTotalsLookLikeWholeCarriage(cls, sum, _detail) {
   if (sum < 4) return false;
   if (cls === "platzkart") {
     return sum >= RZD_TRUST_BERTH_TOTALS_PLATZ_MIN && sum <= RZD_TRUST_BERTH_TOTALS_PLATZ_MAX;
@@ -1677,7 +1564,6 @@ const routeLineFlow = document.querySelector("#route-line-flow");
 const routePulse = document.querySelector("#route-pulse");
 const dialogHistory = document.querySelector("#dialog-history");
 const newSessionButton = document.querySelector("#new-session-button");
-const routeState = document.querySelector("#route-state");
 const textInputPanel = document.querySelector("#text-input-panel");
 const textInputToggle = document.querySelector("#text-input-toggle");
 
@@ -2726,6 +2612,7 @@ function renderTrainListSkeleton(count = 3) {
   const list = document.querySelector("#trains-list");
   if (!list) return;
   list.innerHTML = "";
+  const frag = document.createDocumentFragment();
   for (let i = 0; i < count; i += 1) {
     const card = document.createElement("article");
     card.className = "train-card train-card-skeleton";
@@ -2736,8 +2623,9 @@ function renderTrainListSkeleton(count = 3) {
       <div class="skeleton-line skeleton-line--narrow"></div>
       <div class="skeleton-line skeleton-line--narrow"></div>
     `;
-    list.append(card);
+    frag.append(card);
   }
+  list.append(frag);
 }
 
 async function postRecommendWithRetries(payload, options = {}) {
@@ -2766,6 +2654,7 @@ function renderTrains() {
   const list = document.querySelector("#trains-list");
   list.innerHTML = "";
   const highlightId = getTrainHighlightId();
+  const frag = document.createDocumentFragment();
   getTrainsForUi().forEach((train) => {
     const recommendation = recommendationFor(train.id);
     const card = document.createElement("article");
@@ -2797,8 +2686,9 @@ function renderTrains() {
       </div>
     `;
     card.addEventListener("click", () => void selectTrain(train));
-    list.append(card);
+    frag.append(card);
   });
+  list.append(frag);
 }
 
 function recommendationFor(trainId) {
@@ -3007,7 +2897,7 @@ async function createTicket() {
       item.className = "checkout-step";
       item.textContent = step;
       steps.append(item);
-      await wait(260);
+      await sleep(260);
       item.classList.add("checkout-step-done");
     }
     checkoutPanel.classList.add("hidden");
@@ -3034,15 +2924,6 @@ function hashSeed(str) {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
-}
-
-function mulberry32(seed) {
-  return function next() {
-    let t = (seed += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 function priceForSeatBerth(train, berthKind) {
@@ -4123,6 +4004,7 @@ function addMessage(role, text) {
 function renderHistory() {
   if (!dialogHistory) return;
   dialogHistory.innerHTML = "";
+  const frag = document.createDocumentFragment();
   dialogMessages.forEach((message) => {
     const item = document.createElement("div");
     item.className = `message message-${message.role}`;
@@ -4130,8 +4012,9 @@ function renderHistory() {
       <span>${message.role === "user" ? i18n[language].userRole : i18n[language].assistantRole}</span>
       <p>${escapeHtml(message.text)}</p>
     `;
-    dialogHistory.append(item);
+    frag.append(item);
   });
+  dialogHistory.append(frag);
   dialogHistory.scrollTop = dialogHistory.scrollHeight;
 }
 

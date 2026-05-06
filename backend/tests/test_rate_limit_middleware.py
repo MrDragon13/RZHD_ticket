@@ -1,12 +1,11 @@
 """Изолированная проверка middleware ограничения POST к /api/*."""
 
+from app.rate_limit_middleware import PostApiRateLimitMiddleware
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
-
-from app.rate_limit_middleware import PostApiRateLimitMiddleware
 
 
 async def tiny_ok(request: Request) -> PlainTextResponse:
