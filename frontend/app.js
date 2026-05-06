@@ -785,26 +785,35 @@ function routeMapDestinationKey() {
 /** Световой «поток» по линии маршрута (нижний слой под основной обводкой). */
 function syncRouteFlowOverlay(flowEl, pathD) {
   if (!flowEl || !pathD) return;
-  flowEl.setAttribute("d", pathD);
-  flowEl.style.opacity = "";
-  flowEl.classList.remove("route-line-flow-active");
-  void flowEl.getBoundingClientRect();
   try {
-    const len = flowEl.getTotalLength();
-    const period = Number.isFinite(len) && len > 40 ? len : 1100;
-    flowEl.style.setProperty("--route-flow-period", String(period));
-    const dur = Math.min(7.5, Math.max(3.2, period / 160));
-    flowEl.style.setProperty("--route-flow-duration", `${dur}s`);
-    const dash = Math.round(Math.min(84, Math.max(26, period * 0.052)));
-    const gap = Math.round(Math.max(period * 0.64, dash * 4));
-    flowEl.style.strokeDasharray = `${dash} ${gap}`;
-    flowEl.style.strokeDashoffset = "0";
-  } catch {
-    flowEl.style.strokeDasharray = "52 420";
-    flowEl.style.setProperty("--route-flow-period", "472");
-    flowEl.style.setProperty("--route-flow-duration", "4.5s");
+    flowEl.setAttribute("d", pathD);
+    flowEl.style.opacity = "";
+    flowEl.classList.remove("route-line-flow-active");
+    void flowEl.getBoundingClientRect();
+    try {
+      const len = flowEl.getTotalLength();
+      const period = Number.isFinite(len) && len > 40 ? len : 1100;
+      flowEl.style.setProperty("--route-flow-period", String(period));
+      const dur = Math.min(7.5, Math.max(3.2, period / 160));
+      flowEl.style.setProperty("--route-flow-duration", `${dur}s`);
+      const dash = Math.round(Math.min(84, Math.max(26, period * 0.052)));
+      const gap = Math.round(Math.max(period * 0.64, dash * 4));
+      flowEl.style.strokeDasharray = `${dash} ${gap}`;
+      flowEl.style.strokeDashoffset = "0";
+    } catch {
+      flowEl.style.strokeDasharray = "52 420";
+      flowEl.style.setProperty("--route-flow-period", "472");
+      flowEl.style.setProperty("--route-flow-duration", "4.5s");
+    }
+    flowEl.classList.add("route-line-flow-active");
+  } catch (e) {
+    try {
+      console.warn("[route-flow]", e);
+    } catch {
+      /* ignore */
+    }
+    flowEl.classList.remove("route-line-flow-active");
   }
-  flowEl.classList.add("route-line-flow-active");
 }
 
 function applyRouteGeometry(visual, labelOverride) {
@@ -1234,7 +1243,6 @@ const screens = {
   language: document.querySelector("#language-screen"),
   terminal: document.querySelector("#terminal-screen"),
 };
-startLanguageScreenAmbient();
 const assistantText = document.querySelector("#assistant-text");
 const userInput = document.querySelector("#user-input");
 const languageBadge = document.querySelector("#language-badge");
@@ -1305,6 +1313,7 @@ function updateTextInputToggleLabels() {
 
 updateTextInputToggleLabels();
 initPathLogModal();
+startLanguageScreenAmbient();
 
 // Чипы меняются в зависимости от стадии сценария: старт, поиск, результаты,
 // оформление. Неактуальные подсказки исчезают, чтобы экран не выглядел шумным.
@@ -1775,22 +1784,37 @@ function applyIntroRouteGeometry(visual, labelOverride) {
 
 async function tickLanguageScreenAmbient() {
   if (!screens.language || screens.language.classList.contains("hidden")) return;
-  const { origin, destination } = pickRandomIntroRoutePair();
-  const visual = buildIntroRouteVisual(origin, destination);
-  const copy = i18n[language];
-  const heading = document.querySelector("#language-route-heading-label");
-  const badge = document.querySelector("#language-route-ambient-badge");
-  const meta = document.querySelector("#language-route-meta");
-  const ft = document.querySelector("#language-fact-title");
-  const factEl = document.querySelector("#language-route-fact");
-  if (heading) heading.textContent = copy.route;
-  if (ft) ft.textContent = copy.fact;
-  if (badge) badge.textContent = copy.languageAmbientBadge;
-  if (meta) meta.textContent = `${origin} → ${destination}`;
-  applyIntroRouteGeometry(visual, { origin, destination });
-  if (factEl) factEl.textContent = copy.routeFactLoading;
+  let origin = "";
+  let destination = "";
+  try {
+    const pair = pickRandomIntroRoutePair();
+    origin = pair.origin;
+    destination = pair.destination;
+    const visual = buildIntroRouteVisual(origin, destination);
+    const copy = i18n[language];
+    const heading = document.querySelector("#language-route-heading-label");
+    const badge = document.querySelector("#language-route-ambient-badge");
+    const meta = document.querySelector("#language-route-meta");
+    const ft = document.querySelector("#language-fact-title");
+    const factEl = document.querySelector("#language-route-fact");
+    if (heading) heading.textContent = copy.route;
+    if (ft) ft.textContent = copy.fact;
+    if (badge) badge.textContent = copy.languageAmbientBadge;
+    if (meta) meta.textContent = `${origin} → ${destination}`;
+    applyIntroRouteGeometry(visual, { origin, destination });
+    if (factEl) factEl.textContent = copy.routeFactLoading;
+  } catch (e) {
+    try {
+      console.error("[language-ambient]", e);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
   languageAmbientAbort?.abort();
   languageAmbientAbort = new AbortController();
+  const factEl = document.querySelector("#language-route-fact");
+  const copy = i18n[language];
   try {
     const res = await postJson(
       "/api/fun-fact",
