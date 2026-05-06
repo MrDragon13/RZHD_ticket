@@ -464,10 +464,12 @@ button {
   grid-column: 2;
   justify-self: center;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: clamp(6px, 1.5vmin, 10px);
+  box-sizing: border-box;
+  min-height: clamp(42px, 8vmin, 48px);
   max-width: min(520px, min(92vw, calc(100vw - 24px)));
-  padding: clamp(6px, 1.4vmin, 10px) clamp(12px, 2.8vmin, 18px);
+  padding: clamp(8px, 1.6vmin, 10px) clamp(12px, 2.2vmin, 14px);
   border-radius: 999px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.06);
