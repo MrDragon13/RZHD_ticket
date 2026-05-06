@@ -2637,15 +2637,15 @@ async function confirmSeatSelection() {
   }
 }
 
+/**
+ * Полезная нагрузка QR: простой текст UTF-8 (кириллица), Byte mode в qrcode.js.
+ * Версия матрицы выбирается автоматически; для печати ~3×3 см оставьте тихую зону ≥4 модулей.
+ */
 function buildDemoTicketQrPayload() {
   const copy = i18n[language];
   const d = demoTicket;
   if (!d) return "";
   const thanks = copy.ticketThanks;
-  // Backend уже кладёт компактный JSON — он надёжнее для QR, чем длинный текст с дисклеймером.
-  if (typeof d.qr_payload === "string" && d.qr_payload.trim()) {
-    return `${d.qr_payload.trim()}\n\n${thanks}`;
-  }
   const ru = language === "ru";
   return [
     copy.demoTicket,
@@ -2684,7 +2684,8 @@ function renderTicketQrCanvas(payloadText) {
     height: 220,
     colorDark: "#071018",
     colorLight: "#ffffff",
-    correctLevel: QR.CorrectLevel.L,
+    // EC-M (~15%): читаемость при частичном повреждении; qrcode.js кодирует строку в 8-bit byte (UTF-8 для кириллицы).
+    correctLevel: QR.CorrectLevel.M,
   };
 
   const idFallback =
@@ -2697,9 +2698,15 @@ function renderTicketQrCanvas(payloadText) {
   if (payloadText.length > 450) candidates.push(payloadText.slice(0, 450));
   candidates.push(idFallback);
 
+  /** qrcode.js кладёт и canvas, и img; оба с display:block дают два QR в ряд — оставляем только canvas. */
+  function dropQrRasterDuplicate(wrapEl) {
+    wrapEl.querySelectorAll("img").forEach((el) => el.remove());
+  }
+
   const findQrNode = () => wrap.querySelector("canvas, img, table, svg");
 
   const polishQrDom = () => {
+    dropQrRasterDuplicate(wrap);
     const node = findQrNode();
     if (!node) return false;
     const tag = node.tagName;
@@ -2725,6 +2732,7 @@ function renderTicketQrCanvas(payloadText) {
       wrap.innerHTML = "";
       // Один вызов с text в опциях — так задумано в qrcode.js (makeCode внутри конструктора).
       new QR(wrap, { ...baseOpts, text });
+      dropQrRasterDuplicate(wrap);
       if (findQrNode()) {
         drew = true;
         break;
@@ -2739,9 +2747,15 @@ function renderTicketQrCanvas(payloadText) {
     return;
   }
 
-  // qrcode.js иногда асинхронно подменяет canvas на img (data URL); перепроверяем кадр позже.
-  requestAnimationFrame(() => polishQrDom());
-  setTimeout(() => polishQrDom(), 80);
+  // makeImage может снова добавить img асинхронно — убрать дубликат после тика.
+  requestAnimationFrame(() => {
+    dropQrRasterDuplicate(wrap);
+    polishQrDom();
+  });
+  setTimeout(() => {
+    dropQrRasterDuplicate(wrap);
+    polishQrDom();
+  }, 80);
 }
 
 function renderTicket() {
