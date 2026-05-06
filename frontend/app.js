@@ -230,6 +230,7 @@ const i18n = {
     compartmentUnknown: "",
     wagonServices: "Услуги вагона",
     wagonFeatures: "Особенности вагона",
+    ticketAllFeatures: "Особенности",
     ticketCompartmentFeatures: "Особенности купе",
     ticketSeatFeatures: "Особенности места",
     addSignsLabel: "Код РЖД",
@@ -331,6 +332,7 @@ const i18n = {
     compartmentUnknown: "",
     wagonServices: "Car services",
     wagonFeatures: "Carriage features",
+    ticketAllFeatures: "Features",
     ticketCompartmentFeatures: "Compartment",
     ticketSeatFeatures: "Seat details",
     addSignsLabel: "RZD code",
@@ -1092,6 +1094,11 @@ const featureLabels = {
     direct: "без пересадок",
     balanced: "сбалансированный вариант",
     comfort: "повышенный комфорт",
+    cheap: "экономичный вариант",
+    fast: "скоростной поезд",
+    morning: "утренний поезд",
+    long: "длительный маршрут",
+    resort: "курортное направление",
   },
   en: {
     night: "overnight",
@@ -1099,6 +1106,11 @@ const featureLabels = {
     direct: "direct",
     balanced: "balanced option",
     comfort: "extra comfort",
+    cheap: "budget-friendly",
+    fast: "express-style",
+    morning: "morning departure",
+    long: "long-distance",
+    resort: "resort route",
   },
 };
 
@@ -1112,25 +1124,6 @@ function travelClassForTicket(tc) {
     Плацкарт: "Platzkart",
   };
   return map[raw] || raw;
-}
-
-/**
- * Бейджи для демо-билета: как у карточки поезда (amenities); если их нет — кратко из features.
- */
-function ticketCarriageBadgesHtml(train) {
-  if (!train) return "";
-  const am = train.amenities || [];
-  if (am.length) {
-    return am
-      .slice(0, 8)
-      .map((item) => `<span class="amenity">${escapeHtml(amenityLabels[language][item] || item)}</span>`)
-      .join("");
-  }
-  const feats = train.features || [];
-  return feats
-    .slice(0, 8)
-    .map((f) => `<span class="amenity">${escapeHtml(featureLabels[language][f] || f)}</span>`)
-    .join("");
 }
 
 /** Число условных отсеков на схеме — как при подсветке купе (для сопоставления с метаданными РЖД). */
@@ -1194,55 +1187,71 @@ function platzZoneTicketLabel(zone) {
   return "";
 }
 
-/**
- * Бейджи по выбранным на схеме местам: купе (пол/тип) и место (полка, зона плацкарта).
- */
-function ticketCoupeSeatExtrasHtml(train) {
-  if (!train || !selectedSeatKeys.size) return "";
-  const copy = i18n[language];
-  const coupeSet = new Set();
-  const seatSet = new Set();
+function ticketCarCodesForLookup(carField) {
+  const raw = String(carField || "").trim();
+  if (!raw) return [];
+  return raw.split("+").map((s) => s.trim()).filter(Boolean);
+}
 
-  for (const car of demoCarriages) {
-    const seats = demoSeatLayouts.get(car) || [];
-    const compartmentCount = compartmentCountFromSeatList(seats);
-    for (const seat of seats) {
-      if (!selectedSeatKeys.has(seat.id)) continue;
-      const ci = seat.compartmentIndex ?? 0;
-      const ck = compartmentKindEnumAtSeat(train, car, ci, compartmentCount);
-      if (ck) {
-        const lab = compartmentKindLabel(ck);
-        if (lab && lab !== copy.compartmentUnknown) coupeSet.add(lab);
-      }
-      if (seat.berth_kind) {
-        const bl = berthKindTicketDetailLabel(seat.berth_kind);
-        if (bl) seatSet.add(bl);
-      }
-      if (seat.zone) {
-        const zl = platzZoneTicketLabel(seat.zone);
-        if (zl) seatSet.add(zl);
+/**
+ * Единый список подписей для билета: удобства поезда, теги маршрута, услуги вагона (РЖД),
+ * тип купе/полка/зона по выбранным местам — без дублей, в одном порядке для чипов.
+ */
+function collectUnifiedTicketFeatureLabels(train, ticketCarField) {
+  if (!train) return [];
+  const copy = i18n[language];
+  const labels = [];
+  const seen = new Set();
+  const add = (text) => {
+    const t = String(text || "").trim();
+    if (!t) return;
+    const k = t.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    labels.push(t);
+  };
+
+  for (const item of train.amenities || []) {
+    add(amenityLabels[language][item] || item);
+  }
+  for (const f of train.features || []) {
+    add(featureLabels[language][f] || f);
+  }
+
+  for (const cc of ticketCarCodesForLookup(ticketCarField)) {
+    const det = carriageDetailForTab(train, cc);
+    if (!det) continue;
+    for (const svc of det.services_short || []) add(svc);
+    if (det.service_summary) add(det.service_summary);
+  }
+
+  if (selectedSeatKeys.size) {
+    for (const car of demoCarriages) {
+      const seats = demoSeatLayouts.get(car) || [];
+      const compartmentCount = compartmentCountFromSeatList(seats);
+      for (const seat of seats) {
+        if (!selectedSeatKeys.has(seat.id)) continue;
+        const ci = seat.compartmentIndex ?? 0;
+        const ck = compartmentKindEnumAtSeat(train, car, ci, compartmentCount);
+        if (ck) {
+          const lab = compartmentKindLabel(ck);
+          if (lab && lab !== copy.compartmentUnknown) add(lab);
+        }
+        if (seat.berth_kind) add(berthKindTicketDetailLabel(seat.berth_kind));
+        if (seat.zone) add(platzZoneTicketLabel(seat.zone));
       }
     }
   }
 
-  const blocks = [];
-  if (coupeSet.size) {
-    const chips = [...coupeSet]
-      .map((s) => `<span class="amenity">${escapeHtml(s)}</span>`)
-      .join("");
-    blocks.push(
-      `<p class="ticket-wagon-features-title">${escapeHtml(copy.ticketCompartmentFeatures)}</p><div class="amenity-row">${chips}</div>`,
-    );
-  }
-  if (seatSet.size) {
-    const chips = [...seatSet]
-      .map((s) => `<span class="amenity">${escapeHtml(s)}</span>`)
-      .join("");
-    blocks.push(
-      `<p class="ticket-wagon-features-title">${escapeHtml(copy.ticketSeatFeatures)}</p><div class="amenity-row">${chips}</div>`,
-    );
-  }
-  return blocks.join("");
+  return labels;
+}
+
+function ticketUnifiedFeaturesHtml(train, ticketCarField) {
+  const list = collectUnifiedTicketFeatureLabels(train, ticketCarField);
+  if (!list.length) return "";
+  const copy = i18n[language];
+  const chips = list.map((s) => `<span class="amenity">${escapeHtml(s)}</span>`).join("");
+  return `<div class="ticket-features-block"><p class="ticket-wagon-features-title">${escapeHtml(copy.ticketAllFeatures)}</p><div class="amenity-row ticket-features-unified">${chips}</div></div>`;
 }
 
 let language = "ru";
@@ -3967,12 +3976,7 @@ function renderTicket() {
   setStage("ticket");
   const copy = i18n[language];
   document.querySelector("#ticket-title").textContent = copy.demoTicket;
-  const badges = ticketCarriageBadgesHtml(selectedTrain);
-  const coupeSeatExtras = ticketCoupeSeatExtrasHtml(selectedTrain);
-  const badgesBlock = badges
-    ? `<p class="ticket-wagon-features-title">${copy.wagonFeatures}</p><div class="amenity-row">${badges}</div>`
-    : "";
-  const coupeSeatBlock = coupeSeatExtras || "";
+  const featuresBlock = ticketUnifiedFeaturesHtml(selectedTrain, demoTicket?.car);
   document.querySelector("#ticket-body").innerHTML = `
     <strong>${demoTicket.route}</strong>
     <span>${language === "ru" ? "Поезд" : "Train"}: ${demoTicket.train_number}</span>
@@ -3982,7 +3986,7 @@ function renderTicket() {
     <span>${language === "ru" ? "Место" : "Seat"}: ${demoTicket.seat}</span>
     <span>${language === "ru" ? "Полка" : "Berth"}: ${demoTicket.berth_type}</span>
     <span>${travelClassForTicket(demoTicket.travel_class)}</span>
-    ${badgesBlock}${coupeSeatBlock}
+    ${featuresBlock}
     <small>${demoTicket.disclaimer}</small>
   `;
   renderTicketQrCanvas(buildDemoTicketQrPayload());

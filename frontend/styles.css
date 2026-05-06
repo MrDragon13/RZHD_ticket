@@ -2339,6 +2339,14 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
   justify-content: center;
 }
 
+.ticket-features-block {
+  width: 100%;
+}
+
+.ticket-features-unified {
+  flex-wrap: wrap;
+}
+
 .ticket-wagon-features-title {
   margin: 14px 0 8px;
   font-size: 11px;
