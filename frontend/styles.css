@@ -477,6 +477,7 @@ button {
   stroke: #eef8ff;
   stroke-width: 2;
   filter: drop-shadow(0 0 10px rgba(138, 43, 226, 0.8));
+  transition: opacity 0.45s ease;
 }
 
 .stop-dot.hidden-stop,
@@ -484,11 +485,13 @@ button {
 .stop-dot.hidden-map-point,
 .stop-label.hidden-map-point {
   opacity: 0;
+  pointer-events: none;
 }
 
 .stop-label {
   fill: #cbeaff;
   font-size: 18px;
+  transition: opacity 0.45s ease;
 }
 
 .pulse {

@@ -269,6 +269,8 @@ const routeVisuals = {
 
 /** Максимум промежуточных точек на SVG-карте маршрута (пары #stop-dot-a…e + #stop-label-a…e в index.html). */
 const ROUTE_MAP_MAX_INTERMEDIATE_STOPS = 5;
+/** Интервал между появлением точек по направлению от отправления к прибытию (мс). */
+const ROUTE_STOP_STAGGER_MS = 170;
 
 /**
  * Равномерно выбирает до maxCount названий из упорядоченного сегмента (не подряд с начала):
@@ -756,6 +758,8 @@ let selectedTrain = null;
 let ticketSearchSource = "demo";
 /** Уже догружен полный маршрут (POST /api/train-route-stops) для карты. */
 let routeStopsLoadedIds = new Set();
+/** Таймеры поочерёдного показа промежуточных точек (отменяются при новой отрисовке карты). */
+let routeStopRevealTimeouts = [];
 let demoTicket = null;
 let checkoutAnimating = false;
 let issuingTicket = false;
@@ -1317,6 +1321,11 @@ function routeMapStopElements() {
   return { dots, labels };
 }
 
+function clearRouteStopRevealTimers() {
+  routeStopRevealTimeouts.forEach((id) => clearTimeout(id));
+  routeStopRevealTimeouts = [];
+}
+
 function updateMapGeometry(visual, labelOverride) {
   const originText =
     labelOverride?.origin ??
@@ -1351,21 +1360,62 @@ function updateMapGeometry(visual, labelOverride) {
     destinationLabel.setAttribute("x", visual.destination.labelX);
     destinationLabel.setAttribute("y", visual.destination.labelY);
   }
-  stopDots.forEach((dot, index) => updateStopPoint(dot, stopLabels[index], visual.stops[index]));
+
+  const stopsList = visual.stops || [];
+  clearRouteStopRevealTimers();
+
+  const reducedMotion =
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wantStagger = stopsList.some(Boolean) && !reducedMotion;
+
+  if (!wantStagger) {
+    stopDots.forEach((dot, index) => updateStopPoint(dot, stopLabels[index], stopsList[index]));
+    return;
+  }
+
+  stopDots.forEach((dot, index) => {
+    const stop = stopsList[index];
+    if (!stop) {
+      updateStopPoint(dot, stopLabels[index], null);
+      return;
+    }
+    dot.setAttribute("cx", String(stop.x));
+    dot.setAttribute("cy", String(stop.y));
+    const lab = stopLabels[index];
+    lab.setAttribute("x", String(stop.x + 12));
+    lab.setAttribute("y", String(stop.y - 12));
+    lab.textContent = stop.name;
+    dot.classList.add("hidden-map-point");
+    lab.classList.add("hidden-map-point");
+  });
+
+  stopsList.forEach((stop, index) => {
+    if (!stop) return;
+    const tid = window.setTimeout(() => {
+      const dot = stopDots[index];
+      const lab = stopLabels[index];
+      if (!dot || !lab) return;
+      dot.classList.remove("hidden-map-point");
+      lab.classList.remove("hidden-map-point");
+    }, index * ROUTE_STOP_STAGGER_MS);
+    routeStopRevealTimeouts.push(tid);
+  });
 }
 
 function updateStopPoint(dot, label, stop) {
   if (!dot || !label) return;
   if (!stop) {
     dot.classList.add("hidden-map-point");
+    label.classList.add("hidden-map-point");
     label.textContent = "";
     return;
   }
   dot.classList.remove("hidden-map-point");
-  dot.setAttribute("cx", stop.x);
-  dot.setAttribute("cy", stop.y);
-  label.setAttribute("x", stop.x + 12);
-  label.setAttribute("y", stop.y - 12);
+  label.classList.remove("hidden-map-point");
+  dot.setAttribute("cx", String(stop.x));
+  dot.setAttribute("cy", String(stop.y));
+  label.setAttribute("x", String(stop.x + 12));
+  label.setAttribute("y", String(stop.y - 12));
   label.textContent = stop.name;
 }
 
@@ -2732,6 +2782,7 @@ function resetScenario(announce = true) {
   issuingTicket = false;
   ticketSearchSource = "demo";
   routeStopsLoadedIds = new Set();
+  clearRouteStopRevealTimers();
   demoCarriages = [];
   activeCarriageIndex = 0;
   demoSeatLayouts = new Map();
