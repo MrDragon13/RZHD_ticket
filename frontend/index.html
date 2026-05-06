@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Путь — умный билетный терминал</title>
-    <link rel="stylesheet" href="./styles.css?v=202605073" />
+    <link rel="stylesheet" href="./styles.css?v=202605074" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -285,22 +285,22 @@
           </section>
 
           <aside class="control-panel">
-            <div class="control-panel-head">
-              <div class="assistant-core">
-                <button id="orb-button" class="orb" type="button" aria-label="Запустить голосовой ввод">
-                  <svg class="orb-mic" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V20h2v-2.08A7 7 0 0 0 19 11h-2z"
-                    />
-                  </svg>
-                </button>
-                <div class="assistant-text" aria-live="polite" aria-atomic="true">
-                  <h2 id="listen-label">Слушать</h2>
-                  <p id="assistant-text">Добро пожаловать. Куда направимся?</p>
-                  <p id="start-prompt" class="orb-hint">Коснитесь сферы и скажите, куда вы хотите поехать</p>
-                </div>
+            <div class="assistant-core">
+              <button id="orb-button" class="orb" type="button" aria-label="Запустить голосовой ввод">
+                <svg class="orb-mic" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V20h2v-2.08A7 7 0 0 0 19 11h-2z"
+                  />
+                </svg>
+              </button>
+              <div class="assistant-text" aria-live="polite" aria-atomic="true">
+                <h2 id="listen-label">Слушать</h2>
+                <p id="assistant-text">Добро пожаловать. Куда направимся?</p>
+                <p id="start-prompt" class="orb-hint">Коснитесь сферы и скажите, куда вы хотите поехать</p>
               </div>
+            </div>
 
+            <div class="control-panel-scroll">
               <section class="history-panel">
                 <p class="assist-muted-label" id="history-title">История диалога</p>
                 <div id="dialog-history" class="dialog-history"></div>
@@ -314,9 +314,7 @@
               </div>
 
               <div id="chips" class="chips"></div>
-            </div>
 
-            <div class="control-panel-body">
               <section id="intent-panel" class="hidden">
                 <h2 id="intent-title">Я понял запрос</h2>
                 <div id="intent-grid" class="intent-grid"></div>
@@ -415,8 +413,8 @@
     <div id="session-idle-warning" class="session-idle-warning hidden" role="alert" aria-live="assertive"></div>
 
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
-    <script src="./api-client.js?v=202605073"></script>
-    <script src="./app.js?v=202605073"></script>
+    <script src="./api-client.js?v=202605074"></script>
+    <script src="./app.js?v=202605074"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>

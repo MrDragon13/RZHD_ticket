@@ -3141,6 +3141,19 @@ function renderTrains() {
     frag.append(card);
   });
   list.append(frag);
+  scrollRecommendedTrainCardIntoView();
+}
+
+/** После выдачи списка — прокрутить к рекомендованной карточке сразу под закреплённым assistant-core. */
+function scrollRecommendedTrainCardIntoView() {
+  const card = document.querySelector("#trains-list .train-card-best");
+  if (!card) return;
+  const behavior = prefersReducedMotion() ? "auto" : "smooth";
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      card.scrollIntoView({ block: "start", behavior });
+    });
+  });
 }
 
 function recommendationFor(trainId) {
