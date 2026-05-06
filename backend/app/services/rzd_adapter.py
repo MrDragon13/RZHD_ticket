@@ -66,7 +66,9 @@ class RzdDataAdapter:
 
         enrich = _env_truthy_default_on("RZD_CARRIAGE_ENRICH")
         route_stops_enrich = _env_truthy_default_on("RZD_ROUTE_STOPS_ENRICH")
-        route_stops_max = int(os.getenv("RZD_ROUTE_STOPS_MAX_TRAINS", "12") or "12")
+        # basicRoute — отдельный вызов на каждый поезд; по умолчанию покрываем всю выдачу (до 40),
+        # иначе у поездов ниже порога остаётся только разрежённый слой 5827 → нет промежуточных точек на карте.
+        route_stops_max = int(os.getenv("RZD_ROUTE_STOPS_MAX_TRAINS", "40") or "40")
         route_stops_max = max(1, min(route_stops_max, 40))
         carriage_max = int(os.getenv("RZD_CARRIAGE_ENRICH_MAX_TRAINS", "15") or "15")
         carriage_max = max(1, min(carriage_max, 40))
@@ -97,6 +99,22 @@ class RzdDataAdapter:
             ]
             route_idx = eligible_idx[:route_stops_max] if route_stops_enrich else []
             carriage_idx = eligible_idx[:carriage_max] if enrich else []
+
+            if route_stops_enrich and len(eligible_idx) > route_stops_max:
+                skipped_slice = eligible_idx[route_stops_max : route_stops_max + 20]
+                skipped_nums: list[str] = []
+                for si in skipped_slice:
+                    tobj = trains_list[si]
+                    skipped_nums.append(
+                        str(getattr(tobj, "number", "") or (tobj.content or {}).get("number") or "?"),
+                    )
+                logging.warning(
+                    "RZD route stops enrich capped: max=%s eligible=%s (basicRoute only for first trains); "
+                    "skipped_train_numbers_sample=%s",
+                    route_stops_max,
+                    len(eligible_idx),
+                    skipped_nums,
+                )
 
             carriage_by_index: dict[int, dict] = {}
             basic_stops_by_index: dict[int, list[str]] = {}
@@ -149,6 +167,13 @@ class RzdDataAdapter:
 
                 if tasks:
                     await asyncio.gather(*tasks)
+                    if route_stops_enrich:
+                        logging.info(
+                            "RZD route stops enrich done: basicRoute_ok=%s eligible_trains=%s cap=%s",
+                            len(basic_stops_by_index),
+                            len(eligible_idx),
+                            route_stops_max,
+                        )
 
         mapped: list[TrainOption] = []
         for index in eligible_idx:
