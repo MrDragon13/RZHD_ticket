@@ -108,6 +108,8 @@ const i18n = {
       "Не удалось загрузить поезда с сайта РЖД. Проверьте соединение или попробуйте позже.",
     routeFactUnavailable: "Факт о маршруте временно недоступен.",
     clarifyHint: "Я дождусь уточнения и только потом подберу варианты.",
+    logModalCopy: "Копировать всё",
+    logModalCopied: "Скопировано",
     logModalTitle: "Журнал консоли",
     logModalClose: "Закрыть",
     logModalClear: "Очистить",
@@ -181,6 +183,8 @@ const i18n = {
       "Could not load trains from RZD. Check your connection or try again later.",
     routeFactUnavailable: "Route fact is temporarily unavailable.",
     clarifyHint: "I will wait for clarification before searching options.",
+    logModalCopy: "Copy all",
+    logModalCopied: "Copied",
     logModalTitle: "Console log",
     logModalClose: "Close",
     logModalClear: "Clear",
@@ -639,17 +643,19 @@ function mergeRouteVisualForTrain(destinationKey, train) {
   }
 
   const names = intermediateStopDisplayNames(train);
-  try {
-    console.debug("[path route-map]", train?.train_number, {
-      intent_from: intent?.origin,
-      intent_to: intent?.destination,
-      route_segment: train?.route_segment,
-      frac,
-      marker_names: names,
-      stops_len: train?.stops?.length,
-    });
-  } catch {
-    /* ignore */
+  if (window.localStorage?.getItem("PATH_DEBUG_VERBOSE") === "1") {
+    try {
+      console.debug("[path route-map]", train?.train_number, {
+        intent_from: intent?.origin,
+        intent_to: intent?.destination,
+        route_segment: train?.route_segment,
+        frac,
+        marker_names: names,
+        stops_len: train?.stops?.length,
+      });
+    } catch {
+      /* ignore */
+    }
   }
 
   const placed = names.length > 0 ? stopMarkersAlongPath(base.line, names, frac) : null;
@@ -2596,17 +2602,37 @@ function openPathLogModal() {
   const pre = document.getElementById("path-log-modal-content");
   const title = document.getElementById("path-log-modal-title");
   if (!modal || !pre) return;
-  const copy = i18n[language];
-  if (title) title.textContent = copy.logModalTitle;
+  const labels = i18n[language];
+  if (title) title.textContent = labels.logModalTitle;
+  const copyLogBtn = document.getElementById("path-log-copy");
   const clearBtn = document.getElementById("path-log-clear");
   const closeBtn = document.getElementById("path-log-close");
-  if (clearBtn) clearBtn.textContent = copy.logModalClear;
-  if (closeBtn) closeBtn.textContent = copy.logModalClose;
-  pre.textContent = pathClientLogs.length ? pathClientLogs.join("\n") : copy.logModalEmpty;
+  if (copyLogBtn) copyLogBtn.textContent = labels.logModalCopy;
+  if (clearBtn) clearBtn.textContent = labels.logModalClear;
+  if (closeBtn) closeBtn.textContent = labels.logModalClose;
+  pre.textContent = pathClientLogs.length ? pathClientLogs.join("\n") : labels.logModalEmpty;
   modal.classList.remove("hidden");
   modal.setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
   pre.focus();
+}
+
+async function copyPathLogsToClipboard() {
+  const text = pathClientLogs.length ? pathClientLogs.join("\n") : "";
+  const copyBtn = document.getElementById("path-log-copy");
+  const labels = i18n[language];
+  try {
+    await navigator.clipboard.writeText(text || labels.logModalEmpty);
+    if (copyBtn) {
+      copyBtn.textContent = labels.logModalCopied;
+      setTimeout(() => {
+        if (copyBtn) copyBtn.textContent = labels.logModalCopy;
+      }, 1800);
+    }
+  } catch (err) {
+    pathLogAppend("WARN", ["clipboard:", String(err)]);
+    if (copyBtn) copyBtn.textContent = labels.logModalCopy;
+  }
 }
 
 function closePathLogModal() {
@@ -2627,8 +2653,10 @@ function initPathLogModal() {
   const backdrop = document.getElementById("path-log-modal-backdrop");
   const closeBtn = document.getElementById("path-log-close");
   const clearBtn = document.getElementById("path-log-clear");
+  const copyLogBtn = document.getElementById("path-log-copy");
   if (backdrop) backdrop.addEventListener("click", closePathLogModal);
   if (closeBtn) closeBtn.addEventListener("click", closePathLogModal);
+  if (copyLogBtn) copyLogBtn.addEventListener("click", () => void copyPathLogsToClipboard());
   if (clearBtn)
     clearBtn.addEventListener("click", () => {
       clearPathClientLogs();

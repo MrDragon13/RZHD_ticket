@@ -196,15 +196,18 @@
       aria-hidden="true"
     >
       <div id="path-log-modal-backdrop" class="path-log-modal-backdrop"></div>
-      <div class="path-log-modal-panel glass-panel">
+      <div class="path-log-modal-panel">
         <header class="path-log-modal-header">
           <h2 id="path-log-modal-title">Журнал</h2>
           <div class="path-log-modal-actions">
-            <button type="button" id="path-log-clear" class="ghost-button">Очистить</button>
-            <button type="button" id="path-log-close" class="primary-button">Закрыть</button>
+            <button type="button" id="path-log-copy" class="ghost-button path-log-btn-touch">Копировать</button>
+            <button type="button" id="path-log-clear" class="ghost-button path-log-btn-touch">Очистить</button>
+            <button type="button" id="path-log-close" class="primary-button path-log-btn-touch">Закрыть</button>
           </div>
         </header>
-        <pre id="path-log-modal-content" class="path-log-modal-content" tabindex="0"></pre>
+        <div class="path-log-modal-body">
+          <pre id="path-log-modal-content" class="path-log-modal-content" tabindex="0"></pre>
+        </div>
       </div>
     </div>
 
