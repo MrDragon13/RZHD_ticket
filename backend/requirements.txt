@@ -3,3 +3,4 @@ uvicorn[standard]
 httpx
 python-dotenv
 aiohttp>=3.9.0
+pytest>=8.0.0

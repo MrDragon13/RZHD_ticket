@@ -211,14 +211,29 @@ async def recommend_trains(
 def _fallback_explanation(train: TrainOption, badges: list[str], language: str) -> str:
     """Создает объяснение без LLM, если DeepSeek недоступен или отключен."""
 
+    price_hint = ""
+    try:
+        coup = train.prices.coupe if train.prices else None
+        pl = train.prices.platzkart if train.prices else None
+        nums = [float(p) for p in (coup, pl) if p is not None]
+        if nums:
+            mn = min(nums)
+            price_hint = (
+                f" Цены от ~{mn:.0f} ₽ (плацкарт/купе)." if language != "en" else f" From ~{mn:.0f} ₽ (platzkart/coupe)."
+            )
+    except Exception:
+        price_hint = ""
+
     if language == "en":
         return (
             f"Train {train.train_number} is a strong option: it departs at "
             f"{train.departure_time}, arrives at {train.arrival_time}, and offers "
             f"{', '.join(badges[:2]).lower() if badges else 'a balanced route'}."
+            f"{price_hint}"
         )
     return (
         f"Поезд {train.train_number} хорошо подходит: отправление в {train.departure_time}, "
         f"прибытие в {train.arrival_time}, ключевые преимущества — "
         f"{', '.join(badges[:2]).lower() if badges else 'сбалансированный маршрут'}."
+        f"{price_hint}"
     )

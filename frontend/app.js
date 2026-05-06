@@ -3,6 +3,118 @@
 // во внутренний backend-контейнер, а ключ DeepSeek остается только на сервере.
 const API_BASE_URL = window.PATH_API_BASE_URL || "";
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const DEFAULT_FETCH_TIMEOUT_MS = 55000;
+
+function generateRequestId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `req-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+}
+
+function shouldRetryFetchError(err) {
+  if (!err) return false;
+  if (err.name === "TypeError") return true;
+  if (err.name === "AbortError") return true;
+  if (String(err.message || "").includes("Failed to fetch")) return true;
+  return false;
+}
+
+function mergeAbortSignals(a, b) {
+  if (!b) return a;
+  if (!a) return b;
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  if (a.aborted || b.aborted) {
+    onAbort();
+    return controller.signal;
+  }
+  a.addEventListener("abort", onAbort, { once: true });
+  b.addEventListener("abort", onAbort, { once: true });
+  return controller.signal;
+}
+
+/**
+ * GET/POST к API с таймаутом и одним повтором при сетевой ошибке.
+ * @param {string} path путь начиная с /api/...
+ * @param {{ method?: string, body?: object, timeoutMs?: number, retries?: number, signal?: AbortSignal }} opts
+ */
+async function fetchApi(path, opts = {}) {
+  const method = opts.method || "GET";
+  const body = opts.body;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+  const retries = opts.retries ?? 1;
+  const outerSignal = opts.signal;
+  const url = `${API_BASE_URL}${path}`;
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    if (outerSignal?.aborted) {
+      const e = new Error("Aborted");
+      e.name = "AbortError";
+      throw e;
+    }
+    const rid = generateRequestId();
+    const timeoutController = new AbortController();
+    const timer = setTimeout(() => timeoutController.abort(), timeoutMs);
+    const combined = mergeAbortSignals(timeoutController.signal, outerSignal || null);
+    try {
+      const headers = {
+        Accept: "application/json",
+        "X-Request-Id": rid,
+      };
+      if (body !== undefined) {
+        headers["Content-Type"] = "application/json";
+      }
+      const response = await fetch(url, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: combined,
+      });
+      clearTimeout(timer);
+      if (!response.ok) {
+        throw new Error(`API error ${response.status}`);
+      }
+      const ct = response.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        return response.json();
+      }
+      return null;
+    } catch (err) {
+      clearTimeout(timer);
+      lastErr = err;
+      if (outerSignal?.aborted) throw err;
+      const canRetry = attempt < retries && shouldRetryFetchError(err);
+      if (!canRetry) throw err;
+      await wait(450 * (attempt + 1));
+    }
+  }
+  throw lastErr || new Error("fetchApi failed");
+}
+
+async function postJson(path, payload, options = {}) {
+  return fetchApi(path, {
+    method: "POST",
+    body: payload,
+    timeoutMs: options.timeoutMs,
+    retries: options.retries,
+    signal: options.signal,
+  });
+}
+
+async function getJson(path, options = {}) {
+  return fetchApi(path, {
+    method: "GET",
+    timeoutMs: options.timeoutMs,
+    retries: options.retries,
+    signal: options.signal,
+  });
+}
+
 /** Ввод в поле текста и «Отправить» открывает журнал с этой точной строкой (без учёта регистра). */
 const PATH_DEBUG_TRIGGER = "logloglog";
 const PATH_LOG_CAP = 600;
@@ -132,6 +244,10 @@ const i18n = {
       "Не удалось загрузить поезда с сайта РЖД. Проверьте соединение или попробуйте позже.",
     routeFactUnavailable: "Факт о маршруте временно недоступен.",
     routeFactLoading: "Подбираем факт о маршруте…",
+    bannerDemo:
+      "Показаны демонстрационные данные расписания (не актуальная выдача РЖД в реальном времени).",
+    bannerLive: "Расписание и наличие мест — по данным поиска РЖД.",
+    bannerOffline: "Не удалось связаться с сервером. Проверьте сеть и обновите страницу.",
     languageAmbientBadge: "Случайный маршрут",
     clarifyHint: "Я дождусь уточнения и только потом подберу варианты.",
     logModalCopy: "Копировать всё",
@@ -217,6 +333,9 @@ const i18n = {
       "Could not load trains from RZD. Check your connection or try again later.",
     routeFactUnavailable: "Route fact is temporarily unavailable.",
     routeFactLoading: "Finding a route fact…",
+    bannerDemo: "Showing demo schedule data (not live RZD inventory).",
+    bannerLive: "Schedule and availability from RZD search.",
+    bannerOffline: "Cannot reach the server. Check the network and refresh the page.",
     languageAmbientBadge: "Random route",
     clarifyHint: "I will wait for clarification before searching options.",
     logModalCopy: "Copy all",
@@ -1329,6 +1448,13 @@ const routeState = document.querySelector("#route-state");
 const textInputPanel = document.querySelector("#text-input-panel");
 const textInputToggle = document.querySelector("#text-input-toggle");
 
+const terminalStatusStrip = document.querySelector("#terminal-status-strip");
+const dataSourceBanner = document.querySelector("#data-source-banner");
+const backendHealthBanner = document.querySelector("#backend-health-banner");
+
+/** Блокировка двойных отправок диалога / поиска */
+let uiInteractionLocked = false;
+
 document.querySelectorAll("[data-language]").forEach((button) => {
   button.addEventListener("click", () => setLanguage(button.dataset.language));
 });
@@ -1439,6 +1565,7 @@ function setLanguage(nextLanguage) {
   resetScenario(false);
   updateTextInputToggleLabels();
   assistantSay(copy.assistantReady, { addToHistory: true });
+  void pingBackendHealth();
 }
 
 function renderChips(stage = uiStage) {
@@ -1476,6 +1603,7 @@ async function handleUserText(text) {
     openPathLogModal();
     return;
   }
+  if (uiInteractionLocked) return;
   lastDialogUserText = cleanText;
   // Очищаем поле только после фиксации текста в истории: пользователь видит,
   // что именно распознал микрофон или что он отправил вручную.
@@ -1485,6 +1613,7 @@ async function handleUserText(text) {
 }
 
 async function runDialog(text) {
+  setUiInteractionLocked(true);
   try {
     setStage("searching");
     const response = await postJson("/api/dialog", { language, text, state });
@@ -1500,6 +1629,8 @@ async function runDialog(text) {
   } catch (error) {
     console.error(error);
     runLocalDemoFallback();
+  } finally {
+    setUiInteractionLocked(false);
   }
 }
 
@@ -1527,6 +1658,8 @@ function hasRequiredTripFields(data) {
 }
 
 async function searchAndRecommend() {
+  renderTrainListSkeleton();
+
   const searchRequest = {
     language,
     origin: intent.origin,
@@ -1545,11 +1678,13 @@ async function searchAndRecommend() {
     trains = [];
     recommendations = [];
     assistantSay(i18n[language].searchTicketError);
+    renderTrains();
     setStage("initial");
     return;
   }
 
   ticketSearchSource = ticketResponse.source || "demo";
+  updateDataSourceBanner(ticketSearchSource);
   routeStopsLoadedIds = new Set();
 
   trains = ticketResponse.trains || [];
@@ -1942,6 +2077,22 @@ function localVoiceExplanationFromTrain(train) {
   );
 }
 
+function trainTotalFreeSeats(train) {
+  const d = train?.seat_details || {};
+  return (
+    (Number(d.lower) || 0) +
+    (Number(d.upper) || 0) +
+    (Number(d.side_lower) || 0) +
+    (Number(d.side_upper) || 0)
+  );
+}
+
+function trainCardExplanation(train, recommendation) {
+  const text = (recommendation?.explanation || "").trim();
+  if (text) return text;
+  return localVoiceExplanationFromTrain(train);
+}
+
 function buildFallbackRecommendationsFromTrains(trainList) {
   return trainList.map((t) => ({
     train_id: t.id,
@@ -1951,35 +2102,89 @@ function buildFallbackRecommendationsFromTrains(trainList) {
   }));
 }
 
+function setUiInteractionLocked(locked) {
+  uiInteractionLocked = locked;
+  document.body.classList.toggle("ui-interaction-locked", locked);
+}
+
+function refreshTerminalStatusStrip() {
+  if (!terminalStatusStrip) return;
+  const showWarn = backendHealthBanner && !backendHealthBanner.classList.contains("hidden");
+  const showDemo = dataSourceBanner && !dataSourceBanner.classList.contains("hidden");
+  terminalStatusStrip.hidden = !showWarn && !showDemo;
+}
+
+function updateDataSourceBanner(source) {
+  if (!dataSourceBanner) return;
+  const copy = i18n[language];
+  if (source === "demo") {
+    dataSourceBanner.textContent = copy.bannerDemo;
+    dataSourceBanner.classList.remove("hidden");
+  } else {
+    dataSourceBanner.classList.add("hidden");
+    dataSourceBanner.textContent = "";
+  }
+  refreshTerminalStatusStrip();
+}
+
+function hideDataSourceBanner() {
+  if (!dataSourceBanner) return;
+  dataSourceBanner.classList.add("hidden");
+  dataSourceBanner.textContent = "";
+  refreshTerminalStatusStrip();
+}
+
+function showBackendOfflineBanner() {
+  if (!backendHealthBanner) return;
+  backendHealthBanner.textContent = i18n[language].bannerOffline;
+  backendHealthBanner.classList.remove("hidden");
+  refreshTerminalStatusStrip();
+}
+
+function hideBackendHealthBanner() {
+  if (!backendHealthBanner) return;
+  backendHealthBanner.classList.add("hidden");
+  backendHealthBanner.textContent = "";
+  refreshTerminalStatusStrip();
+}
+
+async function pingBackendHealth() {
+  hideBackendHealthBanner();
+  try {
+    await getJson("/api/health", { timeoutMs: 6000, retries: 0 });
+  } catch {
+    showBackendOfflineBanner();
+  }
+}
+
+function renderTrainListSkeleton(count = 3) {
+  trainsPanel.classList.remove("hidden");
+  const list = document.querySelector("#trains-list");
+  if (!list) return;
+  list.innerHTML = "";
+  for (let i = 0; i < count; i += 1) {
+    const card = document.createElement("article");
+    card.className = "train-card train-card-skeleton";
+    card.setAttribute("aria-hidden", "true");
+    card.innerHTML = `
+      <div class="skeleton-line skeleton-line--wide"></div>
+      <div class="skeleton-line skeleton-line--mid"></div>
+      <div class="skeleton-line skeleton-line--narrow"></div>
+      <div class="skeleton-line skeleton-line--narrow"></div>
+    `;
+    list.append(card);
+  }
+}
+
 async function postRecommendWithRetries(payload, options = {}) {
   const timeoutMs = options.timeoutMs ?? 240000;
-  const maxAttempts = options.retries ?? 3;
-  let lastError = null;
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/recommend`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-      if (!response.ok) {
-        throw new Error(`API error ${response.status}`);
-      }
-      return response.json();
-    } catch (err) {
-      clearTimeout(timer);
-      lastError = err;
-      console.error(`recommend attempt ${attempt + 1} failed`, err);
-      if (attempt < maxAttempts - 1) {
-        await wait(1200 * (attempt + 1));
-      }
-    }
-  }
-  throw lastError || new Error("recommend failed");
+  const retries = options.retries ?? 2;
+  return fetchApi("/api/recommend", {
+    method: "POST",
+    body: payload,
+    timeoutMs,
+    retries,
+  });
 }
 
 function routeDistanceLabel() {
@@ -2012,7 +2217,7 @@ function renderTrains() {
       </div>
       <p>${escapeHtml(formatRoutePair(train.departure_station, train.arrival_station))}</p>
       <p>${train.duration_label} · ${train.route_distance_km} ${language === "ru" ? "км" : "km"}</p>
-      <p class="reason">${recommendation?.explanation || ""}</p>
+      <p class="reason">${escapeHtml(trainCardExplanation(train, recommendation))}</p>
       <div class="seat-grid">
         <span>${language === "ru" ? "Нижние" : "Lower"}: ${train.seat_details?.lower ?? 0}</span>
         <span>${language === "ru" ? "Верхние" : "Upper"}: ${train.seat_details?.upper ?? 0}</span>
@@ -2139,9 +2344,21 @@ async function refreshTopRecommendedTrainRouteLikeSelect() {
 
 function getSortedTrains() {
   const recommendationsById = new Map(recommendations.map((item) => [item.train_id, item]));
-  return trains
-    .slice()
-    .sort((a, b) => (recommendationsById.get(b.id)?.score || 0) - (recommendationsById.get(a.id)?.score || 0));
+  return trains.slice().sort((a, b) => {
+    const scoreA = recommendationsById.get(a.id)?.score || 0;
+    const scoreB = recommendationsById.get(b.id)?.score || 0;
+    if (scoreB !== scoreA) {
+      return scoreB - scoreA;
+    }
+    const seatsA = trainTotalFreeSeats(a);
+    const seatsB = trainTotalFreeSeats(b);
+    const zeroA = seatsA <= 0 ? 1 : 0;
+    const zeroB = seatsB <= 0 ? 1 : 0;
+    if (zeroA !== zeroB) {
+      return zeroA - zeroB;
+    }
+    return seatsB - seatsA;
+  });
 }
 
 function getTrainHighlightId() {
@@ -2194,7 +2411,8 @@ async function selectTrain(train) {
 }
 
 async function createTicket() {
-  if (checkoutAnimating || issuingTicket || !selectedTrain) return;
+  if (checkoutAnimating || issuingTicket || uiInteractionLocked || !selectedTrain) return;
+  setUiInteractionLocked(true);
   checkoutAnimating = true;
   checkoutButton.disabled = true;
   checkoutButton.textContent = i18n[language].checkoutBusy;
@@ -2222,6 +2440,7 @@ async function createTicket() {
     checkoutAnimating = false;
     checkoutButton.disabled = false;
     checkoutButton.textContent = i18n[language].checkout;
+    setUiInteractionLocked(false);
   }
 }
 
@@ -3018,7 +3237,8 @@ function updateSeatPickerChrome() {
 
 async function confirmSeatSelection() {
   const seatsPayload = seatPayloadFromSelection();
-  if (!seatsPayload.length || issuingTicket || !selectedTrain) return;
+  if (!seatsPayload.length || issuingTicket || uiInteractionLocked || !selectedTrain) return;
+  setUiInteractionLocked(true);
   issuingTicket = true;
   confirmSeatsButton.disabled = true;
   try {
@@ -3035,6 +3255,7 @@ async function confirmSeatSelection() {
     issuingTicket = false;
     confirmSeatsButton.disabled = selectedSeatKeys.size === 0;
     updateSeatPickerChrome();
+    setUiInteractionLocked(false);
   }
 }
 
@@ -3321,26 +3542,9 @@ function playOrbTapSound() {
   oscillator.stop(audioContext.currentTime + 0.17);
 }
 
-async function postJson(path, payload, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: options.signal,
-  });
-  if (!response.ok) {
-    throw new Error(`API error ${response.status}`);
-  }
-  return response.json();
-}
-
 function formatPrice(price) {
   if (price === null || price === undefined) return "-";
   return `${Number(price).toLocaleString(language === "ru" ? "ru-RU" : "en-US")} ₽`;
-}
-
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function escapeHtml(value) {
@@ -3468,6 +3672,9 @@ function resetScenario(announce = true) {
   speechQueue = [];
   isSpeaking = false;
   dynamicRouteCache = { key: "", geom: null };
+  setUiInteractionLocked(false);
+  hideDataSourceBanner();
+  hideBackendHealthBanner();
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   if (userInput) userInput.value = "";
   if (transcript) transcript.textContent = "";

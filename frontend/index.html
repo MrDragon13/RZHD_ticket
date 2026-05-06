@@ -23,6 +23,11 @@
         </div>
       </header>
 
+      <div id="terminal-status-strip" class="terminal-status-strip" hidden>
+        <p id="data-source-banner" class="status-banner status-banner--info hidden" role="status"></p>
+        <p id="backend-health-banner" class="status-banner status-banner--warn hidden" role="alert"></p>
+      </div>
+
       <section id="language-screen" class="screen language-screen">
         <div class="language-screen-bg" aria-hidden="true">
           <div class="language-map-shell map-content">
@@ -198,7 +203,7 @@
           <aside class="control-panel">
             <div class="assistant-core">
               <button id="orb-button" class="orb" aria-label="Запустить голосовой ввод"></button>
-              <div class="assistant-text">
+              <div class="assistant-text" aria-live="polite" aria-atomic="true">
                 <h2 id="listen-label">Слушать</h2>
                 <p id="assistant-text">Добро пожаловать. Куда направимся?</p>
                 <p id="start-prompt" class="orb-hint">Коснитесь сферы и скажите, куда вы хотите поехать</p>

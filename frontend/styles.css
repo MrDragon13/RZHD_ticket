@@ -110,6 +110,49 @@ button {
   gap: 12px;
 }
 
+.terminal-status-strip {
+  padding: 0 28px 10px;
+}
+
+.terminal-status-strip[hidden] {
+  display: none !important;
+}
+
+.status-banner {
+  margin: 0 0 8px;
+  padding: 11px 16px;
+  border-radius: 16px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.status-banner:last-child {
+  margin-bottom: 0;
+}
+
+.status-banner--info {
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.08);
+  color: var(--text);
+}
+
+.status-banner--warn {
+  border: 1px solid rgba(255, 170, 90, 0.45);
+  background: rgba(255, 120, 40, 0.12);
+  color: #ffe8d6;
+}
+
+body.ui-interaction-locked #send-button,
+body.ui-interaction-locked #orb-button {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+body.ui-interaction-locked #user-input {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
 .brand {
   display: flex;
   gap: 16px;
@@ -991,6 +1034,45 @@ button {
 .train-card-best {
   border-color: rgba(0, 255, 156, 0.62);
   box-shadow: 0 0 42px rgba(0, 255, 156, 0.16);
+}
+
+.train-card-skeleton {
+  cursor: default;
+  pointer-events: none;
+  min-height: 172px;
+  background: rgba(8, 18, 38, 0.42);
+  animation: train-skeleton-pulse 1.15s ease-in-out infinite;
+}
+
+@keyframes train-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.92;
+  }
+}
+
+.train-card-skeleton .skeleton-line {
+  height: 13px;
+  border-radius: 8px;
+  background: rgba(0, 229, 255, 0.14);
+  margin-bottom: 12px;
+}
+
+.train-card-skeleton .skeleton-line--wide {
+  width: 56%;
+}
+
+.train-card-skeleton .skeleton-line--mid {
+  width: 38%;
+  margin-bottom: 22px;
+}
+
+.train-card-skeleton .skeleton-line--narrow {
+  width: 78%;
+  height: 10px;
 }
 
 .train-head {
