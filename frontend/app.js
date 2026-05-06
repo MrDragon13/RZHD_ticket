@@ -817,6 +817,7 @@ function syncRouteFlowOverlay(flowEl, pathD) {
 }
 
 function applyRouteGeometry(visual, labelOverride) {
+  if (!routeLine || !visual?.line) return;
   routeLine.classList.remove("route-line-active");
   routeLineFlow?.classList.remove("route-line-flow-active");
   routeLine.setAttribute("d", visual.line);
@@ -831,7 +832,7 @@ function applyRouteGeometry(visual, labelOverride) {
   }
   void routeLine.getBoundingClientRect();
   routeLine.classList.add("route-line-active");
-  routePulse.classList.add("route-pulse-active");
+  routePulse?.classList.add("route-pulse-active");
   const flowReduced =
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (!flowReduced && routeLineFlow) {
@@ -1276,24 +1277,35 @@ const textInputToggle = document.querySelector("#text-input-toggle");
 document.querySelectorAll("[data-language]").forEach((button) => {
   button.addEventListener("click", () => setLanguage(button.dataset.language));
 });
-document.querySelector("#send-button").addEventListener("click", () => handleUserText(userInput.value));
-orbButton.addEventListener("click", startVoiceRecognition);
-orbButton.classList.add("orb-idle");
-document.querySelector("#restart-button").addEventListener("click", () => resetScenario(true));
-newSessionButton.addEventListener("click", () => resetScenario(true));
-checkoutButton.addEventListener("click", () => createTicket());
-confirmSeatsButton.addEventListener("click", () => confirmSeatSelection());
-userInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    handleUserText(userInput.value);
-  }
-});
+const sendBtn = document.querySelector("#send-button");
+if (sendBtn && userInput) {
+  sendBtn.addEventListener("click", () => handleUserText(userInput.value));
+}
+if (orbButton) {
+  orbButton.addEventListener("click", startVoiceRecognition);
+  orbButton.classList.add("orb-idle");
+}
+const restartBtn = document.querySelector("#restart-button");
+if (restartBtn) restartBtn.addEventListener("click", () => resetScenario(true));
+if (newSessionButton) newSessionButton.addEventListener("click", () => resetScenario(true));
+if (checkoutButton) checkoutButton.addEventListener("click", () => createTicket());
+if (confirmSeatsButton) confirmSeatsButton.addEventListener("click", () => confirmSeatSelection());
+if (userInput) {
+  userInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      handleUserText(userInput.value);
+    }
+  });
+}
 
-textInputToggle.addEventListener("click", () => {
-  setTextInputPanelOpen(!textInputPanelOpen);
-});
+if (textInputToggle) {
+  textInputToggle.addEventListener("click", () => {
+    setTextInputPanelOpen(!textInputPanelOpen);
+  });
+}
 
 function setTextInputPanelOpen(open) {
+  if (!textInputPanel || !textInputToggle || !userInput) return;
   textInputPanelOpen = open;
   textInputPanel.classList.toggle("hidden", !open);
   textInputToggle.setAttribute("aria-expanded", open ? "true" : "false");
@@ -1306,6 +1318,7 @@ function setTextInputPanelOpen(open) {
 }
 
 function updateTextInputToggleLabels() {
+  if (!textInputToggle) return;
   const copy = i18n[language];
   textInputToggle.textContent = textInputPanelOpen ? copy.textInputHide : copy.textInputReveal;
   textInputToggle.setAttribute("aria-label", textInputPanelOpen ? copy.textInputAriaHide : copy.textInputAriaShow);
@@ -1313,11 +1326,15 @@ function updateTextInputToggleLabels() {
 
 updateTextInputToggleLabels();
 initPathLogModal();
-startLanguageScreenAmbient();
+try {
+  startLanguageScreenAmbient();
+} catch (ambientBootErr) {
+  console.error("[language-ambient boot]", ambientBootErr);
+}
 
 // Чипы меняются в зависимости от стадии сценария: старт, поиск, результаты,
 // оформление. Неактуальные подсказки исчезают, чтобы экран не выглядел шумным.
-document.querySelector("#chips").addEventListener("click", (event) => {
+document.querySelector("#chips")?.addEventListener("click", (event) => {
   if (!event.target.matches("button")) return;
   const action = event.target.dataset.action;
   if (action === "restart") {
@@ -1344,10 +1361,10 @@ function setLanguage(nextLanguage) {
   stopLanguageScreenAmbient();
   language = nextLanguage;
   const copy = i18n[language];
-  screens.language.classList.add("hidden");
-  screens.terminal.classList.remove("hidden");
-  newSessionButton.classList.remove("hidden");
-  languageBadge.textContent = language.toUpperCase();
+  screens.language?.classList.add("hidden");
+  screens.terminal?.classList.remove("hidden");
+  newSessionButton?.classList.remove("hidden");
+  if (languageBadge) languageBadge.textContent = language.toUpperCase();
   document.querySelector("#terminal-title").textContent = copy.title;
   document.querySelector("#terminal-subtitle").textContent = copy.subtitle;
   document.querySelector("#start-prompt").textContent = copy.startPrompt;
@@ -1363,7 +1380,7 @@ function setLanguage(nextLanguage) {
   newSessionButton.textContent = copy.newSession;
   document.querySelector("#seat-picker-title").textContent = copy.seatPickerTitle;
   document.querySelector("#seat-picker-hint").textContent = copy.seatPickerHint;
-  confirmSeatsButton.textContent = copy.seatPickerConfirm;
+  if (confirmSeatsButton) confirmSeatsButton.textContent = copy.seatPickerConfirm;
   resetScenario(false);
   updateTextInputToggleLabels();
   assistantSay(copy.assistantReady, { addToHistory: true });
@@ -1371,6 +1388,7 @@ function setLanguage(nextLanguage) {
 
 function renderChips(stage = uiStage) {
   const chips = document.querySelector("#chips");
+  if (!chips) return;
   chips.innerHTML = "";
   const labels = i18n[language].stages[stage] || [];
   chips.classList.toggle("hidden", labels.length === 0);
@@ -1398,8 +1416,8 @@ async function handleUserText(text) {
   const cleanText = text.trim();
   if (!cleanText) return;
   if (cleanText.toLowerCase() === PATH_DEBUG_TRIGGER) {
-    userInput.value = "";
-    transcript.textContent = "";
+    if (userInput) userInput.value = "";
+    if (transcript) transcript.textContent = "";
     openPathLogModal();
     return;
   }
@@ -1529,6 +1547,7 @@ async function searchAndRecommend() {
 }
 
 function renderIntent(data) {
+  if (!intentPanel) return;
   intentPanel.classList.remove("hidden");
   const arrText = data.arrival_time_window
     ? `${data.arrival_time_window.start}-${data.arrival_time_window.end}`
@@ -1575,6 +1594,8 @@ function clearRouteStopRevealTimers() {
 }
 
 function updateMapGeometry(visual, labelOverride) {
+  const destPt = visual?.destination ?? routeVisuals.default.destination;
+  if (!destPt) return;
   const originText =
     labelOverride?.origin ??
     intent?.origin ??
@@ -1595,8 +1616,8 @@ function updateMapGeometry(visual, labelOverride) {
   const { dots: stopDots, labels: stopLabels } = routeMapStopElements();
   [destinationDot, routePulse].forEach((dot) => {
     if (!dot) return;
-    dot.setAttribute("cx", visual.destination.x);
-    dot.setAttribute("cy", visual.destination.y);
+    dot.setAttribute("cx", String(destPt.x));
+    dot.setAttribute("cy", String(destPt.y));
   });
   if (originLabel) {
     originLabel.textContent = originText;
@@ -1605,8 +1626,8 @@ function updateMapGeometry(visual, labelOverride) {
   }
   if (destinationLabel) {
     destinationLabel.textContent = destText;
-    destinationLabel.setAttribute("x", visual.destination.labelX);
-    destinationLabel.setAttribute("y", visual.destination.labelY);
+    destinationLabel.setAttribute("x", String(destPt.labelX));
+    destinationLabel.setAttribute("y", String(destPt.labelY));
   }
 
   const stopsList = visual.stops || [];
@@ -1712,6 +1733,8 @@ function buildIntroRouteVisual(originRaw, destRaw) {
 }
 
 function updateIntroMapGeometry(visual, labelOverride) {
+  const destPt = visual?.destination ?? routeVisuals.default.destination;
+  if (!destPt) return;
   const originText =
     labelOverride?.origin ?? (language === "ru" ? "Москва" : "Moscow");
   const destText =
@@ -1728,8 +1751,8 @@ function updateIntroMapGeometry(visual, labelOverride) {
   }
   [destinationDot, routePulseEl].forEach((dot) => {
     if (!dot) return;
-    dot.setAttribute("cx", String(visual.destination.x));
-    dot.setAttribute("cy", String(visual.destination.y));
+    dot.setAttribute("cx", String(destPt.x));
+    dot.setAttribute("cy", String(destPt.y));
   });
   if (originLabel) {
     originLabel.textContent = originText;
@@ -1738,8 +1761,8 @@ function updateIntroMapGeometry(visual, labelOverride) {
   }
   if (destinationLabel) {
     destinationLabel.textContent = destText;
-    destinationLabel.setAttribute("x", String(visual.destination.labelX));
-    destinationLabel.setAttribute("y", String(visual.destination.labelY));
+    destinationLabel.setAttribute("x", String(destPt.labelX));
+    destinationLabel.setAttribute("y", String(destPt.labelY));
   }
   for (let i = 0; i < ROUTE_MAP_MAX_INTERMEDIATE_STOPS; i += 1) {
     const letter = String.fromCharCode(97 + i);
@@ -1750,6 +1773,7 @@ function updateIntroMapGeometry(visual, labelOverride) {
 }
 
 function applyIntroRouteGeometry(visual, labelOverride) {
+  if (!visual?.line) return;
   const introLine = document.querySelector("#language-route-line");
   const introPulse = document.querySelector("#language-route-pulse");
   if (!introLine) return;
@@ -3152,7 +3176,7 @@ function startVoiceRecognition() {
 }
 
 function assistantSay(text, options = {}) {
-  assistantText.textContent = text;
+  if (assistantText) assistantText.textContent = text;
   setOrbMode("speaking");
   if (options.addToHistory !== false) {
     addMessage("assistant", text);
@@ -3161,6 +3185,7 @@ function assistantSay(text, options = {}) {
 }
 
 function setOrbMode(mode) {
+  if (!orbButton) return;
   orbButton.classList.remove("orb-idle", "orb-listening", "orb-thinking", "orb-speaking");
   orbButton.classList.add(`orb-${mode}`);
 }
@@ -3172,6 +3197,7 @@ function addMessage(role, text) {
 }
 
 function renderHistory() {
+  if (!dialogHistory) return;
   dialogHistory.innerHTML = "";
   dialogMessages.forEach((message) => {
     const item = document.createElement("div");
@@ -3382,26 +3408,32 @@ function resetScenario(announce = true) {
   isSpeaking = false;
   dynamicRouteCache = { key: "", geom: null };
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-  userInput.value = "";
-  transcript.textContent = "";
-  assistantText.textContent = i18n[language].assistantReady;
+  if (userInput) userInput.value = "";
+  if (transcript) transcript.textContent = "";
+  if (assistantText) assistantText.textContent = i18n[language].assistantReady;
   [intentPanel, trainsPanel, checkoutPanel, seatPickerPanel, ticketPanel].forEach((panel) =>
-    panel.classList.add("hidden"),
+    panel?.classList.add("hidden"),
   );
   hideCheckoutTrainSummary();
   exitCheckoutWorkspaceMode();
-  mapContent.classList.remove("hidden");
-  document.querySelector("#checkout-steps").innerHTML = "";
-  document.querySelector("#route-meta").textContent =
-    language === "ru" ? "Москва -> Казань" : "Moscow -> Kazan";
-  document.querySelector("#route-fact").textContent =
-    language === "ru"
-      ? "Факт о маршруте появится после поиска билетов."
-      : "A route fact will appear after ticket search.";
-  routeLine.classList.remove("route-line-active");
+  mapContent?.classList.remove("hidden");
+  const checkoutSteps = document.querySelector("#checkout-steps");
+  if (checkoutSteps) checkoutSteps.innerHTML = "";
+  const routeMeta = document.querySelector("#route-meta");
+  const routeFactEl = document.querySelector("#route-fact");
+  if (routeMeta)
+    routeMeta.textContent = language === "ru" ? "Москва -> Казань" : "Moscow -> Kazan";
+  if (routeFactEl)
+    routeFactEl.textContent =
+      language === "ru"
+        ? "Факт о маршруте появится после поиска билетов."
+        : "A route fact will appear after ticket search.";
+  routeLine?.classList.remove("route-line-active");
   routeLineFlow?.classList.remove("route-line-flow-active");
-  routeLine.style.strokeDasharray = "";
-  routeLine.style.strokeDashoffset = "";
+  if (routeLine) {
+    routeLine.style.strokeDasharray = "";
+    routeLine.style.strokeDashoffset = "";
+  }
   routeLineFlow?.style.strokeDasharray = "";
   routeLineFlow?.style.strokeDashoffset = "";
   routeLineFlow?.style.opacity = "";

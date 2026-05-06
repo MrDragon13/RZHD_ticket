@@ -319,7 +319,8 @@
       </div>
     </div>
 
-    <script src="./vendor/qrcode.min.js"></script>
+    <!-- app.js первым: если qrcode недоступен на CDN/кэше, интерфейс и язык всё равно работают (QR подгружается позже). -->
     <script src="./app.js"></script>
+    <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>
