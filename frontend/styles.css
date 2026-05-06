@@ -1410,9 +1410,10 @@ body.ui-interaction-locked #user-input {
   stroke-width: 2;
 }
 
+/* Длина штриха задаётся в JS по getTotalLength() — фиксированное число ломало линию на длинных кривых. */
 .route-line {
-  stroke-dasharray: 1000;
-  stroke-dashoffset: 1000;
+  stroke-dasharray: none;
+  stroke-dashoffset: 0;
 }
 
 .route-line-flow {

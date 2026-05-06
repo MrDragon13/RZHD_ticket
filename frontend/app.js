@@ -942,17 +942,33 @@ function applyRouteGeometry(visual, labelOverride) {
   routeLineFlow?.classList.remove("route-line-flow-active");
   routeLineFlow?.classList.remove("route-line-flow--css-only");
   routeLine.setAttribute("d", visual.line);
-  if (visual.routeClip && Number.isFinite(visual.routeClip.totalLen) && visual.routeClip.totalLen > 0) {
+
+  const routeReduced =
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const hasClip =
+    visual.routeClip && Number.isFinite(visual.routeClip.totalLen) && visual.routeClip.totalLen > 0;
+
+  if (hasClip) {
     const L = visual.routeClip.totalLen;
     const v = Math.min(L, Math.max(0, visual.routeClip.visibleLen));
     routeLine.style.strokeDasharray = String(L);
     routeLine.style.strokeDashoffset = String(L - v);
+  } else if (routeReduced) {
+    routeLine.style.strokeDasharray = "none";
+    routeLine.style.strokeDashoffset = "0";
   } else {
-    routeLine.style.strokeDasharray = "";
-    routeLine.style.strokeDashoffset = "";
+    const probe = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    probe.setAttribute("d", visual.line);
+    const rawLen = probe.getTotalLength();
+    const len = Number.isFinite(rawLen) && rawLen > 4 ? rawLen : 1200;
+    routeLine.style.strokeDasharray = String(len);
+    routeLine.style.strokeDashoffset = String(len);
   }
+
   void routeLine.getBoundingClientRect();
-  routeLine.classList.add("route-line-active");
+  if (!hasClip && !routeReduced) {
+    routeLine.classList.add("route-line-active");
+  }
   routePulse?.classList.add("route-pulse-active");
   const flowReduced =
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -4836,20 +4852,11 @@ function resetScenario(announce = true) {
       language === "ru"
         ? "Факт о маршруте появится после поиска билетов."
         : "A route fact will appear after ticket search.";
-  routeLine?.classList.remove("route-line-active");
-  routeLineFlow?.classList.remove("route-line-flow-active");
-  routeLineFlow?.classList.remove("route-line-flow--css-only");
-  if (routeLineFlow) cancelSvgFlowAnimations(routeLineFlow);
-  if (routeLine) {
-    routeLine.style.strokeDasharray = "";
-    routeLine.style.strokeDashoffset = "";
-  }
-  if (routeLineFlow) {
-    routeLineFlow.style.strokeDasharray = "";
-    routeLineFlow.style.strokeDashoffset = "";
-    routeLineFlow.style.opacity = "";
-  }
-  updateMapGeometry(routeVisuals.default);
+  const defaultVisual = mergeRouteVisualForTrain("", null);
+  applyRouteGeometry(defaultVisual, {
+    origin: language === "ru" ? "Москва" : "Moscow",
+    destination: language === "ru" ? "Казань" : "Kazan",
+  });
   setTextInputPanelOpen(false);
   setStage("initial");
   renderHistory();
