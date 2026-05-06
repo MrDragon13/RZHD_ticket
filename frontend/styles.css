@@ -92,6 +92,14 @@ html[data-theme="neon"] {
   --toggle-hover-glow: rgba(0, 229, 255, 0.18);
   --history-panel-border: rgba(0, 229, 255, 0.18);
   --history-panel-bg: rgba(255, 255, 255, 0.035);
+  --card-reason-text: #cbeaff;
+  --checkout-train-route-color: #cbeaff;
+  --map-city-label-fill: #eef8ff;
+  --map-stop-label-fill: #cbeaff;
+  --train-chip-surface: rgba(0, 229, 255, 0.055);
+  --amenity-pill-text: #dfd3ff;
+  --amenity-pill-border: rgba(138, 43, 226, 0.28);
+  --amenity-pill-bg: rgba(138, 43, 226, 0.12);
 }
 
 html[data-theme="rzd"] {
@@ -187,6 +195,14 @@ html[data-theme="rzd"] {
   --toggle-hover-glow: rgba(0, 0, 0, 0.12);
   --history-panel-border: rgba(28, 36, 51, 0.12);
   --history-panel-bg: rgba(255, 255, 255, 0.96);
+  --card-reason-text: #1c2433;
+  --checkout-train-route-color: #1c2433;
+  --map-city-label-fill: #1c2433;
+  --map-stop-label-fill: #3d4d63;
+  --train-chip-surface: rgba(248, 250, 252, 0.98);
+  --amenity-pill-text: #0d47a1;
+  --amenity-pill-border: rgba(13, 71, 161, 0.22);
+  --amenity-pill-bg: rgba(13, 71, 161, 0.08);
 }
 
 * {
@@ -681,21 +697,22 @@ body.ui-interaction-locked #user-input {
   background: linear-gradient(90deg, var(--cyan), var(--violet), var(--green));
 }
 
-.checkout-train-route,
-.checkout-train-meta {
+.checkout-train-route {
   margin: 6px 0 0;
-  color: #cbeaff;
+  color: var(--checkout-train-route-color);
   line-height: 1.45;
 }
 
 .checkout-train-meta {
+  margin: 6px 0 0;
   color: var(--muted);
   font-size: 14px;
+  line-height: 1.45;
 }
 
 .checkout-train-reason {
   margin: 10px 0 0;
-  color: #cbeaff;
+  color: var(--card-reason-text);
   font-size: 14px;
   line-height: 1.4;
 }
@@ -843,9 +860,16 @@ body.ui-interaction-locked #user-input {
 }
 
 .stop-label {
-  fill: #cbeaff;
+  fill: var(--map-stop-label-fill);
   font-size: 18px;
   transition: opacity 1.35s ease;
+}
+
+#origin-label,
+#destination-label,
+#language-origin-label,
+#language-destination-label {
+  fill: var(--map-city-label-fill);
 }
 
 .pulse {
@@ -1288,7 +1312,7 @@ body.ui-interaction-locked #user-input {
 }
 
 .reason {
-  color: #cbeaff;
+  color: var(--card-reason-text);
   line-height: 1.45;
 }
 
@@ -1306,10 +1330,10 @@ body.ui-interaction-locked #user-input {
 
 .seat-grid span {
   padding: 8px 10px;
-  border: 1px solid rgba(0, 229, 255, 0.16);
+  border: 1px solid var(--border-card);
   border-radius: 14px;
-  color: #cbeaff;
-  background: rgba(0, 229, 255, 0.055);
+  color: var(--card-reason-text);
+  background: var(--train-chip-surface);
 }
 
 .amenity-row {
@@ -1321,11 +1345,11 @@ body.ui-interaction-locked #user-input {
 
 .amenity {
   padding: 7px 9px;
-  border: 1px solid rgba(138, 43, 226, 0.28);
+  border: 1px solid var(--amenity-pill-border);
   border-radius: 999px;
-  color: #dfd3ff;
+  color: var(--amenity-pill-text);
   font-size: 12px;
-  background: rgba(138, 43, 226, 0.12);
+  background: var(--amenity-pill-bg);
 }
 
 .train-times {
@@ -1365,7 +1389,7 @@ body.ui-interaction-locked #user-input {
 }
 
 .reason {
-  color: #cbeaff;
+  color: var(--card-reason-text);
   line-height: 1.45;
 }
 
@@ -1387,10 +1411,10 @@ body.ui-interaction-locked #user-input {
 
 .seat-grid span {
   padding: 10px;
-  border: 1px solid rgba(0, 229, 255, 0.16);
+  border: 1px solid var(--border-card);
   border-radius: 14px;
-  color: #dff8ff;
-  background: rgba(255, 255, 255, 0.035);
+  color: var(--card-reason-text);
+  background: var(--train-chip-surface);
 }
 
 .amenity-row {
@@ -1402,9 +1426,10 @@ body.ui-interaction-locked #user-input {
 .amenity {
   padding: 7px 10px;
   border-radius: 999px;
-  color: #cbeaff;
+  border: 1px solid var(--amenity-pill-border);
+  color: var(--amenity-pill-text);
   font-size: 12px;
-  background: rgba(138, 43, 226, 0.18);
+  background: var(--amenity-pill-bg);
 }
 
 .glass-card {
@@ -2248,10 +2273,6 @@ html[data-theme="rzd"] .checkout-train-summary {
 
 html[data-theme="rzd"] .checkout-train-dash {
   background: linear-gradient(90deg, var(--cyan), var(--violet), var(--green));
-}
-
-html[data-theme="rzd"] .checkout-train-route {
-  color: var(--muted);
 }
 
 html[data-theme="rzd"] .path-log-modal-backdrop {
