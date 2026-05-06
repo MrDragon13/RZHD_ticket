@@ -57,6 +57,8 @@ def test_index_html_has_auth_and_idle_warning():
     html = (root / "frontend" / "index.html").read_text(encoding="utf-8")
     assert 'id="auth-screen"' in html
     assert 'id="session-idle-warning"' in html
+    assert 'id="auth-vkeyboard-phone"' in html
+    assert 'id="auth-vkeyboard-otp"' in html
 
 
 def test_index_html_has_logout_button():

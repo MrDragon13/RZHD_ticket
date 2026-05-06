@@ -570,13 +570,16 @@ button {
   gap: 10px;
 }
 
-.vkeyboard-row--narrow {
-  grid-template-columns: 1fr 1fr;
-  max-width: 68%;
-  margin: 0 auto;
+.vkeyboard-spacer {
+  min-height: 52px;
+  visibility: hidden;
+  pointer-events: none;
 }
 
-.vkeyboard-key {
+.vkeyboard-key[data-vkey-role="erase"] {
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
   min-height: 52px;
   border-radius: 12px;
   border: 1px solid var(--border);

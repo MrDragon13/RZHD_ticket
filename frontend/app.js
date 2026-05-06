@@ -164,13 +164,16 @@ const i18n = {
       "Укажите номер телефона для подтверждения — это демонстрация, данные не сохраняются на сервере.",
     authPhoneLabel: "Мобильный телефон",
     authPhoneHint: "Формат: +7 (___) ___-__-__",
+    authPhoneKeyboardAria: "Цифры номера телефона",
     authClear: "Очистить",
     authContinue: "Продолжить",
     authOtpSending: "Отправляем код…",
     authOtpSent: "Код отправлен на ваш номер.",
     authOtpLabel: "Код из SMS",
     authOtpHint: "Код подставится автоматически через несколько секунд.",
+    authOtpKeyboardAria: "Цифры кода из SMS",
     authLogin: "Войти",
+    authVkeyErase: "Стереть",
     sessionUserLabel: "Пассажир",
     sessionLogout: "Выход",
     idleLogoutWarning:
@@ -284,13 +287,16 @@ const i18n = {
       "Enter your mobile phone number to continue — this is a demo; nothing is stored on the server.",
     authPhoneLabel: "Mobile phone",
     authPhoneHint: "Format: +7 (___) ___-__-__",
+    authPhoneKeyboardAria: "Phone number keypad",
     authClear: "Clear",
     authContinue: "Continue",
     authOtpSending: "Sending code…",
     authOtpSent: "Code sent to your number.",
     authOtpLabel: "SMS code",
     authOtpHint: "The code will appear automatically in a few seconds.",
+    authOtpKeyboardAria: "SMS code keypad",
     authLogin: "Sign in",
+    authVkeyErase: "Erase",
     sessionUserLabel: "Passenger",
     sessionLogout: "Sign out",
     idleLogoutWarning:
@@ -1645,7 +1651,8 @@ const authScreen = document.querySelector("#auth-screen");
 const authStepPhone = document.querySelector("#auth-step-phone");
 const authStepOtp = document.querySelector("#auth-step-otp");
 const authPhoneDisplay = document.querySelector("#auth-phone-display");
-const authVkeyboard = document.querySelector("#auth-vkeyboard");
+const authVkeyboardPhone = document.querySelector("#auth-vkeyboard-phone");
+const authVkeyboardOtp = document.querySelector("#auth-vkeyboard-otp");
 const authPhoneClearBtn = document.querySelector("#auth-phone-clear");
 const authPhoneContinueBtn = document.querySelector("#auth-phone-continue");
 const authOtpMessage = document.querySelector("#auth-otp-message");
@@ -1844,13 +1851,18 @@ function applyAuthScreenI18n() {
   if (phoneLab) phoneLab.textContent = copy.authPhoneLabel;
   const authPhoneHintEl = document.querySelector("#auth-phone-hint");
   if (authPhoneHintEl) authPhoneHintEl.textContent = copy.authPhoneHint;
+  if (authVkeyboardPhone) authVkeyboardPhone.setAttribute("aria-label", copy.authPhoneKeyboardAria);
   const authOtpLabelEl = document.querySelector("#auth-otp-label");
   if (authOtpLabelEl) authOtpLabelEl.textContent = copy.authOtpLabel;
   const authOtpHintEl = document.querySelector("#auth-otp-hint");
   if (authOtpHintEl) authOtpHintEl.textContent = copy.authOtpHint;
+  if (authVkeyboardOtp) authVkeyboardOtp.setAttribute("aria-label", copy.authOtpKeyboardAria);
   if (authPhoneClearBtn) authPhoneClearBtn.textContent = copy.authClear;
   if (authPhoneContinueBtn) authPhoneContinueBtn.textContent = copy.authContinue;
   if (authOtpDoneBtn) authOtpDoneBtn.textContent = copy.authLogin;
+  document.querySelectorAll("[data-vkey-role=\"erase\"]").forEach((btn) => {
+    btn.textContent = copy.authVkeyErase;
+  });
 }
 
 function resetAuthFlow() {
@@ -1861,8 +1873,9 @@ function resetAuthFlow() {
     authOtpInput.value = "";
     authOtpInput.disabled = true;
   }
-  if (authOtpDoneBtn) authOtpDoneBtn.disabled = true;
   updateAuthPhoneChrome();
+  if (authPhoneContinueBtn) authPhoneContinueBtn.disabled = authPhoneDigits.length !== 10;
+  syncOtpChrome();
 }
 
 function renderSessionUserStrip() {
@@ -1894,32 +1907,88 @@ function clearSessionPassenger() {
   sessionLogoutButton?.classList.add("hidden");
 }
 
-function buildAuthVirtualKeyboard() {
-  if (!authVkeyboard || authVkeyboard.dataset.built === "1") return;
-  authVkeyboard.dataset.built = "1";
-  authVkeyboard.innerHTML = "";
-  const rows = [
+function authOtpInputDigit(d) {
+  if (!authOtpInput || authOtpInput.disabled) return;
+  const cur = (authOtpInput.value || "").replace(/\D/g, "");
+  if (cur.length >= 6) return;
+  authOtpInput.value = cur + d;
+  syncOtpChrome();
+  touchGlobalIdle();
+}
+
+function authOtpBackspace() {
+  if (!authOtpInput || authOtpInput.disabled) return;
+  const digits = (authOtpInput.value || "").replace(/\D/g, "");
+  authOtpInput.value = digits.slice(0, -1);
+  syncOtpChrome();
+  touchGlobalIdle();
+}
+
+function syncOtpChrome() {
+  if (!authOtpInput) return;
+  const digits = (authOtpInput.value || "").replace(/\D/g, "").slice(0, 6);
+  if (authOtpInput.value !== digits) authOtpInput.value = digits;
+  if (authOtpDoneBtn) {
+    const canSubmit = digits.length === 6 && !authOtpInput.disabled;
+    authOtpDoneBtn.disabled = !canSubmit;
+  }
+}
+
+function mountDigitKeyboard(host, mode) {
+  if (!host) return;
+  host.innerHTML = "";
+  const layout = [
     ["1", "2", "3"],
     ["4", "5", "6"],
     ["7", "8", "9"],
-    ["⌫", "0"],
+    ["erase", "0", "spacer"],
   ];
-  rows.forEach((row, idx) => {
+  const copy = i18n[language];
+  layout.forEach((row) => {
     const wrap = document.createElement("div");
-    wrap.className = idx === rows.length - 1 ? "vkeyboard-row vkeyboard-row--narrow" : "vkeyboard-row";
+    wrap.className = "vkeyboard-row";
     row.forEach((key) => {
+      if (key === "spacer") {
+        const sp = document.createElement("div");
+        sp.className = "vkeyboard-spacer";
+        sp.setAttribute("aria-hidden", "true");
+        wrap.append(sp);
+        return;
+      }
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "vkeyboard-key";
-      btn.textContent = key;
-      btn.addEventListener("click", () => {
-        if (key === "⌫") authPhoneBackspace();
-        else authPhoneInputDigit(key);
-      });
+      if (key === "erase") {
+        btn.dataset.vkeyRole = "erase";
+        btn.textContent = copy.authVkeyErase;
+        btn.addEventListener("click", () => {
+          if (mode === "phone") authPhoneBackspace();
+          else authOtpBackspace();
+        });
+      } else {
+        btn.textContent = key;
+        btn.addEventListener("click", () => {
+          if (mode === "phone") authPhoneInputDigit(key);
+          else authOtpInputDigit(key);
+        });
+      }
       wrap.append(btn);
     });
-    authVkeyboard.append(wrap);
+    host.append(wrap);
   });
+}
+
+function buildAuthVirtualKeyboards() {
+  if (!authVkeyboardPhone || !authVkeyboardOtp) return;
+  if (authVkeyboardPhone.dataset.built === "1") return;
+  authVkeyboardPhone.dataset.built = "1";
+  authVkeyboardOtp.dataset.built = "1";
+  mountDigitKeyboard(authVkeyboardPhone, "phone");
+  mountDigitKeyboard(authVkeyboardOtp, "otp");
+}
+
+function buildAuthVirtualKeyboard() {
+  buildAuthVirtualKeyboards();
 }
 
 async function completeAuthFlow() {
@@ -1957,7 +2026,7 @@ async function runAuthOtpPhase() {
     authOtpInput.value = "";
     authOtpInput.disabled = true;
   }
-  if (authOtpDoneBtn) authOtpDoneBtn.disabled = true;
+  syncOtpChrome();
   touchGlobalIdle();
   await sleep(1600);
   if (!sessionIdleTrackingActive) return;
@@ -1969,7 +2038,7 @@ async function runAuthOtpPhase() {
     authOtpInput.value = code;
     authOtpInput.disabled = false;
   }
-  if (authOtpDoneBtn) authOtpDoneBtn.disabled = false;
+  syncOtpChrome();
   touchGlobalIdle();
   await sleep(400);
   if (!sessionIdleTrackingActive) return;
@@ -2117,6 +2186,7 @@ if (authPhoneClearBtn) {
 }
 if (authPhoneContinueBtn) authPhoneContinueBtn.addEventListener("click", () => void runAuthOtpPhase());
 if (authOtpDoneBtn) authOtpDoneBtn.addEventListener("click", () => void completeAuthFlow());
+if (authOtpInput) authOtpInput.addEventListener("input", syncOtpChrome);
 
 document.addEventListener("pointerdown", (ev) => touchGlobalIdle(ev), true);
 document.addEventListener("keydown", (ev) => touchGlobalIdle(ev), true);

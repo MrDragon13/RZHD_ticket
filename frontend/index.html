@@ -181,7 +181,7 @@
                 aria-describedby="auth-phone-hint"
               ></div>
               <p id="auth-phone-hint" class="auth-hint">Формат: +7 (___) ___-__-__</p>
-              <div id="auth-vkeyboard" class="vkeyboard" aria-label="Экранная клавиатура"></div>
+              <div id="auth-vkeyboard-phone" class="vkeyboard" aria-label="Экранная клавиатура"></div>
               <button type="button" id="auth-phone-clear" class="ghost-button auth-secondary-btn">Очистить</button>
               <button type="button" id="auth-phone-continue" class="primary-button auth-primary-btn" disabled>
                 Продолжить
@@ -201,6 +201,7 @@
                 disabled
                 aria-describedby="auth-otp-hint"
               />
+              <div id="auth-vkeyboard-otp" class="vkeyboard" aria-label="Цифры кода SMS"></div>
               <p id="auth-otp-hint" class="auth-hint">Код подставится автоматически через несколько секунд.</p>
               <button type="button" id="auth-otp-done" class="primary-button auth-primary-btn" disabled>
                 Войти
@@ -412,8 +413,8 @@
     <div id="session-idle-warning" class="session-idle-warning hidden" role="alert" aria-live="assertive"></div>
 
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
-    <script src="./api-client.js?v=202605067"></script>
-    <script src="./app.js?v=202605067"></script>
+    <script src="./api-client.js?v=202605068"></script>
+    <script src="./app.js?v=202605068"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>
