@@ -212,7 +212,7 @@ const routeVisuals = {
   },
 };
 
-/** Максимум промежуточных точек на SVG-карте маршрута (пары circle + text в index.html). */
+/** Максимум промежуточных точек на SVG-карте маршрута (пары #stop-dot-a…e + #stop-label-a…e в index.html). */
 const ROUTE_MAP_MAX_INTERMEDIATE_STOPS = 5;
 
 /**
