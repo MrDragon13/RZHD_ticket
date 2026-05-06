@@ -178,11 +178,8 @@ def filter_trains_by_wagon_constraints(
     trains: list[TrainOption],
     constraints: frozenset[str],
 ) -> list[TrainOption]:
-    """Оставляет поезда, у которых в слое вагонов видны все запрошенные услуги; иначе — исходный список."""
+    """Строго оставляет только поезда, у которых в данных вагонов видны все запрошенные услуги."""
 
     if not constraints:
         return trains
-    matched = [t for t in trains if train_satisfies_all_wagon_tags(t, constraints)]
-    if matched:
-        return matched
-    return trains
+    return [t for t in trains if train_satisfies_all_wagon_tags(t, constraints)]

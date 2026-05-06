@@ -474,7 +474,7 @@ class RzdDataAdapter:
         if not constraints:
             return trains
         filtered = filter_trains_by_wagon_constraints(trains, constraints)
-        if len(filtered) < len(trains):
+        if len(filtered) != len(trains):
             logging.info(
                 "RZD wagon_constraint_filter sid=%s %s -> %s tags=%s",
                 sid or "-",

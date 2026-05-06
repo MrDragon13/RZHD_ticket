@@ -14,7 +14,6 @@
           <div class="brand-mark">П</div>
           <div>
             <h1 id="terminal-title" class="brand-title">ПУТЬ</h1>
-            <p id="terminal-subtitle" class="brand-subtitle">Интеллектуальный терминал РЖД</p>
           </div>
         </div>
         <div class="top-actions">
@@ -216,7 +215,13 @@
           <aside class="control-panel">
             <div class="control-panel-head">
               <div class="assistant-core">
-                <button id="orb-button" class="orb" aria-label="Запустить голосовой ввод"></button>
+                <button id="orb-button" class="orb" type="button" aria-label="Запустить голосовой ввод">
+                  <svg class="orb-mic" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V20h2v-2.08A7 7 0 0 0 19 11h-2z"
+                    />
+                  </svg>
+                </button>
                 <div class="assistant-text" aria-live="polite" aria-atomic="true">
                   <h2 id="listen-label">Слушать</h2>
                   <p id="assistant-text">Добро пожаловать. Куда направимся?</p>
@@ -225,7 +230,7 @@
               </div>
 
               <section class="history-panel">
-                <p class="brand-subtitle" id="history-title">История диалога</p>
+                <p class="assist-muted-label" id="history-title">История диалога</p>
                 <div id="dialog-history" class="dialog-history"></div>
               </section>
 
@@ -247,7 +252,7 @@
             </div>
 
             <div class="control-panel-body">
-              <p id="transcript" class="brand-subtitle"></p>
+              <p id="transcript" class="assist-muted-label"></p>
 
               <section id="intent-panel" class="hidden">
                 <h2 id="intent-title">Я понял запрос</h2>

@@ -1607,7 +1607,6 @@ function setLanguage(nextLanguage) {
   newSessionButton?.classList.remove("hidden");
   if (languageBadge) languageBadge.textContent = language.toUpperCase();
   document.querySelector("#terminal-title").textContent = copy.title;
-  document.querySelector("#terminal-subtitle").textContent = copy.subtitle;
   document.querySelector("#start-prompt").textContent = copy.startPrompt;
   document.querySelector("#send-button").textContent = copy.send;
   document.querySelector("#listen-label").textContent = copy.listen;

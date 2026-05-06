@@ -505,11 +505,17 @@ body.ui-interaction-locked #user-input {
   text-transform: uppercase;
 }
 
-.brand-subtitle {
+.assist-muted-label {
   margin: 4px 0 0;
   color: var(--muted);
   letter-spacing: 0.18em;
   text-transform: uppercase;
+}
+
+#transcript.assist-muted-label {
+  margin: 0 0 12px;
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 .status-pill {
@@ -1187,6 +1193,7 @@ body.ui-interaction-locked #user-input {
 }
 
 .orb {
+  position: relative;
   width: 122px;
   height: 122px;
   border: 2px solid var(--cyan);
@@ -1202,6 +1209,47 @@ body.ui-interaction-locked #user-input {
     border-color 0.25s ease,
     box-shadow 0.25s ease,
     transform 0.25s ease;
+}
+
+.orb-mic {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  pointer-events: none;
+  fill: var(--cyan);
+  opacity: 0.38;
+  transition:
+    opacity 0.28s ease,
+    fill 0.28s ease;
+}
+
+.orb-listening .orb-mic {
+  opacity: 0.92;
+  fill: var(--green);
+}
+
+.orb-thinking .orb-mic {
+  opacity: 0.38;
+  fill: var(--cyan);
+}
+
+.orb-speaking .orb-mic {
+  opacity: 0;
+}
+
+html[data-theme="rzd"] .orb-mic {
+  fill: rgba(21, 101, 192, 0.85);
+}
+
+html[data-theme="rzd"] .orb-listening .orb-mic {
+  fill: rgba(13, 71, 161, 1);
+}
+
+html[data-theme="rzd"] .orb-thinking .orb-mic {
+  fill: rgba(21, 101, 192, 0.85);
 }
 
 .orb-idle {
