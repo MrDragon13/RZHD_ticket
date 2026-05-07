@@ -2150,26 +2150,16 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
   background: rgba(0, 255, 156, 0.1);
 }
 
-.timeline,
-.price-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.timeline span {
-  flex: 1;
-  height: 2px;
-  background: linear-gradient(90deg, var(--cyan), var(--violet), var(--green));
-}
-
 .reason {
   color: var(--card-reason-text);
   line-height: 1.45;
 }
 
 .price-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
   color: var(--green);
   font-weight: 800;
 }
@@ -2178,11 +2168,11 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-top: 12px;
+  margin: 12px 0;
 }
 
 .seat-grid span {
-  padding: 8px 10px;
+  padding: 10px;
   border: 1px solid var(--border-card);
   border-radius: 14px;
   color: var(--card-reason-text);
@@ -2197,7 +2187,7 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
 }
 
 .amenity {
-  padding: 7px 9px;
+  padding: 7px 10px;
   border: 1px solid var(--amenity-pill-border);
   border-radius: 999px;
   color: var(--amenity-pill-text);
@@ -2239,50 +2229,6 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
 .train-meta {
   color: var(--muted);
   line-height: 1.55;
-}
-
-.reason {
-  color: var(--card-reason-text);
-  line-height: 1.45;
-}
-
-.price-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 12px;
-  color: var(--green);
-  font-weight: 800;
-}
-
-.seat-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 12px 0;
-}
-
-.seat-grid span {
-  padding: 10px;
-  border: 1px solid var(--border-card);
-  border-radius: 14px;
-  color: var(--card-reason-text);
-  background: var(--train-chip-surface);
-}
-
-.amenity-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.amenity {
-  padding: 7px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--amenity-pill-border);
-  color: var(--amenity-pill-text);
-  font-size: 12px;
-  background: var(--amenity-pill-bg);
 }
 
 .glass-card {
