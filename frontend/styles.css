@@ -3369,9 +3369,17 @@ html[data-theme="rzd"] .path-log-modal-content {
 }
 
 .compare-trains-cancel-bar {
-  width: 100%;
-  margin-top: 8px;
   min-height: 44px;
+}
+
+/* Кнопка отмены сравнения: прибита к низу панели ассистента, не к карточке поезда */
+.control-panel-compare-cancel {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  border-radius: 14px;
+  min-height: 48px;
 }
 
 .compare-trains-modal {
@@ -3446,6 +3454,17 @@ html[data-theme="rzd"] .path-log-modal-content {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.compare-slot-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.compare-slot-checkout {
+  width: 100%;
+  min-height: 48px;
 }
 
 .compare-slot {
@@ -3528,17 +3547,6 @@ html[data-theme="rzd"] .path-log-modal-content {
 
 .compare-trains-source.hidden {
   display: none;
-}
-
-.compare-trains-checkout-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.compare-trains-checkout-row .primary-button {
-  width: 100%;
-  min-height: 48px;
 }
 
 html[data-theme="rzd"] .compare-trains-sheet {

@@ -2723,8 +2723,8 @@ async function searchAndRecommendBody(signal) {
   if (signal.aborted) return;
   await refreshTopRecommendedTrainRouteLikeSelect(signal);
   renderTrains();
-  await prepareRecommendedCheckoutUi();
   setStage("results");
+  await prepareRecommendedCheckoutUi();
   lastSuccessfulSearchKey = routeFingerprint(intent);
 }
 
