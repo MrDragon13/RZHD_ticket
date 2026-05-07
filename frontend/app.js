@@ -700,12 +700,14 @@ function syncRouteFlowOverlay(flowEl, pathD) {
   }
 }
 
-/** Число точек на декоративной полилинии (одинаково для всех линий в поколении — для морфинга). */
+/** Декор карты: плавные кривые Безье между случайными точками на краю поля (не параллели маршруту); 3–10 линий. */
 const ROUTE_DECOR_SAMPLE_COUNT = 52;
 const ROUTE_DECOR_ANIM_MS = 520;
+const MAP_SVG_W = 900;
+const MAP_SVG_H = 520;
+const MAP_DECOR_EDGE_PAD = 26;
 
-/** Детерминированный RNG для формы декора в одном «поколении». */
-function mulberry32(seed) {
+function decorMulberry32(seed) {
   let a = seed >>> 0;
   return function rand() {
     let t = (a += 0x6d2b79f5);
@@ -715,96 +717,102 @@ function mulberry32(seed) {
   };
 }
 
-/**
- * Одна декоративная линия: не параллель оффсета, а комбинация нормальных и тангенциальных волн вдоль маршрута.
- */
-function buildUniqueDecorPolyline(pathD, lineIndex, lineCount, rng, sampleCount) {
-  const probe = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  probe.setAttribute("d", pathD);
-  let L;
-  try {
-    L = probe.getTotalLength();
-  } catch {
-    return [];
-  }
-  if (!Number.isFinite(L) || L < 4) return [];
-  const n = Math.max(2, sampleCount);
-
-  const ampN = 10 + rng() * 28;
-  const ampT = 2 + rng() * 18;
-  const kAlong = 3 + rng() * 9;
-  const kAcross = 4 + rng() * 11 + lineIndex * 0.35;
-  const phiA = rng() * Math.PI * 2;
-  const phiB = rng() * Math.PI * 2;
-  const phiC = rng() * Math.PI * 2;
-  const side = rng() > 0.5 ? 1 : -1;
-  const bias =
-    side *
-    (12 +
-      lineIndex * (4 + rng() * 6) +
-      rng() * 18 +
-      ((lineIndex % 3) - 1) * rng() * 10 +
-      ((lineCount - 1 - lineIndex) / Math.max(1, lineCount - 1)) * rng() * 12);
-  const envelope = 0.65 + rng() * 0.45;
-  const mixSin = 0.35 + rng() * 0.45;
-  const mixCos = 0.25 + rng() * 0.45;
-
-  const pts = [];
-  for (let i = 0; i < n; i++) {
-    const u = i / Math.max(1, n - 1);
-    const t = u * L;
-    const p = probe.getPointAtLength(t);
-    const dt = Math.min(Math.max(L * 0.004, 2), Math.max(L - t, 1e-6));
-    const p2 = probe.getPointAtLength(Math.min(t + dt, L));
-    let dx = p2.x - p.x;
-    let dy = p2.y - p.y;
-    let len = Math.hypot(dx, dy);
-    if (len < 1e-6) {
-      dx = 1;
-      dy = 0;
-      len = 1;
-    }
-    const tx = dx / len;
-    const ty = dy / len;
-    const nx = -ty;
-    const ny = tx;
-
-    const along =
-      ampT *
-      (Math.sin(u * Math.PI * kAlong + phiA + lineIndex * 0.6) +
-        0.55 * Math.cos(u * Math.PI * (kAlong * 1.7) + phiB));
-
-    const waveA = Math.sin(u * Math.PI * kAcross + phiC + lineIndex * 1.1);
-    const waveB = Math.cos(u * Math.PI * (kAcross * 0.83) + phiA * 0.7 + lineIndex);
-    const ripple = Math.sin(u * Math.PI * (kAcross * 2.1 + lineIndex * 0.4) + phiB + lineIndex);
-
-    const across =
-      bias + ampN * envelope * (waveA * mixSin + waveB * mixCos + ripple * 0.35);
-
-    pts.push({
-      x: p.x + nx * across + tx * along,
-      y: p.y + ny * across + ty * along,
-    });
-  }
-  return pts;
+function pickPointOnMapEdge(rng) {
+  const P = MAP_DECOR_EDGE_PAD;
+  const W = MAP_SVG_W;
+  const H = MAP_SVG_H;
+  const edge = Math.floor(rng() * 4);
+  const t = rng();
+  if (edge === 0) return { x: P + t * (W - 2 * P), y: P };
+  if (edge === 1) return { x: W - P, y: P + t * (H - 2 * P) };
+  if (edge === 2) return { x: P + t * (W - 2 * P), y: H - P };
+  return { x: P, y: P + t * (H - 2 * P) };
 }
 
-function computeDecorLayers(mainPathD) {
+function clampDecorCoord(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+/**
+ * Декоративная линия: случайные концы на границе viewBox + одна или две кубики Безье (по духу buildOrganicRouteGeometry, без опоры на маршрут поезда).
+ */
+function buildDecorativeBezierPathD(rng, lineIndex) {
+  const q = (n) => Number(n).toFixed(1);
+  const rx = (a, b) => a + rng() * (b - a);
+
+  let s = pickPointOnMapEdge(rng);
+  let e = pickPointOnMapEdge(rng);
+  let tries = 0;
+  while (Math.hypot(e.x - s.x, e.y - s.y) < 135 && tries < 48) {
+    e = pickPointOnMapEdge(rng);
+    tries += 1;
+  }
+
+  if (rng() > 0.64) {
+    const mx = rx(130, 770);
+    const my = rx(55, 465);
+    const c1x = clampDecorCoord(rx(30, 870), 12, 888);
+    const c1y = clampDecorCoord(rx(24, 496), 12, 508);
+    const c2x = clampDecorCoord(rx(30, 870), 12, 888);
+    const c2y = clampDecorCoord(rx(24, 496), 12, 508);
+    const c3x = clampDecorCoord(rx(30, 870), 12, 888);
+    const c3y = clampDecorCoord(rx(24, 496), 12, 508);
+    const c4x = clampDecorCoord(rx(30, 870), 12, 888);
+    const c4y = clampDecorCoord(rx(24, 496), 12, 508);
+    return `M${q(s.x)} ${q(s.y)} C${q(c1x)} ${q(c1y)} ${q(c2x)} ${q(c2y)} ${q(mx)} ${q(my)} C${q(c3x)} ${q(c3y)} ${q(c4x)} ${q(c4y)} ${q(e.x)} ${q(e.y)}`;
+  }
+
+  const mx = (s.x + e.x) / 2;
+  const my = (s.y + e.y) / 2;
+  const vx = e.x - s.x;
+  const vy = e.y - s.y;
+  const len = Math.hypot(vx, vy) || 1;
+  const px = -vy / len;
+  const py = vx / len;
+  const bend = (rng() - 0.5) * (150 + lineIndex * 20 + rng() * 210);
+  const lift1 = 0.34 + rng() * 0.44;
+  const lift2 = 0.26 + rng() * 0.4;
+
+  let cp1x = mx + px * bend * lift1 + rx(-125, 125);
+  let cp1y = my + py * bend * lift1 + rx(-105, 105);
+  let cp2x = mx + px * bend * -lift2 + rx(-135, 135);
+  let cp2y = my + py * bend * -lift2 + rx(-110, 110);
+
+  cp1x = clampDecorCoord(cp1x, 12, 888);
+  cp1y = clampDecorCoord(cp1y, 12, 508);
+  cp2x = clampDecorCoord(cp2x, 12, 888);
+  cp2y = clampDecorCoord(cp2y, 12, 508);
+
+  return `M${q(s.x)} ${q(s.y)} C${q(cp1x)} ${q(cp1y)} ${q(cp2x)} ${q(cp2y)} ${q(e.x)} ${q(e.y)}`;
+}
+
+function computeDecorLayers(_mainPathD) {
   let seed = (Math.floor(Math.random() * 0xffffffff) ^ (Date.now() & 0xffffffff)) >>> 0;
   if (!seed) seed = 0x6d2b79f5;
-  const rng = mulberry32(seed);
+  const rng = decorMulberry32(seed);
   const lineCount = 3 + Math.floor(rng() * 8);
-  const layers = [];
+  const pathsD = [];
+  const samples = [];
   for (let li = 0; li < lineCount; li += 1) {
-    const layer = buildUniqueDecorPolyline(mainPathD, li, lineCount, rng, ROUTE_DECOR_SAMPLE_COUNT);
-    if (layer.length >= 2) layers.push(layer);
+    let d = buildDecorativeBezierPathD(rng, li);
+    let pts = samplePathDToPoints(d, ROUTE_DECOR_SAMPLE_COUNT);
+    let guard = 0;
+    while ((!pts || pts.length < 2) && guard < 14) {
+      d = buildDecorativeBezierPathD(rng, li + guard * 29);
+      pts = samplePathDToPoints(d, ROUTE_DECOR_SAMPLE_COUNT);
+      guard += 1;
+    }
+    if (pts && pts.length >= 2) {
+      pathsD.push(d);
+      samples.push(pts);
+    }
   }
-  return layers;
+  return { pathsD, samples };
 }
 
 /** @type {number | null} */
 let routeDecorRaf = null;
-/** @type {null | Array<Array<{ x: number; y: number }>>} */
+/** @type {null | { samples: Array<Array<{ x: number; y: number }>>; pathsD: string[] }} */
 let routeDecorLayersSnapshot = null;
 /** @type {null | Array<Array<{ x: number; y: number }>>} */
 let routeDecorLastPainted = null;
@@ -881,8 +889,8 @@ function samplePathDToPoints(pathD, sampleCount) {
   return pts;
 }
 
-function paintDecorLayers(layers) {
-  routeDecorLastPainted = cloneDecorLayers(layers);
+function paintDecorLayersPolylines(pointLayers) {
+  routeDecorLastPainted = cloneDecorLayers(pointLayers);
   const svgs = [
     document.querySelector("#map-content svg.route-map"),
     document.querySelector(".language-route-map"),
@@ -904,8 +912,8 @@ function paintDecorLayers(layers) {
     while (group.firstChild) {
       group.removeChild(group.firstChild);
     }
-    for (let i = 0; i < layers.length; i++) {
-      const d = polylineToPathD(layers[i]);
+    for (let i = 0; i < pointLayers.length; i++) {
+      const d = polylineToPathD(pointLayers[i]);
       if (!d) continue;
       const path = document.createElementNS(NS, "path");
       path.setAttribute("class", "route-decor-line");
@@ -915,9 +923,45 @@ function paintDecorLayers(layers) {
   }
 }
 
+/** Финальная отрисовка: гладкие кубические `d`, без ломаной аппроксимации. */
+function paintDecorBezierPaths(pathDs) {
+  const sampled = pathDs
+    .map((d) => samplePathDToPoints(d, ROUTE_DECOR_SAMPLE_COUNT))
+    .filter((p) => p && p.length >= 2);
+  routeDecorLastPainted = cloneDecorLayers(sampled);
+  const svgs = [
+    document.querySelector("#map-content svg.route-map"),
+    document.querySelector(".language-route-map"),
+  ].filter(Boolean);
+  const NS = "http://www.w3.org/2000/svg";
+  for (const svg of svgs) {
+    let group = svg.querySelector(".route-decor-group");
+    if (!group) {
+      group = document.createElementNS(NS, "g");
+      group.setAttribute("class", "route-decor-group");
+      group.setAttribute("aria-hidden", "true");
+      const land = svg.querySelector(".map-landmass");
+      if (land && land.parentNode) {
+        land.parentNode.insertBefore(group, land.nextSibling);
+      } else {
+        svg.appendChild(group);
+      }
+    }
+    while (group.firstChild) {
+      group.removeChild(group.firstChild);
+    }
+    for (let i = 0; i < pathDs.length; i++) {
+      const path = document.createElementNS(NS, "path");
+      path.setAttribute("class", "route-decor-line");
+      path.setAttribute("d", pathDs[i]);
+      group.appendChild(path);
+    }
+  }
+}
+
 /**
- * Декоративные линии вдоль маршрута: случайное число (3–10), уникальная форма при каждой генерации.
- * @param {string} mainPathD — атрибут `d` основной линии.
+ * Декоративные линии: при каждой генерации новые плавные кривые по краю поля (см. computeDecorLayers).
+ * @param {string} mainPathD — атрибут `d` основной линии (триггер перегенерации; форма декора от него не зависит).
  * @param {{ animate?: boolean; duration?: number }} [options]
  */
 function syncDecorativeRouteLines(mainPathD, options = {}) {
@@ -927,13 +971,18 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
   const duration = options.duration ?? ROUTE_DECOR_ANIM_MS;
 
   const next = computeDecorLayers(mainPathD);
-  if (!next.length || next.length < 3 || !next.every((layer) => layer.length >= 2)) {
+  if (
+    !next.samples.length ||
+    next.samples.length < 3 ||
+    !next.pathsD.length ||
+    next.pathsD.length !== next.samples.length
+  ) {
     return;
   }
 
-  let from = routeDecorLastPainted || routeDecorLayersSnapshot;
-  if (from && from.length === next.length) {
-    from = from.map((layer, i) => resamplePolyline(layer, next[i].length));
+  let from = routeDecorLastPainted || routeDecorLayersSnapshot?.samples;
+  if (from && from.length === next.samples.length) {
+    from = from.map((layer, i) => resamplePolyline(layer, next.samples[i].length));
   } else {
     from = null;
   }
@@ -943,29 +992,37 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
       cancelAnimationFrame(routeDecorRaf);
       routeDecorRaf = null;
     }
-    paintDecorLayers(next);
-    routeDecorLayersSnapshot = cloneDecorLayers(next);
+    paintDecorBezierPaths(next.pathsD);
+    routeDecorLayersSnapshot = {
+      samples: cloneDecorLayers(next.samples),
+      pathsD: next.pathsD.slice(),
+    };
     return;
   }
 
   const start = performance.now();
   const fromSnap = cloneDecorLayers(from);
-  const toSnap = cloneDecorLayers(next);
+  const toSnapSamples = cloneDecorLayers(next.samples);
+  const toPathsD = next.pathsD.slice();
 
   const tick = (now) => {
     const t = Math.min(1, (now - start) / duration);
     const e = 1 - (1 - t) ** 3;
     const mid = fromSnap.map((layer, li) =>
       layer.map((p, i) => ({
-        x: p.x + (toSnap[li][i].x - p.x) * e,
-        y: p.y + (toSnap[li][i].y - p.y) * e,
+        x: p.x + (toSnapSamples[li][i].x - p.x) * e,
+        y: p.y + (toSnapSamples[li][i].y - p.y) * e,
       })),
     );
-    paintDecorLayers(mid);
+    paintDecorLayersPolylines(mid);
     if (t < 1) routeDecorRaf = requestAnimationFrame(tick);
     else {
       routeDecorRaf = null;
-      routeDecorLayersSnapshot = cloneDecorLayers(toSnap);
+      paintDecorBezierPaths(toPathsD);
+      routeDecorLayersSnapshot = {
+        samples: cloneDecorLayers(toSnapSamples),
+        pathsD: toPathsD.slice(),
+      };
     }
   };
 
