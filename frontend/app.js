@@ -813,21 +813,11 @@ function buildDecorativeBezierPathD(rng, lineIndex) {
   return `M${q(s.x)} ${q(s.y)} C${q(cp1x)} ${q(cp1y)} ${q(cp2x)} ${q(cp2y)} ${q(e.x)} ${q(e.y)}`;
 }
 
-function computeDecorLayers(_mainPathD, preferredLineCount, rngSeed) {
+function computeDecorLayers(_mainPathD, rngSeed) {
   let seed = rngSeed >>> 0;
   if (!seed) seed = 0x6d2b79f5;
   const rng = decorMulberry32(seed);
-  let lineCount;
-  if (
-    preferredLineCount != null &&
-    Number.isFinite(preferredLineCount) &&
-    preferredLineCount >= 2 &&
-    preferredLineCount <= 7
-  ) {
-    lineCount = Math.round(preferredLineCount);
-  } else {
-    lineCount = 2 + Math.floor(rng() * 6);
-  }
+  const lineCount = 2 + Math.floor(rng() * 6);
   const pathsD = [];
   const samples = [];
   let globalGuard = 0;
@@ -856,6 +846,8 @@ let routeDecorRaf = null;
 let routeDecorLayersSnapshot = null;
 /** @type {null | Array<Array<{ x: number; y: number }>>} */
 let routeDecorLastPainted = null;
+/** Увеличивается при каждой перегенерации декора — в XOR seed, чтобы снова случайно 2–7 линий, не «как при загрузке». */
+let routeDecorResyncGen = 0;
 
 function cloneDecorLayers(layers) {
   return layers.map((row) => row.map((p) => ({ x: p.x, y: p.y })));
@@ -1000,7 +992,7 @@ function paintDecorBezierPaths(pathDs) {
 }
 
 /**
- * Декоративные линии: набор кривых фиксируется парой городов (как органическая линия маршрута); см. computeDecorLayers.
+ * Декоративные линии: при каждой синхронизации новый случайный набор 2–7 кривых (seed от пары городов + счётчик смен).
  * @param {string} mainPathD — атрибут `d` основной линии (триггер перегенерации; форма декора от него не зависит).
  * @param {{ animate?: boolean; duration?: number; easing?: 'smoothstep' | 'cubicOut'; originRaw?: string; destinationRaw?: string }} [options]
  */
@@ -1010,14 +1002,11 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
   const animate = options.animate !== false && !reduceMotion;
   const duration = options.duration ?? ROUTE_DECOR_ANIM_MS;
   const easing = options.easing === "cubicOut" ? "cubicOut" : "smoothstep";
-  const seed = resolveDecorLayersSeed(mainPathD, options.originRaw, options.destinationRaw);
+  const baseSeed = resolveDecorLayersSeed(mainPathD, options.originRaw, options.destinationRaw);
+  routeDecorResyncGen += 1;
+  const seed = (baseSeed ^ Math.imul(routeDecorResyncGen, 0x9e3779b9)) >>> 0 || 0x6d2b79f5;
 
-  const preferredCount =
-    routeDecorLayersSnapshot?.pathsD?.length ??
-    routeDecorLayersSnapshot?.samples?.length ??
-    (routeDecorLastPainted && routeDecorLastPainted.length >= 2 ? routeDecorLastPainted.length : null);
-
-  const next = computeDecorLayers(mainPathD, preferredCount, seed);
+  const next = computeDecorLayers(mainPathD, seed);
   if (
     !next.samples.length ||
     next.samples.length < 2 ||
@@ -6019,6 +6008,7 @@ function resetScenario(announce = true) {
   dynamicRouteCache = { key: "", geom: null };
   routeDecorLayersSnapshot = null;
   routeDecorLastPainted = null;
+  routeDecorResyncGen = 0;
   if (routeDecorRaf != null) {
     cancelAnimationFrame(routeDecorRaf);
     routeDecorRaf = null;
