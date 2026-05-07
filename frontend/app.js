@@ -855,6 +855,32 @@ function polylineToPathD(points) {
   return d;
 }
 
+/** Интерполяция основной линии между двумя path `d` (равномерная выборка по длине кривой). */
+const ROUTE_MAIN_MORPH_SAMPLES = 72;
+const ROUTE_MAIN_MORPH_MS = 480;
+const morphTerminalRouteCtx = { gen: 0, raf: /** @type {number | null} */ (null) };
+const morphLanguageRouteCtx = { gen: 0, raf: /** @type {number | null} */ (null) };
+
+function samplePathDToPoints(pathD, sampleCount) {
+  const probe = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  probe.setAttribute("d", pathD);
+  let L;
+  try {
+    L = probe.getTotalLength();
+  } catch {
+    return null;
+  }
+  if (!Number.isFinite(L) || L < 2) return null;
+  const n = Math.max(2, sampleCount);
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i / (n - 1)) * L;
+    const p = probe.getPointAtLength(t);
+    pts.push({ x: p.x, y: p.y });
+  }
+  return pts;
+}
+
 function paintDecorLayers(layers) {
   routeDecorLastPainted = cloneDecorLayers(layers);
   const svgs = [
@@ -949,51 +975,116 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
 
 function applyRouteGeometry(visual, labelOverride) {
   if (!routeLine || !visual?.line) return;
+
   routeLine.classList.remove("route-line-active");
   routeLineFlow?.classList.remove("route-line-flow-active");
   routeLineFlow?.classList.remove("route-line-flow--css-only");
-  routeLine.setAttribute("d", visual.line);
 
   const routeReduced =
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const hasClip =
     visual.routeClip && Number.isFinite(visual.routeClip.totalLen) && visual.routeClip.totalLen > 0;
 
-  if (hasClip) {
-    const L = visual.routeClip.totalLen;
-    const v = Math.min(L, Math.max(0, visual.routeClip.visibleLen));
-    routeLine.style.strokeDasharray = String(L);
-    routeLine.style.strokeDashoffset = String(L - v);
-  } else if (routeReduced) {
-    routeLine.style.strokeDasharray = "none";
-    routeLine.style.strokeDashoffset = "0";
-  } else {
-    const probe = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    probe.setAttribute("d", visual.line);
-    const rawLen = probe.getTotalLength();
-    const len = Number.isFinite(rawLen) && rawLen > 4 ? rawLen : 1200;
-    routeLine.style.strokeDasharray = String(len);
-    routeLine.style.strokeDashoffset = String(len);
+  /** Финальное состояние линии: точный `d`, отрисовка dash, поток, точки карты (после морфинга или сразу). */
+  const finalizeTerminalRouteLine = () => {
+    routeLine.setAttribute("d", visual.line);
+    if (routeLineFlow) routeLineFlow.setAttribute("d", visual.line);
+
+    if (hasClip) {
+      const L = visual.routeClip.totalLen;
+      const v = Math.min(L, Math.max(0, visual.routeClip.visibleLen));
+      routeLine.style.strokeDasharray = String(L);
+      routeLine.style.strokeDashoffset = String(L - v);
+    } else if (routeReduced) {
+      routeLine.style.strokeDasharray = "none";
+      routeLine.style.strokeDashoffset = "0";
+    } else {
+      const probe = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      probe.setAttribute("d", visual.line);
+      const rawLen = probe.getTotalLength();
+      const len = Number.isFinite(rawLen) && rawLen > 4 ? rawLen : 1200;
+      routeLine.style.strokeDasharray = String(len);
+      routeLine.style.strokeDashoffset = String(len);
+    }
+
+    void routeLine.getBoundingClientRect();
+    if (!hasClip && !routeReduced) {
+      routeLine.classList.add("route-line-active");
+    }
+    routePulse?.classList.add("route-pulse-active");
+
+    if (!routeReduced && routeLineFlow) {
+      syncRouteFlowOverlay(routeLineFlow, visual.line);
+    } else if (routeLineFlow) {
+      cancelSvgFlowAnimations(routeLineFlow);
+      routeLineFlow.setAttribute("d", visual.line);
+      routeLineFlow.classList.remove("route-line-flow-active", "route-line-flow--css-only");
+      routeLineFlow.style.strokeDasharray = "none";
+      routeLineFlow.style.opacity = "0.22";
+    }
+
+    updateMapGeometry(visual, labelOverride);
+  };
+
+  syncDecorativeRouteLines(visual.line, { animate: !routeReduced });
+
+  if (routeReduced || hasClip) {
+    finalizeTerminalRouteLine();
+    return;
   }
 
-  void routeLine.getBoundingClientRect();
-  if (!hasClip && !routeReduced) {
-    routeLine.classList.add("route-line-active");
-  }
-  routePulse?.classList.add("route-pulse-active");
-  const flowReduced =
-    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!flowReduced && routeLineFlow) {
-    syncRouteFlowOverlay(routeLineFlow, visual.line);
-  } else if (routeLineFlow) {
-    cancelSvgFlowAnimations(routeLineFlow);
-    routeLineFlow.setAttribute("d", visual.line);
+  morphTerminalRouteCtx.gen += 1;
+  const myGen = morphTerminalRouteCtx.gen;
+  if (morphTerminalRouteCtx.raf != null) cancelAnimationFrame(morphTerminalRouteCtx.raf);
+  morphTerminalRouteCtx.raf = null;
+
+  cancelSvgFlowAnimations(routeLineFlow);
+  if (routeLineFlow) {
     routeLineFlow.classList.remove("route-line-flow-active", "route-line-flow--css-only");
-    routeLineFlow.style.strokeDasharray = "none";
-    routeLineFlow.style.opacity = "0.22";
+    routeLineFlow.style.opacity = "0.18";
   }
-  updateMapGeometry(visual, labelOverride);
-  syncDecorativeRouteLines(visual.line, { animate: !routeReduced });
+  routeLine.style.strokeDasharray = "none";
+  routeLine.style.strokeDashoffset = "0";
+
+  const prevD = routeLine.getAttribute("d") || "";
+  const targetD = visual.line;
+
+  if (!prevD.trim() || prevD === targetD) {
+    finalizeTerminalRouteLine();
+    return;
+  }
+
+  let fromPts = samplePathDToPoints(prevD, ROUTE_MAIN_MORPH_SAMPLES);
+  let toPts = samplePathDToPoints(targetD, ROUTE_MAIN_MORPH_SAMPLES);
+  if (!fromPts || !toPts) {
+    finalizeTerminalRouteLine();
+    return;
+  }
+  if (fromPts.length !== toPts.length) {
+    fromPts = resamplePolyline(fromPts, toPts.length);
+  }
+
+  const start = performance.now();
+
+  const tick = (now) => {
+    if (morphTerminalRouteCtx.gen !== myGen) return;
+    const u = Math.min(1, (now - start) / ROUTE_MAIN_MORPH_MS);
+    const e = 1 - (1 - u) ** 3;
+    const midPts = fromPts.map((p, i) => ({
+      x: p.x + (toPts[i].x - p.x) * e,
+      y: p.y + (toPts[i].y - p.y) * e,
+    }));
+    const dMid = polylineToPathD(midPts);
+    routeLine.setAttribute("d", dMid);
+    if (routeLineFlow && dMid) routeLineFlow.setAttribute("d", dMid);
+    if (u < 1) {
+      morphTerminalRouteCtx.raf = requestAnimationFrame(tick);
+    } else {
+      morphTerminalRouteCtx.raf = null;
+      finalizeTerminalRouteLine();
+    }
+  };
+  morphTerminalRouteCtx.raf = requestAnimationFrame(tick);
 }
 
 function updateRouteMapForSelectedTrain() {
@@ -3009,33 +3100,97 @@ function applyIntroRouteGeometry(visual, labelOverride) {
   if (!introLine) return;
   const reducedMotion =
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   introLine.classList.remove("route-line-active");
-  introLine.setAttribute("d", visual.line);
-  introLine.style.strokeDasharray = "";
-  introLine.style.strokeDashoffset = "";
-  if (reducedMotion) {
-    introLine.style.strokeDashoffset = "0";
-    introLine.style.strokeDasharray = "none";
-  }
-  void introLine.getBoundingClientRect();
-  if (!reducedMotion) {
-    introLine.classList.add("route-line-active");
-  }
-  if (introPulse) introPulse.classList.add("route-pulse-active");
-  updateIntroMapGeometry(visual, labelOverride);
-  const introFlow = document.querySelector("#language-route-line-flow");
-  if (introFlow) {
-    if (!reducedMotion) {
-      syncRouteFlowOverlay(introFlow, visual.line);
-    } else {
-      cancelSvgFlowAnimations(introFlow);
-      introFlow.setAttribute("d", visual.line);
-      introFlow.classList.remove("route-line-flow-active", "route-line-flow--css-only");
-      introFlow.style.strokeDasharray = "none";
-      introFlow.style.opacity = "0.22";
+
+  const finalizeIntroRouteLine = () => {
+    introLine.setAttribute("d", visual.line);
+    introLine.style.strokeDasharray = "";
+    introLine.style.strokeDashoffset = "";
+    if (reducedMotion) {
+      introLine.style.strokeDashoffset = "0";
+      introLine.style.strokeDasharray = "none";
     }
-  }
+    void introLine.getBoundingClientRect();
+    if (!reducedMotion) {
+      introLine.classList.add("route-line-active");
+    }
+    if (introPulse) introPulse.classList.add("route-pulse-active");
+    updateIntroMapGeometry(visual, labelOverride);
+    const introFlowDone = document.querySelector("#language-route-line-flow");
+    if (introFlowDone) {
+      if (!reducedMotion) {
+        syncRouteFlowOverlay(introFlowDone, visual.line);
+      } else {
+        cancelSvgFlowAnimations(introFlowDone);
+        introFlowDone.setAttribute("d", visual.line);
+        introFlowDone.classList.remove("route-line-flow-active", "route-line-flow--css-only");
+        introFlowDone.style.strokeDasharray = "none";
+        introFlowDone.style.opacity = "0.22";
+      }
+    }
+  };
+
   syncDecorativeRouteLines(visual.line, { animate: !reducedMotion });
+
+  if (reducedMotion) {
+    finalizeIntroRouteLine();
+    return;
+  }
+
+  morphLanguageRouteCtx.gen += 1;
+  const myGen = morphLanguageRouteCtx.gen;
+  if (morphLanguageRouteCtx.raf != null) cancelAnimationFrame(morphLanguageRouteCtx.raf);
+  morphLanguageRouteCtx.raf = null;
+
+  const introFlowEl = document.querySelector("#language-route-line-flow");
+  cancelSvgFlowAnimations(introFlowEl);
+  if (introFlowEl) {
+    introFlowEl.classList.remove("route-line-flow-active", "route-line-flow--css-only");
+    introFlowEl.style.opacity = "0.18";
+  }
+  introLine.style.strokeDasharray = "none";
+  introLine.style.strokeDashoffset = "0";
+
+  const prevD = introLine.getAttribute("d") || "";
+  const targetD = visual.line;
+
+  if (!prevD.trim() || prevD === targetD) {
+    finalizeIntroRouteLine();
+    return;
+  }
+
+  let fromPts = samplePathDToPoints(prevD, ROUTE_MAIN_MORPH_SAMPLES);
+  let toPts = samplePathDToPoints(targetD, ROUTE_MAIN_MORPH_SAMPLES);
+  if (!fromPts || !toPts) {
+    finalizeIntroRouteLine();
+    return;
+  }
+  if (fromPts.length !== toPts.length) {
+    fromPts = resamplePolyline(fromPts, toPts.length);
+  }
+
+  const start = performance.now();
+
+  const tick = (now) => {
+    if (morphLanguageRouteCtx.gen !== myGen) return;
+    const u = Math.min(1, (now - start) / ROUTE_MAIN_MORPH_MS);
+    const e = 1 - (1 - u) ** 3;
+    const midPts = fromPts.map((p, i) => ({
+      x: p.x + (toPts[i].x - p.x) * e,
+      y: p.y + (toPts[i].y - p.y) * e,
+    }));
+    const dMid = polylineToPathD(midPts);
+    introLine.setAttribute("d", dMid);
+    if (introFlowEl && dMid) introFlowEl.setAttribute("d", dMid);
+    if (u < 1) {
+      morphLanguageRouteCtx.raf = requestAnimationFrame(tick);
+    } else {
+      morphLanguageRouteCtx.raf = null;
+      finalizeIntroRouteLine();
+    }
+  };
+  morphLanguageRouteCtx.raf = requestAnimationFrame(tick);
 }
 
 async function tickLanguageScreenAmbient() {
@@ -3099,6 +3254,9 @@ function stopLanguageScreenAmbient() {
   }
   languageAmbientAbort?.abort();
   languageAmbientAbort = null;
+  morphLanguageRouteCtx.gen += 1;
+  if (morphLanguageRouteCtx.raf != null) cancelAnimationFrame(morphLanguageRouteCtx.raf);
+  morphLanguageRouteCtx.raf = null;
   const introFlow = document.querySelector("#language-route-line-flow");
   if (introFlow) {
     cancelSvgFlowAnimations(introFlow);
