@@ -2,16 +2,23 @@
 <html lang="ru" data-theme="rzd">
   <head>
     <meta charset="UTF-8" />
-    <!-- Раньше CSS: тема из localStorage, иначе РЖД (ключ = THEME_STORAGE_KEY в app.js). -->
+    <!-- Версия статики и ключ темы — одна пара констант ниже; app.js читает window.PATH_* -->
     <script>
       (function () {
-        var KEY = "path-theme-v3-default-rzd";
+        var ASSET_VERSION = "202605122";
+        var THEME_KEY = "path-theme-v3-default-rzd";
+        window.PATH_ASSET_VERSION = ASSET_VERSION;
+        window.PATH_THEME_STORAGE_KEY = THEME_KEY;
         var s = null;
         try {
-          s = localStorage.getItem(KEY);
+          s = localStorage.getItem(THEME_KEY);
         } catch (e) {}
         if (s !== "neon" && s !== "rzd") s = "rzd";
         document.documentElement.setAttribute("data-theme", s);
+        var link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "./styles.css?v=" + encodeURIComponent(ASSET_VERSION);
+        document.head.appendChild(link);
       })();
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -22,7 +29,6 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=202605121" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -654,9 +660,32 @@
 
     <div id="session-idle-warning" class="session-idle-warning hidden" role="alert" aria-live="assertive"></div>
 
-    <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
-    <script src="./api-client.js?v=202605091"></script>
-    <script src="./app.js?v=202605121"></script>
-    <script src="./vendor/qrcode.min.js"></script>
+    <!-- Порядок: api-client → app-i18n → app → qrcode. Версия query = window.PATH_ASSET_VERSION из <head>. -->
+    <script>
+      (function () {
+        var v = window.PATH_ASSET_VERSION || "202605122";
+        var queue = ["./api-client.js", "./app-i18n.js", "./app.js"];
+        var i = 0;
+        function next() {
+          if (i >= queue.length) {
+            var q = document.createElement("script");
+            q.src = "./vendor/qrcode.min.js?v=" + encodeURIComponent(v);
+            document.body.appendChild(q);
+            return;
+          }
+          var s = document.createElement("script");
+          s.src = queue[i] + "?v=" + encodeURIComponent(v);
+          s.onload = function () {
+            i += 1;
+            next();
+          };
+          s.onerror = function () {
+            console.error("Не удалось загрузить скрипт:", queue[i]);
+          };
+          document.body.appendChild(s);
+        }
+        next();
+      })();
+    </script>
   </body>
 </html>
