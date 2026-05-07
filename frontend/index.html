@@ -22,7 +22,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=202605115" />
+    <link rel="stylesheet" href="./styles.css?v=202605117" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -126,16 +126,25 @@
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
-                <!-- Подложка карты: координатная сетка (pattern + currentColor из --map-coord-grid-color) -->
-                <pattern id="languageMapCoordGrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <rect width="40" height="40" fill="currentColor" opacity="0.07" />
-                  <path
-                    d="M 0 0 V 40 M 0 40 H 40"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="0.55"
-                    stroke-opacity="0.42"
-                  />
+                <!-- Подложка: ультра-минимальная точечная сетка + мягкое растворение к краям (маска) -->
+                <radialGradient id="languageMapGridFadeGrad" cx="50%" cy="46%" r="0.72" gradientUnits="objectBoundingBox">
+                  <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+                  <stop offset="42%" stop-color="#ffffff" stop-opacity="0.9" />
+                  <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+                </radialGradient>
+                <mask
+                  id="languageMapGridSoftMask"
+                  maskUnits="userSpaceOnUse"
+                  maskContentUnits="userSpaceOnUse"
+                  x="0"
+                  y="0"
+                  width="900"
+                  height="520"
+                >
+                  <rect width="900" height="520" fill="url(#languageMapGridFadeGrad)" />
+                </mask>
+                <pattern id="languageMapCoordGrid" width="16" height="16" patternUnits="userSpaceOnUse">
+                  <circle cx="2.25" cy="2.25" r="0.45" fill="currentColor" />
                 </pattern>
               </defs>
               <rect
@@ -144,6 +153,7 @@
                 height="520"
                 x="0"
                 y="0"
+                mask="url(#languageMapGridSoftMask)"
               />
               <path class="map-region-line" d="M120 410 C210 340 276 270 338 166" />
               <path class="map-region-line" d="M330 452 C420 355 498 250 650 76" />
@@ -289,15 +299,24 @@
                       <feMergeNode in="SourceGraphic" />
                     </feMerge>
                   </filter>
-                  <pattern id="routeMapCoordGrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <rect width="40" height="40" fill="currentColor" opacity="0.07" />
-                    <path
-                      d="M 0 0 V 40 M 0 40 H 40"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="0.55"
-                      stroke-opacity="0.42"
-                    />
+                  <radialGradient id="routeMapGridFadeGrad" cx="50%" cy="46%" r="0.72" gradientUnits="objectBoundingBox">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+                    <stop offset="42%" stop-color="#ffffff" stop-opacity="0.9" />
+                    <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+                  </radialGradient>
+                  <mask
+                    id="routeMapGridSoftMask"
+                    maskUnits="userSpaceOnUse"
+                    maskContentUnits="userSpaceOnUse"
+                    x="0"
+                    y="0"
+                    width="900"
+                    height="520"
+                  >
+                    <rect width="900" height="520" fill="url(#routeMapGridFadeGrad)" />
+                  </mask>
+                  <pattern id="routeMapCoordGrid" width="16" height="16" patternUnits="userSpaceOnUse">
+                    <circle cx="2.25" cy="2.25" r="0.45" fill="currentColor" />
                   </pattern>
                 </defs>
                 <rect
@@ -306,6 +325,7 @@
                   height="520"
                   x="0"
                   y="0"
+                  mask="url(#routeMapGridSoftMask)"
                 />
                 <path class="map-region-line" d="M120 410 C210 340 276 270 338 166" />
                 <path class="map-region-line" d="M330 452 C420 355 498 250 650 76" />
