@@ -5163,6 +5163,7 @@ function stopAssistantSpeech() {
 function startVoiceRecognition() {
   stopAssistantSpeech();
   playOrbTapSound();
+  // Повторное нажатие во время захвата: остановить микрофон и выйти в idle (без мгновенного рестарта).
   if (orbRecognition) {
     try {
       orbRecognition.abort();
@@ -5170,6 +5171,8 @@ function startVoiceRecognition() {
       /* ignore */
     }
     orbRecognition = null;
+    setOrbMode("idle");
+    return;
   }
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
@@ -5211,7 +5214,12 @@ function startVoiceRecognition() {
   };
   recognition.onend = () => {
     orbRecognition = null;
-    if (uiStage !== "searching") setOrbMode("idle");
+    // Пока сессия STT жива, на сфере «listening»; при onend снимаем её сразу,
+    // иначе до ответа сервера висит «микрофон включён», хотя захват уже завершён.
+    const micStillActive = orbButton?.classList.contains("orb-listening");
+    if (!micStillActive) return;
+    if (uiStage === "searching") setOrbMode("thinking");
+    else setOrbMode("idle");
   };
   orbRecognition = recognition;
   recognition.start();
@@ -5265,6 +5273,11 @@ function enqueueSpeech(text) {
 function speakNext() {
   if (!speechQueue.length) {
     isSpeaking = false;
+    if (uiStage === "searching") {
+      // Озвучка короткого ответа диалога закончилась, а поиск поездов ещё идёт — «думает», не «speaking».
+      setOrbMode("thinking");
+      return;
+    }
     if (
       uiStage === "initial" ||
       uiStage === "results" ||
