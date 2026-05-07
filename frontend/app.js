@@ -2367,6 +2367,15 @@ async function completeAuthFlow() {
   sessionPassenger.document = profile.document;
   sessionPassenger.phoneDisplay = `+7 (${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 8)}-${digits.slice(8, 10)}`;
 
+  try {
+    await postJson("/api/scenario-step", {
+      kind: "demo_auth_ok",
+      detail: `+7 (***) ***-**-${digits.slice(8, 10)}`,
+    });
+  } catch {
+    /* журнал опционален для демо-сценария */
+  }
+
   await transitionAuthToTerminal();
   sessionPassenger.isAuthenticated = true;
   renderSessionUserStrip();

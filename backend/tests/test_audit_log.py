@@ -36,3 +36,16 @@ def test_audit_log_with_bearer_when_token_set(monkeypatch):
     assert body.get("buffer_capacity", 0) >= 100
     joined = "\n".join(body["lines"])
     assert "/api/health" in joined
+
+
+def test_scenario_step_appends_event_line(monkeypatch):
+    monkeypatch.delenv("PATH_AUDIT_TOKEN", raising=False)
+    r = client.post("/api/scenario-step", json={"kind": "demo_auth_ok", "detail": "+7***9012"})
+    assert r.status_code == 200
+    assert r.json().get("ok") is True
+    client.get("/api/health")
+    log = client.get("/api/audit-log")
+    assert log.status_code == 200
+    text = "\n".join(log.json()["lines"])
+    assert "EVENT" in text
+    assert "клиент:demo_auth_ok" in text

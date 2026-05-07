@@ -20,6 +20,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app import audit_scenario
 from app.models import (
     AuditLogResponse,
     CheckoutVoiceIntentRequest,
@@ -35,6 +36,8 @@ from app.models import (
     HealthResponse,
     RecommendRequest,
     RecommendResponse,
+    ScenarioClientEventRequest,
+    ScenarioClientEventResponse,
     SupportChatRequest,
     SupportChatResponse,
     TicketSearchRequest,
@@ -51,7 +54,7 @@ from app.services.checkout import create_demo_ticket
 from app.services.deepseek_client import DeepSeekClient
 from app.services.recommendations import recommend_trains
 from app.services.rzd_adapter import RzdDataAdapter
-from app.visit_audit import record_http_visit, snapshot
+from app.visit_audit import record_http_visit, record_scenario_event, snapshot
 
 # FastAPI-приложение является центральной точкой backend. Оно держит ключ DeepSeek
 # на сервере, предоставляет frontend простые endpoint'ы и не раскрывает секреты в
@@ -210,6 +213,16 @@ async def audit_log(request: Request) -> AuditLogResponse:
     )
 
 
+@app.post("/api/scenario-step", response_model=ScenarioClientEventResponse)
+async def scenario_step(http_request: Request, body: ScenarioClientEventRequest) -> ScenarioClientEventResponse:
+    """Короткое событие из браузера (демо-вход по телефону и т.д.) — строка EVENT в журнале."""
+
+    detail = body.detail.strip() if body.detail else ""
+    msg = f"клиент:{body.kind}" + (f" | {detail}" if detail else "")
+    record_scenario_event(http_request, msg)
+    return ScenarioClientEventResponse()
+
+
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     """Healthcheck для VDS, reverse proxy и быстрой ручной проверки."""
@@ -218,43 +231,47 @@ async def health() -> HealthResponse:
 
 
 @app.post("/api/understand", response_model=TripIntent)
-async def understand(request: UnderstandRequest) -> TripIntent:
+async def understand(http_request: Request, data: UnderstandRequest) -> TripIntent:
     """Разбирает естественную речь пользователя в структурированные параметры."""
 
-    payload = await deepseek_client.understand_trip(
-        request.language,
-        request.text,
-        request.origin_hint,
+    trip_payload = await deepseek_client.understand_trip(
+        data.language,
+        data.text,
+        data.origin_hint,
     )
-    return TripIntent(**payload)
+    record_scenario_event(http_request, audit_scenario.format_understand_event(data))
+    return TripIntent(**trip_payload)
 
 
 @app.post("/api/checkout-voice-intent", response_model=CheckoutVoiceIntentResponse)
-async def checkout_voice_intent(request: CheckoutVoiceIntentRequest) -> CheckoutVoiceIntentResponse:
+async def checkout_voice_intent(
+    http_request: Request, data: CheckoutVoiceIntentRequest
+) -> CheckoutVoiceIntentResponse:
     """Определяет по фразе DeepSeek, подтверждает ли пользователь оформление демо-билета."""
 
     ok = await deepseek_client.classify_demo_checkout_intent(
-        request.language,
-        request.text,
-        request.ui_stage,
+        data.language,
+        data.text,
+        data.ui_stage,
     )
+    record_scenario_event(http_request, audit_scenario.format_voice_checkout_event(data, ok))
     return CheckoutVoiceIntentResponse(confirm_demo_checkout=ok)
 
 
 @app.post("/api/dialog", response_model=DialogResponse)
-async def dialog(request: DialogRequest) -> DialogResponse:
+async def dialog(http_request: Request, dialog_req: DialogRequest) -> DialogResponse:
     """Поддерживает сквозной диалог и обновляет состояние пользовательского пути.
 
     В MVP диалоговое состояние хранится на frontend и передается в каждом запросе.
     Это проще для демонстрационного терминала и не требует авторизации или сессий.
     """
 
-    current_state = dict(request.state)
-    prior = [(t.role, t.text) for t in request.conversation]
+    current_state = dict(dialog_req.state)
+    prior = [(t.role, t.text) for t in dialog_req.conversation]
 
     payload = await deepseek_client.understand_trip(
-        request.language,
-        request.text,
+        dialog_req.language,
+        dialog_req.text,
         current_state.get("origin"),
         prior_messages=prior,
     )
@@ -265,16 +282,20 @@ async def dialog(request: DialogRequest) -> DialogResponse:
     if missing_fields:
         current_state["pending_fields"] = missing_fields
         action = "ask_clarification"
-        draft = (payload.get("assistant_text") or "").strip() or _clarification_text(request.language, missing_fields)
+        draft = (payload.get("assistant_text") or "").strip() or _clarification_text(
+            dialog_req.language, missing_fields
+        )
     else:
         current_state.pop("pending_fields", None)
         action = "search_tickets"
-        draft = (payload.get("assistant_text") or "").strip() or _ready_to_search_text(request.language, current_state)
+        draft = (payload.get("assistant_text") or "").strip() or _ready_to_search_text(
+            dialog_req.language, current_state
+        )
 
     assistant_text = draft
     scene = "dialog_clarify" if missing_fields else "dialog_ready"
     polished = await deepseek_client.polish_assistant_reply(
-        request.language,
+        dialog_req.language,
         draft,
         prior_messages=prior,
         scene=scene,
@@ -282,6 +303,10 @@ async def dialog(request: DialogRequest) -> DialogResponse:
     if polished:
         assistant_text = polished
 
+    record_scenario_event(
+        http_request,
+        audit_scenario.format_dialog_event(dialog_req, action, current_state),
+    )
     return DialogResponse(
         assistant_text=assistant_text,
         action=action,
@@ -335,78 +360,93 @@ def _ready_to_search_text(language: str, state: dict) -> str:
 
 
 @app.post("/api/tickets/search", response_model=TicketSearchResponse)
-async def search_tickets(request: TicketSearchRequest) -> TicketSearchResponse:
+async def search_tickets(http_request: Request, data: TicketSearchRequest) -> TicketSearchResponse:
     """Возвращает варианты поездов из RZD Data Adapter.
 
     Сейчас адаптер работает в demo-режиме, но контракт endpoint'а уже подходит
     для будущего live-парсера или официальной интеграции с данными РЖД.
     """
 
-    return await rzd_adapter.search(request)
+    result = await rzd_adapter.search(data)
+    record_scenario_event(http_request, audit_scenario.format_search_event(data, result))
+    return result
 
 
 @app.post("/api/train-route-stops", response_model=TrainRouteStopsResponse)
-async def train_route_stops(request: TrainRouteStopsRequest) -> TrainRouteStopsResponse:
+async def train_route_stops(http_request: Request, data: TrainRouteStopsRequest) -> TrainRouteStopsResponse:
     """Догружает полный список станций (basicRoute) для выбранного поезда — карта и сегмент маршрута."""
 
-    return await rzd_adapter.fetch_train_route_stops(request)
+    result = await rzd_adapter.fetch_train_route_stops(data)
+    record_scenario_event(http_request, audit_scenario.format_route_stops_event(data))
+    return result
 
 
 @app.post("/api/train-carriage-details", response_model=TrainCarriageDetailsResponse)
-async def train_carriage_details(request: TrainCarriageDetailsRequest) -> TrainCarriageDetailsResponse:
+async def train_carriage_details(
+    http_request: Request, data: TrainCarriageDetailsRequest
+) -> TrainCarriageDetailsResponse:
     """Догружает слой вагонов 5764 для выбора мест и уточнения полок."""
 
-    return await rzd_adapter.fetch_train_carriage_details(request)
+    result = await rzd_adapter.fetch_train_carriage_details(data)
+    record_scenario_event(http_request, audit_scenario.format_carriage_event(data))
+    return result
 
 
 @app.post("/api/recommend", response_model=RecommendResponse)
-async def recommend(request: RecommendRequest) -> RecommendResponse:
+async def recommend(http_request: Request, data: RecommendRequest) -> RecommendResponse:
     """Ранжирует поезда и формирует реплику голосового ассистента."""
 
-    return await recommend_trains(request, deepseek_client)
+    result = await recommend_trains(data, deepseek_client)
+    record_scenario_event(http_request, audit_scenario.format_recommend_event(data, result))
+    return result
 
 
 @app.post("/api/fun-fact", response_model=FunFactResponse)
-async def fun_fact(request: FunFactRequest) -> FunFactResponse:
+async def fun_fact(http_request: Request, data: FunFactRequest) -> FunFactResponse:
     """Возвращает короткий факт о маршруте или городе назначения."""
 
     fact, source = await deepseek_client.generate_fun_fact(
-        request.language,
-        request.origin,
-        request.destination,
+        data.language,
+        data.origin,
+        data.destination,
     )
+    record_scenario_event(http_request, audit_scenario.format_fun_fact_event(data))
     return FunFactResponse(fact=fact, source=source)
 
 
 @app.post("/api/support-chat", response_model=SupportChatResponse)
-async def support_chat(request: SupportChatRequest) -> SupportChatResponse:
+async def support_chat(http_request: Request, data: SupportChatRequest) -> SupportChatResponse:
     """Имитация чата с техподдержкой; ответ генерирует DeepSeek или локальный fallback."""
 
-    prior = [(t.role, t.text) for t in request.conversation[-14:]]
+    prior = [(t.role, t.text) for t in data.conversation[-14:]]
     reply, source = await deepseek_client.generate_support_reply(
-        request.language,
-        request.message,
+        data.language,
+        data.message,
         prior_messages=prior,
     )
+    record_scenario_event(http_request, audit_scenario.format_support_event(data))
     return SupportChatResponse(reply=reply, source=source)
 
 
 @app.post("/api/compare-trains", response_model=CompareTrainsResponse)
-async def compare_trains(request: CompareTrainsRequest) -> CompareTrainsResponse:
+async def compare_trains(http_request: Request, data: CompareTrainsRequest) -> CompareTrainsResponse:
     """Текстовое сравнение двух поездов для киоска (DeepSeek или детерминированный fallback)."""
 
-    if request.train_a.id == request.train_b.id:
+    if data.train_a.id == data.train_b.id:
         raise HTTPException(status_code=400, detail="train_a and train_b must differ")
     text, source = await deepseek_client.generate_train_comparison(
-        request.language,
-        request.train_a,
-        request.train_b,
+        data.language,
+        data.train_a,
+        data.train_b,
     )
+    record_scenario_event(http_request, audit_scenario.format_compare_event(data))
     return CompareTrainsResponse(comparison_text=text, source=source)
 
 
 @app.post("/api/checkout/demo", response_model=DemoTicket)
-async def demo_checkout(request: DemoCheckoutRequest) -> DemoTicket:
+async def demo_checkout(http_request: Request, data: DemoCheckoutRequest) -> DemoTicket:
     """Имитирует оформление билета без оплаты и персональных данных."""
 
-    return create_demo_ticket(request)
+    ticket = create_demo_ticket(data)
+    record_scenario_event(http_request, audit_scenario.format_demo_checkout_event(data))
+    return ticket

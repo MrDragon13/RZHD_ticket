@@ -482,3 +482,20 @@ class AuditLogResponse(BaseModel):
     lines: list[str] = Field(default_factory=list)
     buffer_capacity: int = Field(..., description="Максимум строк в кольцевом буфере.")
     line_count: int = Field(..., description="Текущее число строк в буфере.")
+
+
+class ScenarioClientEventRequest(BaseModel):
+    """Событие с браузера для журнала сценария (демо-вход и др.; без персональных данных на сервере)."""
+
+    kind: str = Field(
+        ...,
+        min_length=2,
+        max_length=64,
+        pattern=r"^[a-zA-Z0-9_.-]+$",
+        description="Краткий код события, например demo_auth_ok.",
+    )
+    detail: str | None = Field(default=None, max_length=320)
+
+
+class ScenarioClientEventResponse(BaseModel):
+    ok: Literal[True] = True

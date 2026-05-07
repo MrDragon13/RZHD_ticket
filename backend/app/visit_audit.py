@@ -1,7 +1,7 @@
-"""Кольцевой журнал HTTP-запросов к API с момента старта процесса (для секретной панели отладки).
+"""Кольцевой журнал HTTP-запросов к API и событий сценария с момента старта процесса.
 
-Не заменяет централизованный логирование и не пишет тела POST — только метод, путь, статус,
-клиентский IP (с учётом X-Forwarded-For / X-Real-IP), укороченный User-Agent и X-Request-Id.
+Строки без маркера EVENT — каждый HTTP-запрос (метод, путь, статус, IP, UA, rid).
+Строки «… | EVENT | IP | …» — смысловые шаги (маршрут, поезд, места; телефон и документ маскируются).
 """
 
 from __future__ import annotations
@@ -52,6 +52,17 @@ def record_http_visit(
     if len(ua) > 180:
         ua = ua[:177] + "..."
     line = f"{_iso_now()} | {ip} | {method} {path} | {status_code} | rid={request_id} | {ua}"
+    _lines.append(line)
+
+
+def record_scenario_event(request: Request, message: str) -> None:
+    """Одна строка EVENT — действие пользователя для журнала проверки (logloglog)."""
+
+    msg = " ".join(message.split())
+    if len(msg) > 480:
+        msg = msg[:477] + "..."
+    ip = client_ip(request)
+    line = f"{_iso_now()} | EVENT | {ip} | {msg}"
     _lines.append(line)
 
 
