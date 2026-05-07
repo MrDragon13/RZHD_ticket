@@ -917,7 +917,7 @@ class DeepSeekClient:
                 "Comfort.",
                 "Compare total journey time, departure/arrival windows, and listed amenities.",
                 "",
-                "Trade-offs.",
+                "Conclusions.",
             ]
             da = train_a.duration_minutes
             db = train_b.duration_minutes
@@ -943,7 +943,7 @@ class DeepSeekClient:
             "Комфорт.",
             "Сопоставьте длительность, удобство отправления/прибытия и перечисленные услуги.",
             "",
-            "Компромиссы.",
+            "Выводы.",
         ]
         da = train_a.duration_minutes
         db = train_b.duration_minutes
@@ -1019,7 +1019,7 @@ class DeepSeekClient:
             system_prompt = (
                 "You compare two Russian railway train options for a kiosk passenger. "
                 "Reply in English only. Use clear sections with headings exactly as:\n"
-                "Time\nPrice\nComfort\nTrade-offs\n"
+                "Time\nPrice\nComfort\nConclusions\n"
                 "Under each heading, 2–4 short sentences comparing both trains; be factual, no markdown fences. "
                 "For Comfort, mention onboard services from carriages_5764_grouped (e.g. Wi‑Fi, dining car, animals, AC) when present in the data; "
                 "do not invent amenities not listed. "
@@ -1031,7 +1031,7 @@ class DeepSeekClient:
             system_prompt = (
                 "Ты помогаешь пассажиру киоска РЖД сравнить два поезда. Отвечай только по-русски. "
                 "Строго используй заголовки разделов в начале строк:\n"
-                "Время\nЦена\nКомфорт\nКомпромиссы\n"
+                "Время\nЦена\nКомфорт\nВыводы\n"
                 "Под каждым заголовком — 2–4 коротких предложения, сравнивающих оба поезда. "
                 "В разделе «Комфорт» опирайся на carriages_5764_grouped (услуги по вагонам), amenities и features из данных — "
                 "кондиционер, вагон-ресторан, животные, Wi‑Fi и т.п., только если они указаны; не выдумывай. "
