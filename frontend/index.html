@@ -22,7 +22,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=202605114" />
+    <link rel="stylesheet" href="./styles.css?v=202605115" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -126,10 +126,24 @@
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
+                <!-- Подложка карты: координатная сетка (pattern + currentColor из --map-coord-grid-color) -->
+                <pattern id="languageMapCoordGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <rect width="40" height="40" fill="currentColor" opacity="0.07" />
+                  <path
+                    d="M 0 0 V 40 M 0 40 H 40"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="0.55"
+                    stroke-opacity="0.42"
+                  />
+                </pattern>
               </defs>
-              <path
-                class="map-landmass"
-                d="M58 340 C118 245 214 178 328 158 C438 139 544 104 650 75 C766 44 842 83 866 164 C891 246 802 318 714 335 C623 353 548 438 430 456 C318 473 235 417 151 411 C82 407 30 389 58 340Z"
+              <rect
+                class="map-landmass language-map-land"
+                width="900"
+                height="520"
+                x="0"
+                y="0"
               />
               <path class="map-region-line" d="M120 410 C210 340 276 270 338 166" />
               <path class="map-region-line" d="M330 452 C420 355 498 250 650 76" />
@@ -275,8 +289,24 @@
                       <feMergeNode in="SourceGraphic" />
                     </feMerge>
                   </filter>
+                  <pattern id="routeMapCoordGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+                    <rect width="40" height="40" fill="currentColor" opacity="0.07" />
+                    <path
+                      d="M 0 0 V 40 M 0 40 H 40"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="0.55"
+                      stroke-opacity="0.42"
+                    />
+                  </pattern>
                 </defs>
-                <path class="map-landmass" d="M58 340 C118 245 214 178 328 158 C438 139 544 104 650 75 C766 44 842 83 866 164 C891 246 802 318 714 335 C623 353 548 438 430 456 C318 473 235 417 151 411 C82 407 30 389 58 340Z" />
+                <rect
+                  class="map-landmass route-map-land"
+                  width="900"
+                  height="520"
+                  x="0"
+                  y="0"
+                />
                 <path class="map-region-line" d="M120 410 C210 340 276 270 338 166" />
                 <path class="map-region-line" d="M330 452 C420 355 498 250 650 76" />
                 <path class="map-region-line" d="M178 214 C300 250 438 230 602 168" />
