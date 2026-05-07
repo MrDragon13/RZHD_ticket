@@ -5427,14 +5427,28 @@ function renderTicket() {
   const pf = demoTicket?.passenger_full_name || "";
   const pp = demoTicket?.passenger_phone || "";
   const pd = demoTicket?.passenger_document || "";
-  const passBlock =
-    pf || pp || pd
-      ? `<div class="ticket-passenger-block ticket-passenger-grid">
-    ${pf ? `<span><strong>${escapeHtml(copy.ticketPassenger)}:</strong> ${escapeHtml(pf)}</span>` : ""}
-    ${pd ? `<span><strong>${escapeHtml(copy.ticketPassengerDoc)}:</strong> ${escapeHtml(pd)}</span>` : ""}
-    ${pp ? `<span><strong>${escapeHtml(copy.ticketPassengerPhone)}:</strong> ${escapeHtml(pp)}</span>` : ""}
+  const hasAnyPassenger = !!(pf || pp || pd);
+  const hasName = !!pf;
+  const hasDocOrPhone = !!(pd || pp);
+  const qrGridClass = [
+    "ticket-passenger-qr-grid",
+    hasName ? "ticket-passenger-qr-grid--has-name" : "",
+    hasName && !hasDocOrPhone ? "ticket-passenger-qr-grid--name-only" : "",
+    !hasAnyPassenger ? "ticket-passenger-qr-grid--qr-only" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const passengerQrHtml = hasAnyPassenger
+    ? `<div class="${qrGridClass}">
+    ${pf ? `<div class="ticket-p-field ticket-p-name"><strong>${escapeHtml(copy.ticketPassenger)}:</strong> ${escapeHtml(pf)}</div>` : ""}
+    ${pd ? `<div class="ticket-p-field ticket-p-doc"><strong>${escapeHtml(copy.ticketPassengerDoc)}:</strong> ${escapeHtml(pd)}</div>` : ""}
+    ${pp ? `<div class="ticket-p-field ticket-p-phone"><strong>${escapeHtml(copy.ticketPassengerPhone)}:</strong> ${escapeHtml(pp)}</div>` : ""}
+    <div id="ticket-qr-wrap" class="ticket-qr-wrap" aria-hidden="true"></div>
   </div>`
-      : "";
+    : `<div class="ticket-passenger-qr-grid ticket-passenger-qr-grid--qr-only">
+    <div id="ticket-qr-wrap" class="ticket-qr-wrap" aria-hidden="true"></div>
+  </div>`;
   const isRu = language === "ru";
   const trip = {
     train: isRu ? "Поезд" : "Train",
@@ -5456,7 +5470,7 @@ function renderTicket() {
       <div class="ticket-kv"><span class="ticket-k">${trip.berth}</span><span class="ticket-v">${escapeHtml(demoTicket.berth_type)}</span></div>
       <div class="ticket-kv ticket-kv--wide"><span class="ticket-k">${trip.clazz}</span><span class="ticket-v">${escapeHtml(travelClassForTicket(demoTicket.travel_class))}</span></div>
     </div>
-    ${passBlock}
+    ${passengerQrHtml}
     ${featuresBlock}
     <small class="ticket-disclaimer">${escapeHtml(demoTicket.disclaimer)}</small>
   `;

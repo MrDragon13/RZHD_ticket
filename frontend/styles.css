@@ -758,30 +758,95 @@ html[data-theme="rzd"] .auth-otp-input {
   border-color: rgba(28, 36, 51, 0.14);
 }
 
-.ticket-passenger-block {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.ticket-passenger-qr-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 14px;
   margin: 10px 0 12px;
   padding-top: 10px;
   border-top: 1px dashed rgba(255, 255, 255, 0.18);
+  align-items: start;
+  width: 100%;
   font-size: 14px;
   line-height: 1.35;
 }
 
-.ticket-passenger-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 12px;
+.ticket-passenger-qr-grid .ticket-p-field {
+  grid-column: 1;
+  min-width: 0;
 }
 
-@container ticket (max-width: 380px) {
-  .ticket-passenger-grid {
+.ticket-passenger-qr-grid .ticket-p-name {
+  grid-column: 1 / -1;
+}
+
+.ticket-passenger-qr-grid .ticket-qr-wrap {
+  grid-column: 2;
+  align-self: center;
+  justify-self: end;
+  margin-top: 0;
+  min-height: 0;
+}
+
+.ticket-passenger-qr-grid--has-name:not(.ticket-passenger-qr-grid--name-only) .ticket-qr-wrap {
+  grid-row: 2 / -1;
+  align-self: center;
+}
+
+.ticket-passenger-qr-grid:not(.ticket-passenger-qr-grid--has-name):not(.ticket-passenger-qr-grid--qr-only) .ticket-qr-wrap {
+  grid-row: 1 / -1;
+  align-self: start;
+}
+
+.ticket-passenger-qr-grid--name-only .ticket-qr-wrap {
+  grid-row: 1;
+  grid-column: 2;
+  align-self: center;
+}
+
+.ticket-passenger-qr-grid--name-only .ticket-p-name {
+  grid-column: 1;
+}
+
+.ticket-passenger-qr-grid--qr-only {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding-top: 4px;
+  margin: 8px 0 10px;
+  border-top: none;
+}
+
+.ticket-passenger-qr-grid--qr-only .ticket-qr-wrap {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.ticket-passenger-qr-grid .ticket-qr-wrap canvas,
+.ticket-passenger-qr-grid .ticket-qr-wrap img,
+.ticket-passenger-qr-grid .ticket-qr-wrap table,
+.ticket-passenger-qr-grid .ticket-qr-wrap svg {
+  max-height: min(132px, 20dvh);
+}
+
+@container ticket (max-width: 420px) {
+  .ticket-passenger-qr-grid:not(.ticket-passenger-qr-grid--qr-only) {
     grid-template-columns: 1fr;
+  }
+  .ticket-passenger-qr-grid .ticket-p-name {
+    grid-column: 1;
+  }
+  .ticket-passenger-qr-grid .ticket-qr-wrap {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: center;
+    align-self: auto;
+  }
+  .ticket-passenger-qr-grid--has-name .ticket-qr-wrap {
+    grid-row: auto;
   }
 }
 
-html[data-theme="rzd"] .ticket-passenger-block {
+html[data-theme="rzd"] .ticket-passenger-qr-grid {
   border-top-color: rgba(28, 36, 51, 0.15);
 }
 
@@ -2802,26 +2867,6 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
   margin-top: 0;
   color: var(--green);
   text-align: center;
-}
-
-.ticket-body-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(86px, 120px);
-  gap: clamp(8px, 1.4vmin, 14px) clamp(12px, 2vmin, 18px);
-  align-items: start;
-  width: 100%;
-}
-
-@container ticket (max-width: 360px) {
-  .ticket-body-row {
-    grid-template-columns: 1fr;
-    justify-items: stretch;
-  }
-
-  .ticket-qr-wrap {
-    justify-self: center;
-    max-width: 160px;
-  }
 }
 
 .ticket-details {
