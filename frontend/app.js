@@ -700,6 +700,179 @@ function syncRouteFlowOverlay(flowEl, pathD) {
   }
 }
 
+/** Нормальные смещения от основной линии: три «региона» + rail-background (порядок как в index.html). */
+const ROUTE_DECOR_OFFSETS = [14, -22, 30, -11];
+const ROUTE_DECOR_SAMPLE_COUNT = 52;
+const ROUTE_DECOR_ANIM_MS = 520;
+
+/** @type {number | null} */
+let routeDecorRaf = null;
+/** @type {null | Array<Array<{ x: number; y: number }>>} */
+let routeDecorLayersSnapshot = null;
+/** @type {null | Array<Array<{ x: number; y: number }>>} */
+let routeDecorLastPainted = null;
+
+function cloneDecorLayers(layers) {
+  return layers.map((row) => row.map((p) => ({ x: p.x, y: p.y })));
+}
+
+/** Равномерная пересборка полилинии до заданного числа точек (для стыковки анимаций). */
+function resamplePolyline(points, targetCount) {
+  if (!points.length || targetCount < 2) return points.slice();
+  const cum = [0];
+  for (let i = 1; i < points.length; i++) {
+    cum.push(
+      cum[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y),
+    );
+  }
+  const total = cum[cum.length - 1];
+  if (total < 1e-6) {
+    const p = points[0];
+    return Array.from({ length: targetCount }, () => ({ x: p.x, y: p.y }));
+  }
+  const out = [];
+  for (let j = 0; j < targetCount; j++) {
+    const dist = (j / (targetCount - 1)) * total;
+    let seg = 0;
+    while (seg < cum.length - 1 && cum[seg + 1] < dist) seg += 1;
+    const segStart = cum[seg];
+    const segLen = cum[seg + 1] - segStart || 1e-6;
+    const u = (dist - segStart) / segLen;
+    const ax = points[seg];
+    const bx = points[seg + 1];
+    out.push({
+      x: ax.x + u * (bx.x - ax.x),
+      y: ax.y + u * (bx.y - ax.y),
+    });
+  }
+  return out;
+}
+
+function polylineToPathD(points) {
+  if (points.length < 2) return "";
+  const fmt = (v) => v.toFixed(2);
+  let d = `M ${fmt(points[0].x)} ${fmt(points[0].y)}`;
+  for (let i = 1; i < points.length; i++) {
+    d += ` L ${fmt(points[i].x)} ${fmt(points[i].y)}`;
+  }
+  return d;
+}
+
+function buildOffsetPolylineFromPath(pathD, offsetPx, sampleCount) {
+  const probe = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  probe.setAttribute("d", pathD);
+  let L;
+  try {
+    L = probe.getTotalLength();
+  } catch {
+    return [];
+  }
+  if (!Number.isFinite(L) || L < 4) return [];
+  const n = Math.max(2, sampleCount);
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i / (n - 1)) * L;
+    const p = probe.getPointAtLength(t);
+    const dt = Math.min(Math.max(L * 0.004, 2), Math.max(L - t, 1e-6));
+    const p2 = probe.getPointAtLength(Math.min(t + dt, L));
+    let dx = p2.x - p.x;
+    let dy = p2.y - p.y;
+    let len = Math.hypot(dx, dy);
+    if (len < 1e-6) {
+      dx = 1;
+      dy = 0;
+      len = 1;
+    }
+    const nx = (-dy / len) * offsetPx;
+    const ny = (dx / len) * offsetPx;
+    pts.push({ x: p.x + nx, y: p.y + ny });
+  }
+  return pts;
+}
+
+function computeDecorLayers(mainPathD) {
+  return ROUTE_DECOR_OFFSETS.map((off) =>
+    buildOffsetPolylineFromPath(mainPathD, off, ROUTE_DECOR_SAMPLE_COUNT),
+  );
+}
+
+function paintDecorLayers(layers) {
+  routeDecorLastPainted = cloneDecorLayers(layers);
+  const svgs = [
+    document.querySelector("#map-content svg.route-map"),
+    document.querySelector(".language-route-map"),
+  ].filter(Boolean);
+  for (const svg of svgs) {
+    const regions = svg.querySelectorAll(".map-region-line");
+    const rail = svg.querySelector(".rail-background");
+    if (regions.length < 3 || !rail || layers.length < 4) continue;
+    for (let i = 0; i < 3; i++) {
+      const d = polylineToPathD(layers[i]);
+      if (d) regions[i].setAttribute("d", d);
+    }
+    const rd = polylineToPathD(layers[3]);
+    if (rd) rail.setAttribute("d", rd);
+  }
+}
+
+/**
+ * Обновляет статичные декоративные линии под текущую геометрию маршрута (параллели к основной кривой).
+ * @param {string} mainPathD — атрибут `d` основной линии.
+ * @param {{ animate?: boolean; duration?: number }} [options]
+ */
+function syncDecorativeRouteLines(mainPathD, options = {}) {
+  if (!mainPathD || typeof mainPathD !== "string") return;
+  const reduceMotion = prefersReducedMotion();
+  const animate = options.animate !== false && !reduceMotion;
+  const duration = options.duration ?? ROUTE_DECOR_ANIM_MS;
+
+  const next = computeDecorLayers(mainPathD);
+  if (!next.every((layer) => layer.length >= 2)) {
+    return;
+  }
+
+  let from = routeDecorLastPainted || routeDecorLayersSnapshot;
+  if (from && from.length === next.length) {
+    from = from.map((layer, i) => resamplePolyline(layer, next[i].length));
+  } else {
+    from = null;
+  }
+
+  if (!animate || !from) {
+    if (routeDecorRaf) {
+      cancelAnimationFrame(routeDecorRaf);
+      routeDecorRaf = null;
+    }
+    paintDecorLayers(next);
+    routeDecorLayersSnapshot = cloneDecorLayers(next);
+    return;
+  }
+
+  const start = performance.now();
+  const fromSnap = cloneDecorLayers(from);
+  const toSnap = cloneDecorLayers(next);
+
+  const tick = (now) => {
+    const t = Math.min(1, (now - start) / duration);
+    const e = 1 - (1 - t) ** 3;
+    const mid = fromSnap.map((layer, li) =>
+      layer.map((p, i) => ({
+        x: p.x + (toSnap[li][i].x - p.x) * e,
+        y: p.y + (toSnap[li][i].y - p.y) * e,
+      })),
+    );
+    paintDecorLayers(mid);
+    if (t < 1) routeDecorRaf = requestAnimationFrame(tick);
+    else {
+      routeDecorRaf = null;
+      routeDecorLayersSnapshot = cloneDecorLayers(toSnap);
+    }
+  };
+
+  if (routeDecorRaf) cancelAnimationFrame(routeDecorRaf);
+  routeDecorRaf = requestAnimationFrame(tick);
+}
+
 function applyRouteGeometry(visual, labelOverride) {
   if (!routeLine || !visual?.line) return;
   routeLine.classList.remove("route-line-active");
@@ -746,6 +919,7 @@ function applyRouteGeometry(visual, labelOverride) {
     routeLineFlow.style.opacity = "0.22";
   }
   updateMapGeometry(visual, labelOverride);
+  syncDecorativeRouteLines(visual.line, { animate: !routeReduced });
 }
 
 function updateRouteMapForSelectedTrain() {
@@ -2787,6 +2961,7 @@ function applyIntroRouteGeometry(visual, labelOverride) {
       introFlow.style.opacity = "0.22";
     }
   }
+  syncDecorativeRouteLines(visual.line, { animate: !reducedMotion });
 }
 
 async function tickLanguageScreenAmbient() {
