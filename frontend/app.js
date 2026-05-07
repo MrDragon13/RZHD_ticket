@@ -701,8 +701,8 @@ function syncRouteFlowOverlay(flowEl, pathD) {
 }
 
 /** Декор карты: плавные кривые Безье между случайными точками на краю поля (не параллели маршруту); 3–10 линий. */
-const ROUTE_DECOR_SAMPLE_COUNT = 52;
-const ROUTE_DECOR_ANIM_MS = 520;
+const ROUTE_DECOR_SAMPLE_COUNT = 88;
+const ROUTE_DECOR_ANIM_MS = 640;
 const MAP_SVG_W = 900;
 const MAP_SVG_H = 520;
 const MAP_DECOR_EDGE_PAD = 26;
@@ -786,21 +786,34 @@ function buildDecorativeBezierPathD(rng, lineIndex) {
   return `M${q(s.x)} ${q(s.y)} C${q(cp1x)} ${q(cp1y)} ${q(cp2x)} ${q(cp2y)} ${q(e.x)} ${q(e.y)}`;
 }
 
-function computeDecorLayers(_mainPathD) {
+function computeDecorLayers(_mainPathD, preferredLineCount) {
   let seed = (Math.floor(Math.random() * 0xffffffff) ^ (Date.now() & 0xffffffff)) >>> 0;
   if (!seed) seed = 0x6d2b79f5;
   const rng = decorMulberry32(seed);
-  const lineCount = 3 + Math.floor(rng() * 8);
+  let lineCount;
+  if (
+    preferredLineCount != null &&
+    Number.isFinite(preferredLineCount) &&
+    preferredLineCount >= 3 &&
+    preferredLineCount <= 10
+  ) {
+    lineCount = Math.round(preferredLineCount);
+  } else {
+    lineCount = 3 + Math.floor(rng() * 8);
+  }
   const pathsD = [];
   const samples = [];
-  for (let li = 0; li < lineCount; li += 1) {
-    let d = buildDecorativeBezierPathD(rng, li);
+  let globalGuard = 0;
+  while (pathsD.length < lineCount && globalGuard < 160) {
+    globalGuard += 1;
+    const idx = pathsD.length;
+    let d = buildDecorativeBezierPathD(rng, idx + globalGuard * 3);
     let pts = samplePathDToPoints(d, ROUTE_DECOR_SAMPLE_COUNT);
-    let guard = 0;
-    while ((!pts || pts.length < 2) && guard < 14) {
-      d = buildDecorativeBezierPathD(rng, li + guard * 29);
+    let inner = 0;
+    while ((!pts || pts.length < 2) && inner < 18) {
+      d = buildDecorativeBezierPathD(rng, idx + inner * 29 + globalGuard * 11);
       pts = samplePathDToPoints(d, ROUTE_DECOR_SAMPLE_COUNT);
-      guard += 1;
+      inner += 1;
     }
     if (pts && pts.length >= 2) {
       pathsD.push(d);
@@ -970,7 +983,12 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
   const animate = options.animate !== false && !reduceMotion;
   const duration = options.duration ?? ROUTE_DECOR_ANIM_MS;
 
-  const next = computeDecorLayers(mainPathD);
+  const preferredCount =
+    routeDecorLayersSnapshot?.pathsD?.length ??
+    routeDecorLayersSnapshot?.samples?.length ??
+    (routeDecorLastPainted && routeDecorLastPainted.length >= 3 ? routeDecorLastPainted.length : null);
+
+  const next = computeDecorLayers(mainPathD, preferredCount);
   if (
     !next.samples.length ||
     next.samples.length < 3 ||
@@ -1007,7 +1025,7 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
 
   const tick = (now) => {
     const t = Math.min(1, (now - start) / duration);
-    const e = 1 - (1 - t) ** 3;
+    const e = t * t * (3 - 2 * t);
     const mid = fromSnap.map((layer, li) =>
       layer.map((p, i) => ({
         x: p.x + (toSnapSamples[li][i].x - p.x) * e,
@@ -5942,6 +5960,12 @@ function resetScenario(announce = true) {
   speechQueue = [];
   isSpeaking = false;
   dynamicRouteCache = { key: "", geom: null };
+  routeDecorLayersSnapshot = null;
+  routeDecorLastPainted = null;
+  if (routeDecorRaf != null) {
+    cancelAnimationFrame(routeDecorRaf);
+    routeDecorRaf = null;
+  }
   setUiInteractionLocked(false);
   hideDataSourceBanner();
   hideBackendHealthBanner();
