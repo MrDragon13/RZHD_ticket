@@ -190,15 +190,23 @@ async def recommend_trains(
                 reordered.append(by_id[tid])
         ranked = reordered if len(reordered) == len(ranked) else ranked
 
-    recommendations = [
-        Recommendation(
-            train_id=train.id,
-            score=round(score, 2),
-            badges=badges[:3] or (["Лучший выбор"] if request.language == "ru" else ["Best choice"]),
-            explanation=_fallback_explanation(train, badges, request.language),
+    def _default_badge_for_rank(i: int) -> list[str]:
+        """Когда эвристика не выдала ни одного бейджа, раньше подставлялся «Лучший выбор» всем — в UI выглядело как массовая плашка. Оставляем «лучший» только у лидера рейтинга."""
+        if i == 0:
+            return ["Лучший выбор"] if request.language == "ru" else ["Best choice"]
+        return ["Альтернатива"] if request.language == "ru" else ["Alternative"]
+
+    recommendations: list[Recommendation] = []
+    for i, (train, score, badges) in enumerate(ranked):
+        rec_badges = badges[:3] if badges[:3] else _default_badge_for_rank(i)
+        recommendations.append(
+            Recommendation(
+                train_id=train.id,
+                score=round(score, 2),
+                badges=rec_badges,
+                explanation=_fallback_explanation(train, badges, request.language),
+            )
         )
-        for train, score, badges in ranked
-    ]
 
     if not recommendations:
         empty_text = (

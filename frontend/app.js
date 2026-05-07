@@ -3267,15 +3267,28 @@ function renderTrains() {
   list.innerHTML = "";
   const highlightId = getTrainHighlightId();
   const frag = document.createDocumentFragment();
-  getTrainsForUi().forEach((train) => {
+  const uiTrains = getTrainsForUi();
+  const topPickId = recommendations[0]?.train_id || uiTrains[0]?.id || null;
+  uiTrains.forEach((train) => {
     const recommendation = recommendationFor(train.id);
     const card = document.createElement("article");
     card.dataset.trainId = train.id;
     card.className = `train-card ${train.id === highlightId ? "train-card-best" : ""}`;
+    const apiBadge = recommendation?.badges?.[0];
+    const hasApiBadge = apiBadge != null && String(apiBadge).trim() !== "";
+    const badgeLabel = hasApiBadge
+      ? String(apiBadge)
+      : train.id === topPickId
+        ? language === "ru"
+          ? "Лучший выбор"
+          : "Best choice"
+        : language === "ru"
+          ? "Вариант"
+          : "Option";
     card.innerHTML = `
       <div class="train-card-header">
         <span class="train-number">${train.train_number}</span>
-        <span class="badge">${recommendation?.badges?.[0] || (language === "ru" ? "Лучший выбор" : "Best choice")}</span>
+        <span class="badge">${escapeHtml(badgeLabel)}</span>
       </div>
       <div class="timeline">
         <strong>${train.departure_time}</strong>
@@ -3305,7 +3318,7 @@ function renderTrains() {
     frag.append(card);
   });
   list.append(frag);
-  if (getTrainsForUi().length === 0) {
+  if (uiTrains.length === 0) {
     selectedTrain = null;
     checkoutPanel.classList.add("hidden");
   }
