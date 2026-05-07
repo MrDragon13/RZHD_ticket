@@ -5,7 +5,7 @@
     <!-- Версия статики и ключ темы — одна пара констант ниже; app.js читает window.PATH_* -->
     <script>
       (function () {
-        var ASSET_VERSION = "202605133";
+        var ASSET_VERSION = "202605135";
         var THEME_KEY = "path-theme-v3-default-rzd";
         window.PATH_ASSET_VERSION = ASSET_VERSION;
         window.PATH_THEME_STORAGE_KEY = THEME_KEY;
@@ -657,7 +657,7 @@
     <!-- Порядок: api-client → app-i18n → app → qrcode. Версия query = window.PATH_ASSET_VERSION из <head>. -->
     <script>
       (function () {
-        var v = window.PATH_ASSET_VERSION || "202605133";
+        var v = window.PATH_ASSET_VERSION || "202605135";
         var queue = ["./api-client.js", "./app-i18n.js", "./app.js"];
         var i = 0;
         function next() {

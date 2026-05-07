@@ -980,13 +980,14 @@ function paintDecorBezierPaths(pathDs) {
 /**
  * Декоративные линии: при каждой генерации новые плавные кривые по краю поля (см. computeDecorLayers).
  * @param {string} mainPathD — атрибут `d` основной линии (триггер перегенерации; форма декора от него не зависит).
- * @param {{ animate?: boolean; duration?: number }} [options]
+ * @param {{ animate?: boolean; duration?: number; easing?: 'smoothstep' | 'cubicOut' }} [options]
  */
 function syncDecorativeRouteLines(mainPathD, options = {}) {
   if (!mainPathD || typeof mainPathD !== "string") return;
   const reduceMotion = prefersReducedMotion();
   const animate = options.animate !== false && !reduceMotion;
   const duration = options.duration ?? ROUTE_DECOR_ANIM_MS;
+  const easing = options.easing === "cubicOut" ? "cubicOut" : "smoothstep";
 
   const preferredCount =
     routeDecorLayersSnapshot?.pathsD?.length ??
@@ -1030,7 +1031,7 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
 
   const tick = (now) => {
     const t = Math.min(1, (now - start) / duration);
-    const e = t * t * (3 - 2 * t);
+    const e = easing === "cubicOut" ? 1 - (1 - t) ** 3 : t * t * (3 - 2 * t);
     const mid = fromSnap.map((layer, li) =>
       layer.map((p, i) => ({
         x: p.x + (toSnapSamples[li][i].x - p.x) * e,
@@ -1106,9 +1107,8 @@ function applyRouteGeometry(visual, labelOverride) {
     updateMapGeometry(visual, labelOverride);
   };
 
-  syncDecorativeRouteLines(visual.line, { animate: !routeReduced });
-
   if (routeReduced || hasClip) {
+    syncDecorativeRouteLines(visual.line, { animate: false });
     finalizeTerminalRouteLine();
     return;
   }
@@ -1130,6 +1130,7 @@ function applyRouteGeometry(visual, labelOverride) {
   const targetD = visual.line;
 
   if (!prevD.trim() || prevD === targetD) {
+    syncDecorativeRouteLines(visual.line, { animate: false });
     finalizeTerminalRouteLine();
     return;
   }
@@ -1137,12 +1138,19 @@ function applyRouteGeometry(visual, labelOverride) {
   let fromPts = samplePathDToPoints(prevD, ROUTE_MAIN_MORPH_SAMPLES);
   let toPts = samplePathDToPoints(targetD, ROUTE_MAIN_MORPH_SAMPLES);
   if (!fromPts || !toPts) {
+    syncDecorativeRouteLines(visual.line, { animate: false });
     finalizeTerminalRouteLine();
     return;
   }
   if (fromPts.length !== toPts.length) {
     fromPts = resamplePolyline(fromPts, toPts.length);
   }
+
+  syncDecorativeRouteLines(visual.line, {
+    animate: true,
+    duration: ROUTE_MAIN_MORPH_MS,
+    easing: "cubicOut",
+  });
 
   const start = performance.now();
 
@@ -3211,9 +3219,8 @@ function applyIntroRouteGeometry(visual, labelOverride) {
     }
   };
 
-  syncDecorativeRouteLines(visual.line, { animate: !reducedMotion });
-
   if (reducedMotion) {
+    syncDecorativeRouteLines(visual.line, { animate: false });
     finalizeIntroRouteLine();
     return;
   }
@@ -3236,6 +3243,7 @@ function applyIntroRouteGeometry(visual, labelOverride) {
   const targetD = visual.line;
 
   if (!prevD.trim() || prevD === targetD) {
+    syncDecorativeRouteLines(visual.line, { animate: false });
     finalizeIntroRouteLine();
     return;
   }
@@ -3243,12 +3251,19 @@ function applyIntroRouteGeometry(visual, labelOverride) {
   let fromPts = samplePathDToPoints(prevD, ROUTE_MAIN_MORPH_SAMPLES);
   let toPts = samplePathDToPoints(targetD, ROUTE_MAIN_MORPH_SAMPLES);
   if (!fromPts || !toPts) {
+    syncDecorativeRouteLines(visual.line, { animate: false });
     finalizeIntroRouteLine();
     return;
   }
   if (fromPts.length !== toPts.length) {
     fromPts = resamplePolyline(fromPts, toPts.length);
   }
+
+  syncDecorativeRouteLines(visual.line, {
+    animate: true,
+    duration: ROUTE_MAIN_MORPH_MS,
+    easing: "cubicOut",
+  });
 
   const start = performance.now();
 
