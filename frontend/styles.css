@@ -4074,7 +4074,7 @@ html[data-theme="rzd"] {
   --orb-think-inner: rgba(58, 99, 216, 0.12);
   --orb-speak-glow-a: rgba(214, 31, 52, 0.42);
   --orb-speak-glow-b: rgba(58, 99, 216, 0.32);
-  --fact-card-bg: linear-gradient(135deg, rgba(232, 248, 244, 0.96), rgba(240, 252, 248, 0.88));
+  --fact-card-bg: linear-gradient(135deg, rgba(232, 248, 244, 0.82), rgba(240, 252, 248, 0.72));
   --train-best-border: rgba(214, 31, 52, 0.28);
   --train-best-shadow: rgba(30, 36, 48, 0.12);
   --train-selected-bg: rgba(58, 99, 216, 0.06);
