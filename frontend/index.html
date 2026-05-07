@@ -16,7 +16,7 @@
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Путь — умный билетный терминал</title>
-    <link rel="stylesheet" href="./styles.css?v=202605109" />
+    <link rel="stylesheet" href="./styles.css?v=202605112" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -200,13 +200,17 @@
 
             <div id="auth-step-phone" class="auth-step">
               <label id="auth-phone-label" class="auth-label" for="auth-phone-display">Мобильный телефон</label>
-              <div
+              <input
                 id="auth-phone-display"
                 class="auth-phone-display"
-                tabindex="0"
-                role="textbox"
-                aria-readonly="true"
-              ></div>
+                type="text"
+                inputmode="numeric"
+                autocomplete="tel-national"
+                spellcheck="false"
+                autocorrect="off"
+                autocapitalize="none"
+                aria-required="true"
+              />
               <div id="auth-vkeyboard-phone" class="vkeyboard" aria-label="Экранная клавиатура"></div>
               <button type="button" id="auth-phone-clear" class="ghost-button auth-secondary-btn">Очистить</button>
               <button type="button" id="auth-phone-continue" class="primary-button auth-primary-btn" disabled>
@@ -598,7 +602,7 @@
 
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
     <script src="./api-client.js?v=202605091"></script>
-    <script src="./app.js?v=202605111"></script>
+    <script src="./app.js?v=202605112"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>

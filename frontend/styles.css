@@ -635,6 +635,9 @@ html[data-a11y-vision] .text-input-toggle {
 }
 
 .auth-phone-display {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: clamp(1rem, 3.2vmin, 1.375rem);
   letter-spacing: 0.04em;
@@ -642,8 +645,18 @@ html[data-a11y-vision] .text-input-toggle {
   border-radius: 12px;
   border: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
   margin-bottom: 10px;
   min-height: clamp(46px, 10vmin, 52px);
+}
+
+.auth-phone-display:focus {
+  outline: none;
+}
+
+.auth-phone-display:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent, #00e5ff) 70%, var(--text));
+  outline-offset: 2px;
 }
 
 .auth-hint {

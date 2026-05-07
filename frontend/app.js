@@ -1983,8 +1983,61 @@ function formatPhoneMaskDisplay(digits) {
 }
 
 function updateAuthPhoneChrome() {
-  if (authPhoneDisplay) authPhoneDisplay.textContent = formatPhoneMaskDisplay(authPhoneDigits);
+  if (authPhoneDisplay) {
+    const masked = formatPhoneMaskDisplay(authPhoneDigits);
+    if (authPhoneDisplay.tagName === "INPUT") authPhoneDisplay.value = masked;
+    else authPhoneDisplay.textContent = masked;
+  }
   if (authPhoneContinueBtn) authPhoneContinueBtn.disabled = authPhoneDigits.length !== 10;
+}
+
+/** Физическая клавиатура и вставка: только цифры, до 10 — маска как у экранной клавиатуры. */
+function initAuthPhoneFieldInput() {
+  if (!authPhoneDisplay || authPhoneDisplay.tagName !== "INPUT") return;
+
+  authPhoneDisplay.addEventListener("input", () => {
+    const only = (authPhoneDisplay.value || "").replace(/\D/g, "").slice(0, 10);
+    authPhoneDigits = only.split("");
+    updateAuthPhoneChrome();
+    touchGlobalIdle();
+  });
+
+  authPhoneDisplay.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    const nav = [
+      "Tab",
+      "Escape",
+      "Enter",
+      "Backspace",
+      "Delete",
+      "ArrowLeft",
+      "ArrowRight",
+      "ArrowUp",
+      "ArrowDown",
+      "Home",
+      "End",
+    ];
+    if (nav.includes(k)) {
+      if (k === "Enter" && authPhoneDigits.length === 10) {
+        e.preventDefault();
+        void runAuthOtpPhase();
+      }
+      return;
+    }
+    if (k.length === 1 && !/[0-9]/.test(k)) {
+      e.preventDefault();
+    }
+  });
+
+  authPhoneDisplay.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData)?.getData("text") || "";
+    const only = text.replace(/\D/g, "").slice(0, 10);
+    authPhoneDigits = only.split("");
+    updateAuthPhoneChrome();
+    touchGlobalIdle();
+  });
 }
 
 function authPhoneInputDigit(d) {
@@ -2242,6 +2295,13 @@ async function transitionLanguageToAuth() {
     lang.classList.add("hidden");
     auth.classList.remove("hidden");
     syncTopbarA11yVisibility();
+    requestAnimationFrame(() => {
+      try {
+        if (authPhoneDisplay?.tagName === "INPUT") authPhoneDisplay.focus();
+      } catch {
+        /* ignore */
+      }
+    });
     return;
   }
   lang.classList.add("screen-motion-leave-out-up");
@@ -2256,6 +2316,15 @@ async function transitionLanguageToAuth() {
     });
   });
   syncTopbarA11yVisibility();
+  requestAnimationFrame(() => {
+    try {
+      if (authPhoneDisplay?.tagName === "INPUT" && authStepPhone && !authStepPhone.classList.contains("hidden")) {
+        authPhoneDisplay.focus();
+      }
+    } catch {
+      /* ignore */
+    }
+  });
 }
 
 async function transitionAuthToTerminal() {
@@ -2373,6 +2442,7 @@ initSupportChatModal();
 initCompareTrainModal();
 initPathLogModal();
 initA11yVisionToggle();
+initAuthPhoneFieldInput();
 
 window.pathTerminalIdleFetchBegin = beginIdlePause;
 window.pathTerminalIdleFetchEnd = endIdlePause;
@@ -2384,6 +2454,11 @@ if (sessionLogoutButton) {
 if (authPhoneClearBtn) {
   authPhoneClearBtn.addEventListener("click", () => {
     resetAuthFlow();
+    try {
+      if (authPhoneDisplay?.tagName === "INPUT") authPhoneDisplay.focus();
+    } catch {
+      /* ignore */
+    }
     touchGlobalIdle();
   });
 }
