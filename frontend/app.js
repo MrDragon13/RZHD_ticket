@@ -700,7 +700,7 @@ function syncRouteFlowOverlay(flowEl, pathD) {
   }
 }
 
-/** Декор карты: плавные кривые Безье между случайными точками на краю поля (не параллели маршруту); 3–10 линий. */
+/** Декор карты: плавные кривые Безье между случайными точками на краю поля (не параллели маршруту); 2–7 линий. */
 const ROUTE_DECOR_SAMPLE_COUNT = 88;
 const ROUTE_DECOR_ANIM_MS = 640;
 const MAP_SVG_W = 900;
@@ -743,40 +743,45 @@ function buildDecorativeBezierPathD(rng, lineIndex) {
   let s = pickPointOnMapEdge(rng);
   let e = pickPointOnMapEdge(rng);
   let tries = 0;
-  while (Math.hypot(e.x - s.x, e.y - s.y) < 135 && tries < 48) {
+  while (Math.hypot(e.x - s.x, e.y - s.y) < 125 && tries < 48) {
     e = pickPointOnMapEdge(rng);
     tries += 1;
   }
 
-  if (rng() > 0.64) {
-    const mx = rx(130, 770);
-    const my = rx(55, 465);
-    const c1x = clampDecorCoord(rx(30, 870), 12, 888);
-    const c1y = clampDecorCoord(rx(24, 496), 12, 508);
-    const c2x = clampDecorCoord(rx(30, 870), 12, 888);
-    const c2y = clampDecorCoord(rx(24, 496), 12, 508);
-    const c3x = clampDecorCoord(rx(30, 870), 12, 888);
-    const c3y = clampDecorCoord(rx(24, 496), 12, 508);
-    const c4x = clampDecorCoord(rx(30, 870), 12, 888);
-    const c4y = clampDecorCoord(rx(24, 496), 12, 508);
-    return `M${q(s.x)} ${q(s.y)} C${q(c1x)} ${q(c1y)} ${q(c2x)} ${q(c2y)} ${q(mx)} ${q(my)} C${q(c3x)} ${q(c3y)} ${q(c4x)} ${q(c4y)} ${q(e.x)} ${q(e.y)}`;
-  }
-
-  const mx = (s.x + e.x) / 2;
-  const my = (s.y + e.y) / 2;
   const vx = e.x - s.x;
   const vy = e.y - s.y;
   const len = Math.hypot(vx, vy) || 1;
   const px = -vy / len;
   const py = vx / len;
-  const bend = (rng() - 0.5) * (150 + lineIndex * 20 + rng() * 210);
-  const lift1 = 0.34 + rng() * 0.44;
-  const lift2 = 0.26 + rng() * 0.4;
+  // Меньшая амплитуда изгиба и джиттер у контрольных точек — более плавные дуги.
+  const bendAmp = (rng() - 0.5) * (56 + lineIndex * 9 + rng() * 76);
 
-  let cp1x = mx + px * bend * lift1 + rx(-125, 125);
-  let cp1y = my + py * bend * lift1 + rx(-105, 105);
-  let cp2x = mx + px * bend * -lift2 + rx(-135, 135);
-  let cp2y = my + py * bend * -lift2 + rx(-110, 110);
+  if (rng() > 0.58) {
+    const tMid = 0.36 + rng() * 0.28;
+    const mx = s.x + vx * tMid + px * bendAmp * (0.19 + rng() * 0.13);
+    const my = s.y + vy * tMid + py * bendAmp * (0.19 + rng() * 0.13);
+    const f1 = 0.22 + rng() * 0.18;
+    const f2 = 0.46 + rng() * 0.18;
+    const c1x = clampDecorCoord(s.x + vx * f1 + px * bendAmp * 0.24 + rx(-42, 42), 12, 888);
+    const c1y = clampDecorCoord(s.y + vy * f1 + py * bendAmp * 0.24 + rx(-36, 36), 12, 508);
+    const c2x = clampDecorCoord(mx - vx * 0.08 + px * bendAmp * 0.17 + rx(-42, 42), 12, 888);
+    const c2y = clampDecorCoord(my - vy * 0.08 + py * bendAmp * 0.17 + rx(-36, 36), 12, 508);
+    const c3x = clampDecorCoord(mx + vx * 0.1 + px * bendAmp * -0.19 + rx(-42, 42), 12, 888);
+    const c3y = clampDecorCoord(my + vy * 0.1 + py * bendAmp * -0.19 + rx(-36, 36), 12, 508);
+    const c4x = clampDecorCoord(e.x - vx * f2 + px * bendAmp * -0.22 + rx(-42, 42), 12, 888);
+    const c4y = clampDecorCoord(e.y - vy * f2 + py * bendAmp * -0.22 + rx(-36, 36), 12, 508);
+    return `M${q(s.x)} ${q(s.y)} C${q(c1x)} ${q(c1y)} ${q(c2x)} ${q(c2y)} ${q(mx)} ${q(my)} C${q(c3x)} ${q(c3y)} ${q(c4x)} ${q(c4y)} ${q(e.x)} ${q(e.y)}`;
+  }
+
+  const mx = (s.x + e.x) / 2;
+  const my = (s.y + e.y) / 2;
+  const lift1 = 0.36 + rng() * 0.36;
+  const lift2 = 0.28 + rng() * 0.34;
+
+  let cp1x = mx + px * bendAmp * lift1 + rx(-68, 68);
+  let cp1y = my + py * bendAmp * lift1 + rx(-56, 56);
+  let cp2x = mx + px * bendAmp * -lift2 + rx(-70, 70);
+  let cp2y = my + py * bendAmp * -lift2 + rx(-56, 56);
 
   cp1x = clampDecorCoord(cp1x, 12, 888);
   cp1y = clampDecorCoord(cp1y, 12, 508);
@@ -794,12 +799,12 @@ function computeDecorLayers(_mainPathD, preferredLineCount) {
   if (
     preferredLineCount != null &&
     Number.isFinite(preferredLineCount) &&
-    preferredLineCount >= 3 &&
-    preferredLineCount <= 10
+    preferredLineCount >= 2 &&
+    preferredLineCount <= 7
   ) {
     lineCount = Math.round(preferredLineCount);
   } else {
-    lineCount = 3 + Math.floor(rng() * 8);
+    lineCount = 2 + Math.floor(rng() * 6);
   }
   const pathsD = [];
   const samples = [];
@@ -986,12 +991,12 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
   const preferredCount =
     routeDecorLayersSnapshot?.pathsD?.length ??
     routeDecorLayersSnapshot?.samples?.length ??
-    (routeDecorLastPainted && routeDecorLastPainted.length >= 3 ? routeDecorLastPainted.length : null);
+    (routeDecorLastPainted && routeDecorLastPainted.length >= 2 ? routeDecorLastPainted.length : null);
 
   const next = computeDecorLayers(mainPathD, preferredCount);
   if (
     !next.samples.length ||
-    next.samples.length < 3 ||
+    next.samples.length < 2 ||
     !next.pathsD.length ||
     next.pathsD.length !== next.samples.length
   ) {
