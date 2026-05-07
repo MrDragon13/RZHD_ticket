@@ -849,6 +849,11 @@ let routeDecorLastPainted = null;
 /** Увеличивается при каждой перегенерации декора — в XOR seed, чтобы снова случайно 2–7 линий, не «как при загрузке». */
 let routeDecorResyncGen = 0;
 
+/** Снимок терминальной карты до морфа — интерполяция точек отправления/прибытия вместе с линией. */
+let lastTerminalRouteMapVisual = null;
+/** Снимок карты на экране выбора языка (аналогично). */
+let lastIntroRouteMapVisual = null;
+
 function cloneDecorLayers(layers) {
   return layers.map((row) => row.map((p) => ({ x: p.x, y: p.y })));
 }
@@ -994,7 +999,7 @@ function paintDecorBezierPaths(pathDs) {
 /**
  * Декоративные линии: при каждой синхронизации новый случайный набор 2–7 кривых (seed от пары городов + счётчик смен).
  * @param {string} mainPathD — атрибут `d` основной линии (триггер перегенерации; форма декора от него не зависит).
- * @param {{ animate?: boolean; duration?: number; easing?: 'smoothstep' | 'cubicOut'; originRaw?: string; destinationRaw?: string }} [options]
+ * @param {{ animate?: boolean; duration?: number; easing?: 'smoothstep' | 'cubicOut'; originRaw?: string; destinationRaw?: string; morphSyncStart?: number }} [options]
  */
 function syncDecorativeRouteLines(mainPathD, options = {}) {
   if (!mainPathD || typeof mainPathD !== "string") return;
@@ -1036,7 +1041,10 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
     return;
   }
 
-  const start = performance.now();
+  const start =
+    typeof options.morphSyncStart === "number" && Number.isFinite(options.morphSyncStart)
+      ? options.morphSyncStart
+      : performance.now();
   const fromSnap = cloneDecorLayers(from);
   const toSnapSamples = cloneDecorLayers(next.samples);
   const toPathsD = next.pathsD.slice();
@@ -1128,6 +1136,7 @@ function applyRouteGeometry(visual, labelOverride) {
     }
 
     updateMapGeometry(visual, labelOverride);
+    lastTerminalRouteMapVisual = snapshotRouteMapVisual(visual);
   };
 
   if (routeReduced) {
@@ -1169,13 +1178,13 @@ function applyRouteGeometry(visual, labelOverride) {
     fromPts = resamplePolyline(fromPts, toPts.length);
   }
 
-  syncDecorativeRouteLines(visual.line, decorMorphOpts);
-
-  const start = performance.now();
+  const prevRouteMapSnap = lastTerminalRouteMapVisual;
+  const morphSyncStart = performance.now();
+  syncDecorativeRouteLines(visual.line, { ...decorMorphOpts, morphSyncStart });
 
   const tick = (now) => {
     if (morphTerminalRouteCtx.gen !== myGen) return;
-    const u = Math.min(1, (now - start) / ROUTE_MAIN_MORPH_MS);
+    const u = Math.min(1, (now - morphSyncStart) / ROUTE_MAIN_MORPH_MS);
     const e = 1 - (1 - u) ** 3;
     const midPts = fromPts.map((p, i) => ({
       x: p.x + (toPts[i].x - p.x) * e,
@@ -1184,6 +1193,7 @@ function applyRouteGeometry(visual, labelOverride) {
     const dMid = polylineToPathD(midPts);
     routeLine.setAttribute("d", dMid);
     if (routeLineFlow && dMid) routeLineFlow.setAttribute("d", dMid);
+    updateMapGeometry(buildMorphingRouteMapVisual(visual, midPts, prevRouteMapSnap, e), labelOverride);
     if (u < 1) {
       morphTerminalRouteCtx.raf = requestAnimationFrame(tick);
     } else {
@@ -3021,6 +3031,60 @@ function clearRouteStopRevealTimers() {
   routeStopRevealTimeouts = [];
 }
 
+function snapshotRouteMapVisual(visual) {
+  if (!visual) return null;
+  return {
+    origin: visual.origin ? { ...visual.origin } : null,
+    destination: visual.destination ? { ...visual.destination } : null,
+    stops: Array.isArray(visual.stops) ? visual.stops.slice() : [],
+    line: visual.line,
+    routeClip: visual.routeClip && typeof visual.routeClip === "object" ? { ...visual.routeClip } : null,
+  };
+}
+
+function lerpRouteLabel(prevVal, tgtVal, fb, easing01) {
+  const a = prevVal != null && Number.isFinite(prevVal) ? prevVal : fb;
+  const b = tgtVal != null && Number.isFinite(tgtVal) ? tgtVal : fb;
+  return a + (b - a) * easing01;
+}
+
+/**
+ * Промежуточный visual для карты: концы линии из точек морфа + подписи между предыдущим и целевым кадром.
+ */
+function buildMorphingRouteMapVisual(visual, midPts, prevSnap, easing01) {
+  const e = easing01;
+  const n = midPts.length;
+  if (n < 2) return visual;
+  const defaultDest = routeVisuals.default?.destination;
+  const tgtO = visual.origin || DEFAULT_ROUTE_ORIGIN;
+  const tgtD = visual.destination || defaultDest;
+  const prevO = prevSnap?.origin;
+  const prevDpt = prevSnap?.destination;
+  const ox = midPts[0].x;
+  const oy = midPts[0].y;
+  const dx = midPts[n - 1].x;
+  const dy = midPts[n - 1].y;
+  const lineStr = polylineToPathD(midPts);
+  const stopsUse = e >= 1 - 1e-6 ? visual.stops || [] : [];
+  return {
+    ...visual,
+    origin: {
+      x: ox,
+      y: oy,
+      labelX: lerpRouteLabel(prevO?.labelX, tgtO.labelX, ox - 43, e),
+      labelY: lerpRouteLabel(prevO?.labelY, tgtO.labelY, oy + 36, e),
+    },
+    destination: {
+      x: dx,
+      y: dy,
+      labelX: lerpRouteLabel(prevDpt?.labelX, tgtD.labelX, dx - 58, e),
+      labelY: lerpRouteLabel(prevDpt?.labelY, tgtD.labelY, dy - 22, e),
+    },
+    line: lineStr,
+    stops: stopsUse,
+  };
+}
+
 function updateMapGeometry(visual, labelOverride) {
   const destPt = visual?.destination ?? routeVisuals.default.destination;
   if (!destPt) return;
@@ -3247,6 +3311,7 @@ function applyIntroRouteGeometry(visual, labelOverride) {
         introFlowDone.style.opacity = "0.22";
       }
     }
+    lastIntroRouteMapVisual = snapshotRouteMapVisual(visual);
   };
 
   if (reducedMotion) {
@@ -3289,13 +3354,13 @@ function applyIntroRouteGeometry(visual, labelOverride) {
     fromPts = resamplePolyline(fromPts, toPts.length);
   }
 
-  syncDecorativeRouteLines(visual.line, decorIntroMorphOpts);
-
-  const start = performance.now();
+  const prevIntroMapSnap = lastIntroRouteMapVisual;
+  const introMorphSyncStart = performance.now();
+  syncDecorativeRouteLines(visual.line, { ...decorIntroMorphOpts, morphSyncStart: introMorphSyncStart });
 
   const tick = (now) => {
     if (morphLanguageRouteCtx.gen !== myGen) return;
-    const u = Math.min(1, (now - start) / ROUTE_MAIN_MORPH_MS);
+    const u = Math.min(1, (now - introMorphSyncStart) / ROUTE_MAIN_MORPH_MS);
     const e = 1 - (1 - u) ** 3;
     const midPts = fromPts.map((p, i) => ({
       x: p.x + (toPts[i].x - p.x) * e,
@@ -3304,6 +3369,7 @@ function applyIntroRouteGeometry(visual, labelOverride) {
     const dMid = polylineToPathD(midPts);
     introLine.setAttribute("d", dMid);
     if (introFlowEl && dMid) introFlowEl.setAttribute("d", dMid);
+    updateIntroMapGeometry(buildMorphingRouteMapVisual(visual, midPts, prevIntroMapSnap, e), labelOverride);
     if (u < 1) {
       morphLanguageRouteCtx.raf = requestAnimationFrame(tick);
     } else {
@@ -6009,6 +6075,8 @@ function resetScenario(announce = true) {
   routeDecorLayersSnapshot = null;
   routeDecorLastPainted = null;
   routeDecorResyncGen = 0;
+  lastTerminalRouteMapVisual = null;
+  lastIntroRouteMapVisual = null;
   if (routeDecorRaf != null) {
     cancelAnimationFrame(routeDecorRaf);
     routeDecorRaf = null;
