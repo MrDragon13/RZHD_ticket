@@ -1730,6 +1730,7 @@ const routePanel = document.querySelector("#route-panel");
 const checkoutTrainSummary = document.querySelector("#checkout-train-summary");
 const checkoutTrainSummaryBody = document.querySelector("#checkout-train-summary-body");
 const checkoutTrainSummaryLabel = document.querySelector("#checkout-train-summary-label");
+const checkoutSeatConfirmWrap = document.querySelector("#checkout-seat-confirm-wrap");
 const checkoutButton = document.querySelector("#checkout-button");
 const checkoutLoadingEl = document.querySelector("#checkout-loading");
 const compareTrainsStartBtn = document.querySelector("#compare-trains-start");
@@ -4496,6 +4497,10 @@ function hideCheckoutTrainSummary() {
   checkoutTrainSummary.setAttribute("aria-hidden", "true");
 }
 
+function setCheckoutSeatConfirmBarVisible(visible) {
+  checkoutSeatConfirmWrap?.classList.toggle("hidden", !visible);
+}
+
 async function enterCheckoutWorkspaceMode() {
   if (!checkoutWorkspace || !mainWorkspace || !checkoutMapHost || !mapContent || !routePanel) return;
   if (prefersReducedMotion()) {
@@ -4521,6 +4526,7 @@ function exitCheckoutWorkspaceMode() {
   seatPickerPanel.classList.add("hidden");
   ticketPanel.classList.add("hidden");
   hideCheckoutTrainSummary();
+  setCheckoutSeatConfirmBarVisible(false);
   checkoutWorkspace.classList.add("hidden");
   mainWorkspace.classList.remove("hidden");
   if (mapContent.parentElement !== routePanel) {
@@ -4552,6 +4558,7 @@ async function showSeatPicker() {
       : "Choose a car and seats on the layout. Multiple seats are allowed.",
   );
   document.querySelector("#checkout-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  setCheckoutSeatConfirmBarVisible(true);
 }
 
 function renderCarriageTabs() {
@@ -5083,6 +5090,7 @@ function playTicketConfirmCelebration() {
 }
 
 function renderTicket() {
+  setCheckoutSeatConfirmBarVisible(false);
   seatPickerPanel.classList.add("hidden");
   mapContent.classList.remove("hidden");
   ticketPanel.classList.remove("hidden");

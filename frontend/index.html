@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Путь — умный билетный терминал</title>
-    <link rel="stylesheet" href="./styles.css?v=202605107" />
+    <link rel="stylesheet" href="./styles.css?v=202605108" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -389,9 +389,6 @@
                   aria-hidden="true"
                 ></div>
                 <div id="seat-grid" class="seat-grid" role="group"></div>
-                <div class="seat-picker-actions">
-                  <button id="confirm-seats-button" type="button" class="primary-button" disabled>Подтвердить</button>
-                </div>
               </div>
             </section>
 
@@ -408,11 +405,23 @@
             </section>
           </section>
           <aside id="checkout-side-panel" class="map-panel checkout-side-stack">
-            <section id="checkout-train-summary" class="checkout-train-summary hidden" aria-hidden="true">
-              <p id="checkout-train-summary-label" class="checkout-train-summary-label"></p>
-              <div id="checkout-train-summary-body" class="checkout-train-summary-body"></div>
-            </section>
-            <div id="checkout-map-host" class="checkout-map-host"></div>
+            <div class="checkout-side-scroll">
+              <section id="checkout-train-summary" class="checkout-train-summary hidden" aria-hidden="true">
+                <p id="checkout-train-summary-label" class="checkout-train-summary-label"></p>
+                <div id="checkout-train-summary-body" class="checkout-train-summary-body"></div>
+              </section>
+              <div id="checkout-map-host" class="checkout-map-host"></div>
+            </div>
+            <div id="checkout-seat-confirm-wrap" class="checkout-seat-confirm-wrap hidden">
+              <button
+                id="confirm-seats-button"
+                type="button"
+                class="primary-button checkout-seat-confirm-btn"
+                disabled
+              >
+                Подтвердить
+              </button>
+            </div>
           </aside>
         </div>
       </section>
@@ -577,7 +586,7 @@
 
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
     <script src="./api-client.js?v=202605091"></script>
-    <script src="./app.js?v=202605106"></script>
+    <script src="./app.js?v=202605108"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>

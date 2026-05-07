@@ -1253,10 +1253,43 @@ body.ui-interaction-locked #user-input {
 .checkout-side-stack {
   display: flex;
   flex-direction: column;
-  gap: 18px;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  gap: 0;
+}
+
+.checkout-side-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+
+.checkout-seat-confirm-wrap {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding-top: clamp(10px, 1.8vmin, 16px);
+  margin-top: 0;
+  border-top: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), var(--panel));
+}
+
+.checkout-seat-confirm-wrap.hidden {
+  display: none !important;
+}
+
+.checkout-seat-confirm-btn {
+  width: 100%;
+  min-height: clamp(48px, 9vmin, 56px);
+  font-size: clamp(14px, 2.4vmin, 16px);
+  font-weight: 800;
 }
 
 .checkout-map-host {
@@ -1282,6 +1315,11 @@ body.ui-interaction-locked #user-input {
   padding-left: 4px;
   padding-right: 8px;
   align-items: flex-start;
+}
+
+html[data-theme="rzd"] .checkout-seat-confirm-wrap {
+  border-top-color: rgba(28, 36, 51, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), #fbfcfe);
 }
 
 .checkout-map-host #route-state {
@@ -2765,12 +2803,6 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
   border-style: dashed;
 }
 
-.seat-picker-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.ticket-panel {
   min-height: 100%;
   display: flex;
   flex-direction: column;
