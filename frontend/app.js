@@ -724,7 +724,7 @@ function syncRouteFlowOverlay(flowEl, pathD) {
 
 /** Декор карты: плавные кривые Безье между случайными точками на краю поля (не параллели маршруту); 2–7 линий. */
 const ROUTE_DECOR_SAMPLE_COUNT = 88;
-const ROUTE_DECOR_ANIM_MS = 640;
+const ROUTE_DECOR_ANIM_MS = 1280;
 const MAP_SVG_W = 900;
 const MAP_SVG_H = 520;
 const MAP_DECOR_EDGE_PAD = 26;
@@ -905,7 +905,7 @@ function polylineToPathD(points) {
 
 /** Интерполяция основной линии между двумя path `d` (равномерная выборка по длине кривой). */
 const ROUTE_MAIN_MORPH_SAMPLES = 72;
-const ROUTE_MAIN_MORPH_MS = 480;
+const ROUTE_MAIN_MORPH_MS = 960;
 const morphTerminalRouteCtx = { gen: 0, raf: /** @type {number | null} */ (null) };
 const morphLanguageRouteCtx = { gen: 0, raf: /** @type {number | null} */ (null) };
 
