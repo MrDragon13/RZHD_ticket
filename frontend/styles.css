@@ -2912,7 +2912,7 @@ html[data-theme="rzd"] .orb-thinking .orb-mic {
 }
 
 .ticket-thanks {
-  margin: 18px auto 0;
+  margin: clamp(8px, 1.5vmin, 12px) auto clamp(14px, 2vmin, 18px);
   max-width: 28em;
   text-align: center;
   font-size: clamp(15px, 2.2vw, 18px);
