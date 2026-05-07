@@ -151,6 +151,18 @@ const i18n = {
     supportChatTyping: "Оператор отвечает…",
     supportChatError: "Не удалось получить ответ. Проверьте соединение и попробуйте снова.",
     supportChatAgentRole: "Техподдержка",
+    compareTrains: "Сравнить",
+    comparePickSecond:
+      "Режим сравнения: выберите на списке второй поезд — я покажу разницу по времени, цене и комфорту.",
+    compareCancelled: "Сравнение отменено. Можно снова выбрать поезд в списке.",
+    compareSameTrain: "Выберите другой поезд — не тот же, что уже отмечен для сравнения.",
+    compareModalSubtitle: "Текст подготовлен для демонстрации — сверяйте тарифы и расписание с официальными источниками РЖД.",
+    compareLoading: "Готовим сравнение…",
+    compareClose: "Закрыть",
+    compareCheckoutTrain: "Оформить поезд {num}",
+    compareSourceLlm: "Источник: ИИ (DeepSeek)",
+    compareSourceFallback: "Источник: локальное сравнение",
+    compareError: "Не удалось получить сравнение. Попробуйте ещё раз или закройте окно.",
     noSpeech:
       "В этом браузере нет встроенного распознавания речи. Воспользуйтесь кнопкой «Текст» и полем ввода.",
     speechMicDenied:
@@ -294,6 +306,19 @@ const i18n = {
     supportChatTyping: "Support is typing…",
     supportChatError: "Could not get a reply. Check your connection and try again.",
     supportChatAgentRole: "Support",
+    compareTrains: "Compare",
+    comparePickSecond:
+      "Compare mode: tap another train in the list — I will summarize time, price, and comfort.",
+    compareCancelled: "Comparison cancelled. You can pick a train from the list again.",
+    compareSameTrain: "Pick a different train — not the one already marked for comparison.",
+    compareModalSubtitle:
+      "Demo text — always verify fares and times with official RZD channels before travelling.",
+    compareLoading: "Preparing comparison…",
+    compareClose: "Close",
+    compareCheckoutTrain: "Checkout train {num}",
+    compareSourceLlm: "Source: AI (DeepSeek)",
+    compareSourceFallback: "Source: local comparison",
+    compareError: "Could not load comparison. Try again or close this panel.",
     noSpeech:
       "This browser has no built-in speech recognition. Use the Text button and type your request.",
     speechMicDenied: "Microphone access is blocked — allow it in the browser settings for this site.",
@@ -1291,6 +1316,12 @@ let intent = null;
 let trains = [];
 let recommendations = [];
 let selectedTrain = null;
+/** @type {null | "pickingSecond"} */
+let compareMode = null;
+let compareFirstId = null;
+let compareModalOpen = false;
+/** @type {AbortController | null} */
+let comparePrefetchAbort = null;
 /** Источник выдачи поездов: demo JSON или live-cache (отложенный basicRoute). */
 let ticketSearchSource = "demo";
 /** Уже догружен полный маршрут (POST /api/train-route-stops) для карты. */
@@ -1683,6 +1714,21 @@ const checkoutTrainSummaryBody = document.querySelector("#checkout-train-summary
 const checkoutTrainSummaryLabel = document.querySelector("#checkout-train-summary-label");
 const checkoutButton = document.querySelector("#checkout-button");
 const checkoutLoadingEl = document.querySelector("#checkout-loading");
+const compareTrainsStartBtn = document.querySelector("#compare-trains-start");
+const compareTrainsCancelBar = document.querySelector("#compare-trains-cancel-bar");
+const compareTrainsModal = document.querySelector("#compare-trains-modal");
+const compareTrainsBackdrop = document.querySelector("#compare-trains-backdrop");
+const compareTrainsCloseBtn = document.querySelector("#compare-trains-close");
+const compareSlotA = document.querySelector("#compare-slot-a");
+const compareSlotB = document.querySelector("#compare-slot-b");
+const compareTrainsLoadingEl = document.querySelector("#compare-trains-loading");
+const compareTrainsLoadingTitle = document.querySelector("#compare-trains-loading-title");
+const compareTrainsTextEl = document.querySelector("#compare-trains-text");
+const compareTrainsSubtitleEl = document.querySelector("#compare-trains-subtitle");
+const compareTrainsHeadingEl = document.querySelector("#compare-trains-heading");
+const compareTrainsSourceEl = document.querySelector("#compare-trains-source");
+const compareCheckoutABtn = document.querySelector("#compare-checkout-a");
+const compareCheckoutBBtn = document.querySelector("#compare-checkout-b");
 const confirmSeatsButton = document.querySelector("#confirm-seats-button");
 const wagonMetaPanel = document.querySelector("#wagon-meta-panel");
 const orbButton = document.querySelector("#orb-button");
@@ -2079,6 +2125,7 @@ async function completeAuthFlow() {
   refreshThemeToggleLabels();
   applySupportChatChrome();
   applyCheckoutLoadingTexts();
+  applyCompareChrome();
   assistantSay(i18n[language].assistantReady, { addToHistory: true });
   void pingBackendHealth();
   touchGlobalIdle();
@@ -2240,8 +2287,10 @@ function updateTextInputToggleLabels() {
 updateTextInputToggleLabels();
 applySupportChatChrome();
 applyCheckoutLoadingTexts();
+applyCompareChrome();
 initThemeToggle();
 initSupportChatModal();
+initCompareTrainModal();
 initPathLogModal();
 
 window.pathTerminalIdleFetchBegin = beginIdlePause;
@@ -2362,6 +2411,7 @@ async function setLanguage(nextLanguage) {
     refreshThemeToggleLabels();
     applySupportChatChrome();
     applyCheckoutLoadingTexts();
+    applyCompareChrome();
   } finally {
     languageScreenBusy = false;
     document.querySelector(".language-actions")?.classList.remove("language-actions--busy");
@@ -3250,7 +3300,11 @@ function renderTrains() {
         <span>${language === "ru" ? "Плацкарт" : "Platzkart"}: ${formatPrice(train.prices.platzkart)}</span>
       </div>
     `;
-    card.addEventListener("click", () => void selectTrain(train));
+    if (compareMode === "pickingSecond") {
+      card.classList.toggle("train-card--compare-first", train.id === compareFirstId);
+      card.classList.toggle("train-card--compare-pick", train.id !== compareFirstId);
+    }
+    card.addEventListener("click", () => void handleTrainCardActivate(train));
     frag.append(card);
   });
   list.append(frag);
@@ -3260,6 +3314,7 @@ function renderTrains() {
   }
   syncCheckoutPanelPlacement();
   updateRouteMapForSelectedTrain();
+  updateCompareTrainChrome();
 }
 
 /** Сразу после поиска: рекомендованный поезд считается выбранным — «Оформить» под его карточкой без клика. Этап UI остаётся results. */
@@ -3287,6 +3342,7 @@ async function prepareRecommendedCheckoutUi() {
       scrollRecommendedTrainCardIntoView();
     });
   });
+  updateCompareTrainChrome();
 }
 
 /** Прокрутка только контейнера `.control-panel-scroll`, чтобы карточка оказалась у верхней границы области под закреплённым assistant-core (scrollIntoView часто трогает неверного предка). */
@@ -3505,6 +3561,7 @@ async function selectTrain(train, options = {}) {
   updateRouteMapForSelectedTrain();
   const scrollBehavior = prefersReducedMotion() ? "auto" : "smooth";
   checkoutPanel.scrollIntoView({ behavior: scrollBehavior, block: "nearest" });
+  updateCompareTrainChrome();
 }
 
 function applyCheckoutLoadingTexts() {
@@ -3518,8 +3575,203 @@ function applyCheckoutLoadingTexts() {
   }
 }
 
+function applyCompareChrome() {
+  const copy = i18n[language];
+  if (compareTrainsHeadingEl)
+    compareTrainsHeadingEl.textContent = language === "ru" ? "Сравнение поездов" : "Train comparison";
+  if (compareTrainsSubtitleEl) compareTrainsSubtitleEl.textContent = copy.compareModalSubtitle;
+  if (compareTrainsLoadingTitle) compareTrainsLoadingTitle.textContent = copy.compareLoading;
+  if (compareTrainsCloseBtn) compareTrainsCloseBtn.textContent = copy.compareClose;
+  if (compareTrainsStartBtn) compareTrainsStartBtn.textContent = copy.compareTrains;
+  if (compareTrainsCancelBar)
+    compareTrainsCancelBar.textContent = language === "ru" ? "Отменить сравнение" : "Cancel comparison";
+}
+
+function updateCompareTrainChrome() {
+  const baseEligible =
+    Boolean(selectedTrain) &&
+    !checkoutAnimating &&
+    !issuingTicket &&
+    !compareModalOpen &&
+    (uiStage === "results" || uiStage === "checkout");
+  const showStart = baseEligible && compareMode !== "pickingSecond";
+  const showCancelBar = compareMode === "pickingSecond";
+  if (compareTrainsStartBtn) {
+    compareTrainsStartBtn.classList.toggle("hidden", !showStart);
+    compareTrainsStartBtn.disabled = !showStart;
+  }
+  if (compareTrainsCancelBar) {
+    compareTrainsCancelBar.classList.toggle("hidden", !showCancelBar);
+  }
+}
+
+function truncateForSpeech(text, max = 1700) {
+  const t = String(text || "").trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max)}…`;
+}
+
+function renderCompareMiniCard(train, labelKind) {
+  const ru = language === "ru";
+  const lbl =
+    labelKind === "a" ? (ru ? "Поезд A" : "Train A") : ru ? "Поезд B" : "Train B";
+  return `
+    <div class="compare-mini-card">
+      <span class="compare-mini-label">${escapeHtml(lbl)}</span>
+      <strong>${escapeHtml(train.train_number)}</strong>
+      <div class="compare-mini-meta">
+        ${escapeHtml(formatRoutePair(train.departure_station, train.arrival_station))}<br />
+        ${escapeHtml(train.departure_time)} – ${escapeHtml(train.arrival_time)} · ${escapeHtml(train.duration_label)}<br />
+        ${ru ? "Плацкарт" : "Platz"}: ${formatPrice(train.prices.platzkart)} · ${ru ? "Купе" : "Coupe"}: ${formatPrice(
+          train.prices.coupe,
+        )}
+      </div>
+    </div>
+  `;
+}
+
+function openCompareModalLoading() {
+  compareModalOpen = true;
+  document.body.style.overflow = "hidden";
+  compareTrainsModal?.classList.remove("hidden");
+  compareTrainsModal?.setAttribute("aria-hidden", "false");
+  compareTrainsLoadingEl?.classList.remove("hidden");
+  if (compareTrainsTextEl) compareTrainsTextEl.textContent = "";
+  compareTrainsSourceEl?.classList.add("hidden");
+  compareCheckoutABtn?.classList.add("hidden");
+  compareCheckoutBBtn?.classList.add("hidden");
+  updateCompareTrainChrome();
+}
+
+function closeCompareModal() {
+  if (!compareTrainsModal) return;
+  compareTrainsModal.classList.add("hidden");
+  compareTrainsModal.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+  compareModalOpen = false;
+  compareTrainsLoadingEl?.classList.add("hidden");
+  updateCompareTrainChrome();
+}
+
+function fillCompareModal(trainA, trainB, text, source) {
+  if (compareSlotA) compareSlotA.innerHTML = renderCompareMiniCard(trainA, "a");
+  if (compareSlotB) compareSlotB.innerHTML = renderCompareMiniCard(trainB, "b");
+  if (compareTrainsTextEl) {
+    compareTrainsTextEl.textContent = text || "";
+  }
+  compareTrainsLoadingEl?.classList.add("hidden");
+  const copy = i18n[language];
+  if (compareTrainsSourceEl) {
+    compareTrainsSourceEl.textContent = source === "llm" ? copy.compareSourceLlm : copy.compareSourceFallback;
+    compareTrainsSourceEl.classList.remove("hidden");
+  }
+  if (compareCheckoutABtn) {
+    compareCheckoutABtn.textContent = copy.compareCheckoutTrain.replace("{num}", trainA.train_number);
+    compareCheckoutABtn.dataset.trainId = trainA.id;
+    compareCheckoutABtn.classList.remove("hidden");
+  }
+  if (compareCheckoutBBtn) {
+    compareCheckoutBBtn.textContent = copy.compareCheckoutTrain.replace("{num}", trainB.train_number);
+    compareCheckoutBBtn.dataset.trainId = trainB.id;
+    compareCheckoutBBtn.classList.remove("hidden");
+  }
+}
+
+function cancelTrainCompareFlow(options = {}) {
+  const { silent = false, skipRender = false } = options;
+  comparePrefetchAbort?.abort();
+  comparePrefetchAbort = null;
+  compareMode = null;
+  compareFirstId = null;
+  closeCompareModal();
+  if (!silent) {
+    assistantSay(i18n[language].compareCancelled);
+  }
+  if (!skipRender) {
+    renderTrains();
+  }
+  updateCompareTrainChrome();
+}
+
+function startTrainCompare() {
+  if (!selectedTrain || compareMode === "pickingSecond" || checkoutAnimating || issuingTicket) return;
+  stopAssistantSpeech();
+  compareMode = "pickingSecond";
+  compareFirstId = selectedTrain.id;
+  comparePrefetchAbort?.abort();
+  comparePrefetchAbort = new AbortController();
+  void fetchTrainRouteStopsIfNeeded(selectedTrain, comparePrefetchAbort.signal);
+  assistantSay(i18n[language].comparePickSecond);
+  updateCompareTrainChrome();
+  renderTrains();
+}
+
+async function finalizeTrainCompare(secondTrain) {
+  if (!compareFirstId || secondTrain.id === compareFirstId) {
+    assistantSay(i18n[language].compareSameTrain);
+    return;
+  }
+  comparePrefetchAbort?.abort();
+  comparePrefetchAbort = new AbortController();
+  const sig = comparePrefetchAbort.signal;
+  compareMode = null;
+  openCompareModalLoading();
+  applyCompareChrome();
+  try {
+    let trainA = trains.find((t) => t.id === compareFirstId);
+    let trainB = trains.find((t) => t.id === secondTrain.id);
+    if (!trainA || !trainB) {
+      assistantSay(i18n[language].compareError);
+      cancelTrainCompareFlow({ silent: true });
+      return;
+    }
+    if (sig.aborted) {
+      closeCompareModal();
+      return;
+    }
+    trainA = trains.find((t) => t.id === compareFirstId) || trainA;
+    trainB = trains.find((t) => t.id === secondTrain.id) || trainB;
+    const res = await postJson(
+      "/api/compare-trains",
+      {
+        language,
+        train_a: trainA,
+        train_b: trainB,
+      },
+      { signal: sig },
+    );
+    if (sig.aborted) {
+      closeCompareModal();
+      return;
+    }
+    fillCompareModal(trainA, trainB, res.comparison_text, res.source);
+    assistantSay(truncateForSpeech(res.comparison_text));
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+    console.error("compare-trains failed", e);
+    assistantSay(i18n[language].compareError);
+    cancelTrainCompareFlow({ silent: true });
+  }
+}
+
+async function completeCompareCheckout(trainId) {
+  const tr = trains.find((t) => t.id === trainId);
+  if (!tr) return;
+  cancelTrainCompareFlow({ silent: true });
+  await selectTrain(tr);
+}
+
+async function handleTrainCardActivate(train) {
+  if (compareMode === "pickingSecond") {
+    await finalizeTrainCompare(train);
+    return;
+  }
+  await selectTrain(train);
+}
+
 async function createTicket() {
   if (checkoutAnimating || issuingTicket || uiInteractionLocked || !selectedTrain) return;
+  cancelTrainCompareFlow({ silent: true });
   setUiInteractionLocked(true);
   checkoutAnimating = true;
   checkoutButton.disabled = true;
@@ -4558,6 +4810,35 @@ function renderTicketQrCanvas(payloadText) {
   }, 80);
 }
 
+function playTicketConfirmCelebration() {
+  if (prefersReducedMotion()) return;
+  const ticket = document.querySelector("#ticket-panel .ticket");
+  if (!ticket) return;
+  ticket.classList.remove("ticket--celebrate");
+  void ticket.offsetWidth;
+  ticket.classList.add("ticket--celebrate");
+  setTimeout(() => ticket.classList.remove("ticket--celebrate"), 900);
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 783.99;
+    osc.type = "sine";
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.055, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.11);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.12);
+    ctx.close();
+  } catch {
+    /* ignore */
+  }
+}
+
 function renderTicket() {
   seatPickerPanel.classList.add("hidden");
   mapContent.classList.remove("hidden");
@@ -4591,6 +4872,7 @@ function renderTicket() {
     <small>${demoTicket.disclaimer}</small>
   `;
   renderTicketQrCanvas(buildDemoTicketQrPayload());
+  playTicketConfirmCelebration();
   assistantSay(language === "ru" ? "Демонстрационный билет готов." : "Your demo ticket is ready.");
   document.querySelector("#checkout-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
   touchGlobalIdle();
@@ -5013,6 +5295,21 @@ function clearPathClientLogs() {
   pathLogAppend("INFO", ["Путь: журнал очищен"]);
 }
 
+function initCompareTrainModal() {
+  compareTrainsBackdrop?.addEventListener("click", () => cancelTrainCompareFlow({ silent: false }));
+  compareTrainsCloseBtn?.addEventListener("click", () => cancelTrainCompareFlow({ silent: false }));
+  compareTrainsStartBtn?.addEventListener("click", () => startTrainCompare());
+  compareTrainsCancelBar?.addEventListener("click", () => cancelTrainCompareFlow({ silent: false }));
+  compareCheckoutABtn?.addEventListener("click", () => {
+    const id = compareCheckoutABtn?.dataset?.trainId;
+    if (id) void completeCompareCheckout(id);
+  });
+  compareCheckoutBBtn?.addEventListener("click", () => {
+    const id = compareCheckoutBBtn?.dataset?.trainId;
+    if (id) void completeCompareCheckout(id);
+  });
+}
+
 function initPathLogModal() {
   const modal = document.getElementById("path-log-modal");
   const backdrop = document.getElementById("path-log-modal-backdrop");
@@ -5029,6 +5326,11 @@ function initPathLogModal() {
     });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
+    const compareModal = document.getElementById("compare-trains-modal");
+    if (compareModal && !compareModal.classList.contains("hidden")) {
+      cancelTrainCompareFlow({ silent: false });
+      return;
+    }
     const supportModal = document.getElementById("support-chat-modal");
     if (supportModal && !supportModal.classList.contains("hidden")) {
       closeSupportChatModal();
@@ -5109,6 +5411,7 @@ function runLocalDemoFallback() {
 
 function resetScenario(announce = true) {
   abortDialogRequests();
+  cancelTrainCompareFlow({ silent: true, skipRender: true });
   state = {};
   intent = null;
   trains = [];

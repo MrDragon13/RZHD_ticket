@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Путь — умный билетный терминал</title>
-    <link rel="stylesheet" href="./styles.css?v=202605088" />
+    <link rel="stylesheet" href="./styles.css?v=202605090" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -325,7 +325,20 @@
                 <h2 id="trains-title">Рекомендованные поезда</h2>
                 <div id="trains-list" class="train-list"></div>
                 <section id="checkout-panel" class="hidden">
-                  <button id="checkout-button" type="button" class="primary-button">Оформить демо-билет</button>
+                  <div class="checkout-actions-row">
+                    <button id="checkout-button" type="button" class="primary-button">Оформить демо-билет</button>
+                    <button
+                      type="button"
+                      id="compare-trains-start"
+                      class="ghost-button compare-trains-start-btn hidden"
+                      aria-haspopup="dialog"
+                    >
+                      Сравнить
+                    </button>
+                  </div>
+                  <button type="button" id="compare-trains-cancel-bar" class="ghost-button compare-trains-cancel-bar hidden">
+                    Отменить сравнение
+                  </button>
                   <div id="checkout-steps"></div>
                   <div id="checkout-loading" class="checkout-loading hidden" role="status" aria-live="polite">
                     <div class="checkout-loading-spinner" aria-hidden="true"></div>
@@ -429,6 +442,44 @@
     </div>
 
     <div
+      id="compare-trains-modal"
+      class="compare-trains-modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="compare-trains-heading"
+      aria-hidden="true"
+    >
+      <div id="compare-trains-backdrop" class="support-chat-backdrop"></div>
+      <div class="compare-trains-sheet glass-panel">
+        <header class="compare-trains-header">
+          <div>
+            <h2 id="compare-trains-heading">Сравнение поездов</h2>
+            <p id="compare-trains-subtitle" class="compare-trains-subtitle"></p>
+          </div>
+          <button type="button" id="compare-trains-close" class="ghost-button compare-trains-close-btn">Закрыть</button>
+        </header>
+        <div class="compare-trains-layout">
+          <div class="compare-trains-cards-col">
+            <div id="compare-slot-a" class="compare-slot"></div>
+            <div id="compare-slot-b" class="compare-slot"></div>
+          </div>
+          <aside class="compare-trains-side-col">
+            <div id="compare-trains-loading" class="compare-trains-loading hidden" role="status" aria-live="polite">
+              <div class="checkout-loading-spinner" aria-hidden="true"></div>
+              <p id="compare-trains-loading-title" class="compare-loading-title"></p>
+            </div>
+            <div id="compare-trains-text" class="compare-trains-text" tabindex="0"></div>
+            <p id="compare-trains-source" class="compare-trains-source hidden" aria-live="polite"></p>
+            <div class="compare-trains-checkout-row">
+              <button type="button" id="compare-checkout-a" class="primary-button compare-checkout-train hidden"></button>
+              <button type="button" id="compare-checkout-b" class="primary-button compare-checkout-train hidden"></button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <div
       id="path-log-modal"
       class="path-log-modal hidden"
       role="dialog"
@@ -455,8 +506,8 @@
     <div id="session-idle-warning" class="session-idle-warning hidden" role="alert" aria-live="assertive"></div>
 
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
-    <script src="./api-client.js?v=202605084"></script>
-    <script src="./app.js?v=202605088"></script>
+    <script src="./api-client.js?v=202605090"></script>
+    <script src="./app.js?v=202605090"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>

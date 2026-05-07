@@ -115,6 +115,21 @@ class SupportChatResponse(BaseModel):
     source: Literal["llm", "fallback"]
 
 
+class CompareTrainsRequest(BaseModel):
+    """Сравнение двух поездов из выдачи: клиент передаёт полные объекты TrainOption."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    language: Language
+    train_a: TrainOption
+    train_b: TrainOption
+
+
+class CompareTrainsResponse(BaseModel):
+    comparison_text: str
+    source: Literal["llm", "fallback"]
+
+
 class CheckoutVoiceIntentRequest(BaseModel):
     """Реплика на экране списка поездов или перед оформлением — нужно ли трактовать как согласие на демо-билет."""
 

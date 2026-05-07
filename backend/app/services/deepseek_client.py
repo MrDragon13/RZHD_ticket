@@ -863,3 +863,170 @@ class DeepSeekClient:
         except Exception:
             logging.exception("generate_support_reply failed")
             return fallback, "fallback"
+
+    def _fallback_train_comparison(self, language: str, train_a: TrainOption, train_b: TrainOption) -> str:
+        """Структурированное сравнение без LLM — для демонстрации при отключённом DeepSeek."""
+
+        def seats_total(t: TrainOption) -> int:
+            s = t.available_seats
+            return int(s.platzkart + s.coupe + s.sv)
+
+        def min_price(t: TrainOption) -> int | None:
+            vals = [
+                v
+                for v in (t.prices.platzkart, t.prices.coupe, t.prices.sv)
+                if v is not None
+            ]
+            return min(vals) if vals else None
+
+        def fmt_train(prefix: str, t: TrainOption) -> list[str]:
+            mp = min_price(t)
+            am = ", ".join(_dedupe_preserve(list(t.amenities), limit=6, max_len=48))
+            if language == "en":
+                price_txt = f"{mp} RUB" if mp is not None else "n/a"
+                row = [
+                    f"{prefix} {t.train_number}: {t.departure_time}–{t.arrival_time}, "
+                    f"{t.duration_label}, {t.route_distance_km} km, ~{seats_total(t)} seats, "
+                    f"from {price_txt}.",
+                    f"{prefix} stations: {t.departure_station} → {t.arrival_station}.",
+                ]
+                if am:
+                    row.append(f"{prefix} amenities: {am}.")
+                return row
+            price_txt = f"{mp} ₽" if mp is not None else "—"
+            row_ru = [
+                f"{prefix} {t.train_number}: {t.departure_time}–{t.arrival_time}, "
+                f"{t.duration_label}, {t.route_distance_km} км, свободных мест ~{seats_total(t)}, "
+                f"от {price_txt}.",
+                f"{prefix} маршрут карточки: {t.departure_station} → {t.arrival_station}.",
+            ]
+            if am:
+                row_ru.append(f"{prefix} услуги: {am}.")
+            return row_ru
+
+        if language == "en":
+            lines: list[str] = [
+                "Time and schedule.",
+                *fmt_train("Train A", train_a),
+                *fmt_train("Train B", train_b),
+                "",
+                "Price (minimum among classes shown in the card).",
+                f"Train A from {min_price(train_a) if min_price(train_a) is not None else 'n/a'} ₽.",
+                f"Train B from {min_price(train_b) if min_price(train_b) is not None else 'n/a'} ₽.",
+                "",
+                "Comfort.",
+                "Compare total journey time, departure/arrival windows, and listed amenities.",
+                "",
+                "Trade-offs.",
+            ]
+            da = train_a.duration_minutes
+            db = train_b.duration_minutes
+            pa = min_price(train_a)
+            pb = min_price(train_b)
+            if da < db and pa is not None and pb is not None and pa > pb:
+                lines.append("Train A is faster but may cost more; Train B is cheaper with a longer ride.")
+            elif da > db and pa is not None and pb is not None and pa < pb:
+                lines.append("Train A is cheaper but slower; Train B saves time at a higher fare.")
+            else:
+                lines.append("Pick the balance of time, price, and remaining seats that fits your trip.")
+            return "\n".join(x for x in lines if x)
+
+        lines_ru: list[str] = [
+            "Время в пути и расписание.",
+            *fmt_train("Поезд A", train_a),
+            *fmt_train("Поезд B", train_b),
+            "",
+            "Цена (ориентир — минимум по классам в карточке).",
+            f"Поезд A: от {min_price(train_a) if min_price(train_a) is not None else '—'} ₽.",
+            f"Поезд B: от {min_price(train_b) if min_price(train_b) is not None else '—'} ₽.",
+            "",
+            "Комфорт.",
+            "Сопоставьте длительность, удобство отправления/прибытия и перечисленные услуги.",
+            "",
+            "Компромиссы.",
+        ]
+        da = train_a.duration_minutes
+        db = train_b.duration_minutes
+        pa = min_price(train_a)
+        pb = min_price(train_b)
+        if da < db and pa is not None and pb is not None and pa > pb:
+            lines_ru.append("Поезд A быстрее, но может быть дороже; поезд B дешевле, но в пути дольше.")
+        elif da > db and pa is not None and pb is not None and pa < pb:
+            lines_ru.append("Поезд A дешевле, но медленнее; поезд B экономит время при более высокой цене.")
+        else:
+            lines_ru.append("Выберите баланс времени, цены и оставшихся мест под вашу поездку.")
+        return "\n".join(x for x in lines_ru if x)
+
+    def _train_compare_blob(self, label: str, t: TrainOption) -> str:
+        stops = _compact_stops_for_llm(list(t.stops or []), limit=12)
+        stop_txt = " → ".join(stops) if stops else "—"
+        am = ", ".join(_dedupe_preserve(list(t.amenities), limit=8, max_len=48))
+        notes = "; ".join(_dedupe_preserve(list(t.carriage_notes), limit=3, max_len=120))
+        seats = t.available_seats
+        return (
+            f"{label}:\n"
+            f"  number={t.train_number} id={t.id}\n"
+            f"  times {t.departure_time}–{t.arrival_time} duration_min={t.duration_minutes} ({t.duration_label})\n"
+            f"  stations {t.departure_station} → {t.arrival_station}\n"
+            f"  distance_km={t.route_distance_km}\n"
+            f"  seats platz/coupe/sv={seats.platzkart}/{seats.coupe}/{seats.sv}\n"
+            f"  berth lower/upper/side {t.seat_details.lower}/{t.seat_details.upper}/"
+            f"{t.seat_details.side_lower}+{t.seat_details.side_upper}\n"
+            f"  prices platz/coupe/sv={t.prices.platzkart}/{t.prices.coupe}/{t.prices.sv}\n"
+            f"  amenities: {am or '—'}\n"
+            f"  notes: {notes or '—'}\n"
+            f"  stops sample: {stop_txt}\n"
+        )
+
+    async def generate_train_comparison(
+        self,
+        language: str,
+        train_a: TrainOption,
+        train_b: TrainOption,
+    ) -> tuple[str, str]:
+        """Краткое структурированное сравнение двух поездов для голосового и текстового вывода киоска."""
+
+        fb = self._fallback_train_comparison(language, train_a, train_b)
+        if not self.enabled:
+            return fb, "fallback"
+
+        blob_a = self._train_compare_blob("TRAIN_A", train_a)
+        blob_b = self._train_compare_blob("TRAIN_B", train_b)
+
+        if language == "en":
+            system_prompt = (
+                "You compare two Russian railway train options for a kiosk passenger. "
+                "Reply in English only. Use clear sections with headings exactly as:\n"
+                "Time\nPrice\nComfort\nTrade-offs\n"
+                "Under each heading, 2–4 short sentences comparing both trains; be factual, no markdown fences. "
+                "Do not invent precise fares if missing — say «unknown from card». "
+                "This is a demo terminal, not a binding quote."
+            )
+            user_blob = f"Compare these trains for a passenger choosing between them:\n\n{blob_a}\n{blob_b}"
+        else:
+            system_prompt = (
+                "Ты помогаешь пассажиру киоска РЖД сравнить два поезда. Отвечай только по-русски. "
+                "Строго используй заголовки разделов в начале строк:\n"
+                "Время\nЦена\nКомфорт\nКомпромиссы\n"
+                "Под каждым заголовком — 2–4 коротких предложения, сравнивающих оба поезда. "
+                "Без markdown-блоков. Не выдумывай точные тарифы, если в данных прочерк — так и скажи. "
+                "Это учебный терминал, не официальное предложение РЖД."
+            )
+            user_blob = f"Сравни поезда для выбора пассажиром:\n\n{blob_a}\n{blob_b}"
+
+        try:
+            timeout = float(os.getenv("DEEPSEEK_COMPARE_TIMEOUT_SECONDS", "45"))
+            timeout = max(10.0, min(timeout, 90.0))
+            text = await self.chat_text(
+                system_prompt,
+                user_blob,
+                temperature=0.35,
+                timeout_seconds=timeout,
+            )
+            text = (text or "").strip()
+            if not text:
+                return fb, "fallback"
+            return text[:4200], "llm"
+        except Exception:
+            logging.exception("generate_train_comparison failed")
+            return fb, "fallback"

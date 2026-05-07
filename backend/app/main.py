@@ -10,7 +10,7 @@ _level_name = os.getenv("LOG_LEVEL", "INFO").strip().upper()
 _level = getattr(logging, _level_name, logging.INFO)
 logging.basicConfig(level=_level, format="%(levelname)s %(name)s %(message)s", force=True)
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -18,6 +18,8 @@ from fastapi.responses import JSONResponse
 from app.models import (
     CheckoutVoiceIntentRequest,
     CheckoutVoiceIntentResponse,
+    CompareTrainsRequest,
+    CompareTrainsResponse,
     DemoCheckoutRequest,
     DemoTicket,
     DialogRequest,
@@ -338,6 +340,20 @@ async def support_chat(request: SupportChatRequest) -> SupportChatResponse:
         prior_messages=prior,
     )
     return SupportChatResponse(reply=reply, source=source)
+
+
+@app.post("/api/compare-trains", response_model=CompareTrainsResponse)
+async def compare_trains(request: CompareTrainsRequest) -> CompareTrainsResponse:
+    """Текстовое сравнение двух поездов для киоска (DeepSeek или детерминированный fallback)."""
+
+    if request.train_a.id == request.train_b.id:
+        raise HTTPException(status_code=400, detail="train_a and train_b must differ")
+    text, source = await deepseek_client.generate_train_comparison(
+        request.language,
+        request.train_a,
+        request.train_b,
+    )
+    return CompareTrainsResponse(comparison_text=text, source=source)
 
 
 @app.post("/api/checkout/demo", response_model=DemoTicket)
