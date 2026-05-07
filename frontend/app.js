@@ -300,8 +300,8 @@ function hashRoutePairKey(normOrigin, normDest) {
 }
 
 /**
- * Детерминированный seed для декора карты: та же стабильность, что у `buildOrganicRouteGeometry`
- * (одна нормализованная пара городов → один набор кривых). Если пары нет — от строки `d` линии.
+ * Базовый seed декора от нормализованной пары городов или от строки `d` линии.
+ * На каждую синхронизацию накладывается `routeDecorResyncGen`, чтобы число линий и формы менялись.
  */
 function resolveDecorLayersSeed(mainPathD, originRaw, destRaw) {
   const o = String(originRaw ?? "").trim();
