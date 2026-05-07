@@ -3537,15 +3537,19 @@ html[data-theme="rzd"] .path-log-modal-content {
   user-select: none;
 }
 
+.compare-trains-layout.compare-trains-layout--loading {
+  min-height: clamp(240px, 38vmin, 440px);
+}
+
 .compare-trains-loading-overlay {
   position: absolute;
   inset: 0;
   z-index: 2;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  place-content: center;
   align-items: center;
-  padding: clamp(16px, 3vmin, 28px);
+  padding: clamp(20px, 4vmin, 36px) clamp(20px, 5vmin, 40px);
   box-sizing: border-box;
   overflow: hidden;
   border-radius: clamp(14px, 2.4vmin, 18px);
@@ -3570,6 +3574,8 @@ html[data-theme="rzd"] .path-log-modal-content {
 .compare-trains-loading.compare-trains-loading--solo {
   width: 100%;
   max-width: none;
+  flex: 0 0 auto;
+  align-self: center;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -3580,7 +3586,7 @@ html[data-theme="rzd"] .path-log-modal-content {
 }
 
 .compare-trains-loading.compare-trains-loading--solo .compare-trains-loading-copy {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   width: 100%;
   max-width: min(42em, 100%);
   align-items: center;
@@ -3609,11 +3615,17 @@ html[data-theme="rzd"] .path-log-modal-content {
   margin: 0;
 }
 
+.compare-trains-loading-copy {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.compare-trains-loading.compare-trains-loading--solo .checkout-loading-spinner {
+  flex-shrink: 0;
+  margin: 0 !important;
 }
 
 .compare-loading-title {
