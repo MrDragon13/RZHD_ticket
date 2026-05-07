@@ -1322,6 +1322,8 @@ let compareFirstId = null;
 let compareModalOpen = false;
 /** @type {AbortController | null} */
 let comparePrefetchAbort = null;
+/** @type {ResizeObserver | null} */
+let compareLeftColumnResizeObserver = null;
 /** Источник выдачи поездов: demo JSON или live-cache (отложенный basicRoute). */
 let ticketSearchSource = "demo";
 /** Уже догружен полный маршрут (POST /api/train-route-stops) для карты. */
@@ -3629,6 +3631,36 @@ function truncateForSpeech(text, max = 1700) {
   return `${t.slice(0, max)}…`;
 }
 
+function syncCompareModalHeights() {
+  const layout = document.querySelector(".compare-trains-layout");
+  const left = document.querySelector(".compare-trains-cards-col");
+  if (!layout || !left) return;
+  if (compareTrainsModal?.classList.contains("hidden")) {
+    layout.style.removeProperty("--compare-left-h");
+    return;
+  }
+  try {
+    if (window.matchMedia("(max-width: 900px)").matches) {
+      layout.style.removeProperty("--compare-left-h");
+      return;
+    }
+  } catch {
+    /* ignore */
+  }
+  const h = left.getBoundingClientRect().height;
+  if (h > 0) {
+    layout.style.setProperty("--compare-left-h", `${Math.round(h)}px`);
+  }
+}
+
+function scheduleSyncCompareModalHeights() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      syncCompareModalHeights();
+    });
+  });
+}
+
 function renderCompareMiniCard(train, labelKind) {
   const ru = language === "ru";
   const lbl =
@@ -3668,6 +3700,7 @@ function closeCompareModal() {
   document.body.style.overflow = "";
   compareModalOpen = false;
   compareTrainsLoadingEl?.classList.add("hidden");
+  document.querySelector(".compare-trains-layout")?.style.removeProperty("--compare-left-h");
   updateCompareTrainChrome();
 }
 
@@ -3693,6 +3726,7 @@ function fillCompareModal(trainA, trainB, text, source) {
     compareCheckoutBBtn.dataset.trainId = trainB.id;
     compareCheckoutBBtn.classList.remove("hidden");
   }
+  scheduleSyncCompareModalHeights();
 }
 
 function cancelTrainCompareFlow(options = {}) {
@@ -5326,6 +5360,20 @@ function initCompareTrainModal() {
   compareCheckoutBBtn?.addEventListener("click", () => {
     const id = compareCheckoutBBtn?.dataset?.trainId;
     if (id) void completeCompareCheckout(id);
+  });
+  const leftCol = document.querySelector(".compare-trains-cards-col");
+  if (leftCol && typeof ResizeObserver !== "undefined") {
+    compareLeftColumnResizeObserver = new ResizeObserver(() => {
+      if (!compareTrainsModal?.classList.contains("hidden")) {
+        syncCompareModalHeights();
+      }
+    });
+    compareLeftColumnResizeObserver.observe(leftCol);
+  }
+  window.addEventListener("resize", () => {
+    if (!compareTrainsModal?.classList.contains("hidden")) {
+      scheduleSyncCompareModalHeights();
+    }
   });
 }
 
