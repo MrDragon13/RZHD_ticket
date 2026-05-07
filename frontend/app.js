@@ -352,7 +352,7 @@ function hashRoutePairKey(normOrigin, normDest) {
 
 /**
  * Базовый seed декора от нормализованной пары городов или от строки `d` линии.
- * На каждую синхронизацию накладывается `routeDecorResyncGen`, чтобы число линий и формы менялись.
+ * Совпадает для одной и той же пары отправление–прибытие (как и органическая линия маршрута).
  */
 function resolveDecorLayersSeed(mainPathD, originRaw, destRaw) {
   const o = String(originRaw ?? "").trim();
@@ -895,12 +895,14 @@ function computeDecorLayers(_mainPathD, rngSeed) {
 let routeDecorRaf = null;
 /** Генерация цепочки fade-out / fade-in декора — сброс при новой синхронизации. */
 let routeDecorFadeGen = 0;
+/** Ключ стабильности декора: пара О–П после normalizeStationName, иначе хэш пути `d` (экран без маршрута). */
+let routeDecorStableGateKey = null;
+/** @type {number | null} */
+let routeDecorStableSeed = null;
 /** @type {null | { samples: Array<Array<{ x: number; y: number }>>; pathsD: string[] }} */
 let routeDecorLayersSnapshot = null;
 /** @type {null | Array<Array<{ x: number; y: number }>>} */
 let routeDecorLastPainted = null;
-/** Увеличивается при каждой перегенерации декора — в XOR seed, чтобы снова случайно 2–7 линий, не «как при загрузке». */
-let routeDecorResyncGen = 0;
 
 /** Снимок терминальной карты до морфа — интерполяция точек отправления/прибытия вместе с линией. */
 let lastTerminalRouteMapVisual = null;
@@ -1047,9 +1049,17 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
   const fadeOutMs = options.fadeOutMs ?? Math.max(240, Math.round(baseDur * 0.46));
   const fadeInMs = options.fadeInMs ?? Math.max(240, Math.round(baseDur * 0.46));
 
+  const pathKey = mainPathD.trim();
+  const no = normalizeStationName(String(options.originRaw ?? "").trim());
+  const nd = normalizeStationName(String(options.destinationRaw ?? "").trim());
+  const stableGateKey = no && nd && no !== nd ? `${no}\u241f${nd}` : pathKey;
+
   const baseSeed = resolveDecorLayersSeed(mainPathD, options.originRaw, options.destinationRaw);
-  routeDecorResyncGen += 1;
-  const seed = (baseSeed ^ Math.imul(routeDecorResyncGen, 0x9e3779b9)) >>> 0 || 0x6d2b79f5;
+  const seed = baseSeed || 0x6d2b79f5;
+
+  if (seed === routeDecorStableSeed && stableGateKey === routeDecorStableGateKey && decorPathsExist()) {
+    return;
+  }
 
   const next = computeDecorLayers(mainPathD, seed);
   if (
@@ -1066,6 +1076,8 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
       samples: cloneDecorLayers(next.samples),
       pathsD: next.pathsD.slice(),
     };
+    routeDecorStableGateKey = stableGateKey;
+    routeDecorStableSeed = seed;
   };
 
   if (!animate) {
@@ -6164,7 +6176,8 @@ function resetScenario(announce = true) {
   dynamicRouteCache = { key: "", geom: null };
   routeDecorLayersSnapshot = null;
   routeDecorLastPainted = null;
-  routeDecorResyncGen = 0;
+  routeDecorStableGateKey = null;
+  routeDecorStableSeed = null;
   lastTerminalRouteMapVisual = null;
   lastIntroRouteMapVisual = null;
   routeDecorFadeGen += 1;
