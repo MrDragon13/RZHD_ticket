@@ -160,8 +160,6 @@ const i18n = {
     compareLoading: "Готовим сравнение…",
     compareClose: "Закрыть",
     compareCheckoutTrain: "Оформить поезд {num}",
-    compareSourceLlm: "Источник: ИИ (DeepSeek)",
-    compareSourceFallback: "Источник: локальное сравнение",
     compareError: "Не удалось получить сравнение. Попробуйте ещё раз или закройте окно.",
     noSpeech:
       "В этом браузере нет встроенного распознавания речи. Воспользуйтесь кнопкой «Текст» и полем ввода.",
@@ -316,8 +314,6 @@ const i18n = {
     compareLoading: "Preparing comparison…",
     compareClose: "Close",
     compareCheckoutTrain: "Checkout train {num}",
-    compareSourceLlm: "Source: AI (DeepSeek)",
-    compareSourceFallback: "Source: local comparison",
     compareError: "Could not load comparison. Try again or close this panel.",
     noSpeech:
       "This browser has no built-in speech recognition. Use the Text button and type your request.",
@@ -1728,7 +1724,6 @@ const compareTrainsLoadingTitle = document.querySelector("#compare-trains-loadin
 const compareTrainsTextEl = document.querySelector("#compare-trains-text");
 const compareTrainsSubtitleEl = document.querySelector("#compare-trains-subtitle");
 const compareTrainsHeadingEl = document.querySelector("#compare-trains-heading");
-const compareTrainsSourceEl = document.querySelector("#compare-trains-source");
 const compareCheckoutABtn = document.querySelector("#compare-checkout-a");
 const compareCheckoutBBtn = document.querySelector("#compare-checkout-b");
 const confirmSeatsButton = document.querySelector("#confirm-seats-button");
@@ -3598,7 +3593,7 @@ function applyCheckoutLoadingTexts() {
 function applyCompareChrome() {
   const copy = i18n[language];
   if (compareTrainsHeadingEl)
-    compareTrainsHeadingEl.textContent = language === "ru" ? "Сравнение поездов" : "Train comparison";
+    compareTrainsHeadingEl.textContent = language === "ru" ? "AI Сравнение поездов" : "AI Train comparison";
   if (compareTrainsSubtitleEl) compareTrainsSubtitleEl.textContent = copy.compareModalSubtitle;
   if (compareTrainsLoadingTitle) compareTrainsLoadingTitle.textContent = copy.compareLoading;
   if (compareTrainsCloseBtn) compareTrainsCloseBtn.textContent = copy.compareClose;
@@ -3648,6 +3643,11 @@ function syncCompareModalHeights() {
     /* ignore */
   }
   const h = left.getBoundingClientRect().height;
+  const loadingEl = document.getElementById("compare-trains-loading");
+  if (loadingEl && !loadingEl.classList.contains("hidden")) {
+    layout.style.removeProperty("--compare-left-h");
+    return;
+  }
   if (h > 0) {
     layout.style.setProperty("--compare-left-h", `${Math.round(h)}px`);
   }
@@ -3685,9 +3685,9 @@ function openCompareModalLoading() {
   document.body.style.overflow = "hidden";
   compareTrainsModal?.classList.remove("hidden");
   compareTrainsModal?.setAttribute("aria-hidden", "false");
+  document.querySelector(".compare-trains-layout")?.style.removeProperty("--compare-left-h");
   compareTrainsLoadingEl?.classList.remove("hidden");
   if (compareTrainsTextEl) compareTrainsTextEl.textContent = "";
-  compareTrainsSourceEl?.classList.add("hidden");
   compareCheckoutABtn?.classList.add("hidden");
   compareCheckoutBBtn?.classList.add("hidden");
   updateCompareTrainChrome();
@@ -3704,7 +3704,7 @@ function closeCompareModal() {
   updateCompareTrainChrome();
 }
 
-function fillCompareModal(trainA, trainB, text, source) {
+function fillCompareModal(trainA, trainB, text) {
   if (compareSlotA) compareSlotA.innerHTML = renderCompareMiniCard(trainA, "a");
   if (compareSlotB) compareSlotB.innerHTML = renderCompareMiniCard(trainB, "b");
   if (compareTrainsTextEl) {
@@ -3712,10 +3712,6 @@ function fillCompareModal(trainA, trainB, text, source) {
   }
   compareTrainsLoadingEl?.classList.add("hidden");
   const copy = i18n[language];
-  if (compareTrainsSourceEl) {
-    compareTrainsSourceEl.textContent = source === "llm" ? copy.compareSourceLlm : copy.compareSourceFallback;
-    compareTrainsSourceEl.classList.remove("hidden");
-  }
   if (compareCheckoutABtn) {
     compareCheckoutABtn.textContent = copy.compareCheckoutTrain.replace("{num}", trainA.train_number);
     compareCheckoutABtn.dataset.trainId = trainA.id;
@@ -3797,7 +3793,7 @@ async function finalizeTrainCompare(secondTrain) {
       closeCompareModal();
       return;
     }
-    fillCompareModal(trainA, trainB, res.comparison_text, res.source);
+    fillCompareModal(trainA, trainB, res.comparison_text);
     assistantSay(truncateForSpeech(res.comparison_text));
   } catch (e) {
     if (e && e.name === "AbortError") return;

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Путь — умный билетный терминал</title>
-    <link rel="stylesheet" href="./styles.css?v=202605094" />
+    <link rel="stylesheet" href="./styles.css?v=202605096" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -458,7 +458,7 @@
       <div class="compare-trains-sheet glass-panel">
         <header class="compare-trains-header">
           <div>
-            <h2 id="compare-trains-heading">Сравнение поездов</h2>
+            <h2 id="compare-trains-heading">AI Сравнение поездов</h2>
             <p id="compare-trains-subtitle" class="compare-trains-subtitle"></p>
           </div>
           <button type="button" id="compare-trains-close" class="ghost-button compare-trains-close-btn">Закрыть</button>
@@ -480,7 +480,6 @@
               <p id="compare-trains-loading-title" class="compare-loading-title"></p>
             </div>
             <div id="compare-trains-text" class="compare-trains-text" tabindex="0"></div>
-            <p id="compare-trains-source" class="compare-trains-source hidden" aria-live="polite"></p>
           </aside>
         </div>
       </div>
@@ -514,7 +513,7 @@
 
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
     <script src="./api-client.js?v=202605091"></script>
-    <script src="./app.js?v=202605094"></script>
+    <script src="./app.js?v=202605096"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>
