@@ -157,6 +157,7 @@ const i18n = {
     compareCancelled: "Сравнение отменено. Можно снова выбрать поезд в списке.",
     compareSameTrain: "Выберите другой поезд — не тот же, что уже отмечен для сравнения.",
     compareLoading: "Готовим сравнение…",
+    compareLoadingHint: "Загружаем расписание и состав поездов — затем ИИ сформирует текст сравнения.",
     compareClose: "Закрыть",
     compareCheckoutTrain: "Оформить поезд {num}",
     compareError: "Не удалось получить сравнение. Попробуйте ещё раз или закройте окно.",
@@ -309,6 +310,8 @@ const i18n = {
     compareCancelled: "Comparison cancelled. You can pick a train from the list again.",
     compareSameTrain: "Pick a different train — not the one already marked for comparison.",
     compareLoading: "Preparing comparison…",
+    compareLoadingHint:
+      "Loading schedules and train composition — then the AI will draft the comparison text.",
     compareClose: "Close",
     compareCheckoutTrain: "Checkout train {num}",
     compareError: "Could not load comparison. Try again or close this panel.",
@@ -1716,8 +1719,9 @@ const compareTrainsBackdrop = document.querySelector("#compare-trains-backdrop")
 const compareTrainsCloseBtn = document.querySelector("#compare-trains-close");
 const compareSlotA = document.querySelector("#compare-slot-a");
 const compareSlotB = document.querySelector("#compare-slot-b");
-const compareTrainsLoadingEl = document.querySelector("#compare-trains-loading");
+const compareTrainsLoadingOverlayEl = document.querySelector("#compare-trains-loading-overlay");
 const compareTrainsLoadingTitle = document.querySelector("#compare-trains-loading-title");
+const compareTrainsLoadingHint = document.querySelector("#compare-trains-loading-hint");
 const compareTrainsTextEl = document.querySelector("#compare-trains-text");
 const compareTrainsHeadingEl = document.querySelector("#compare-trains-heading");
 const compareCheckoutABtn = document.querySelector("#compare-checkout-a");
@@ -3591,6 +3595,7 @@ function applyCompareChrome() {
   if (compareTrainsHeadingEl)
     compareTrainsHeadingEl.textContent = language === "ru" ? "AI Сравнение поездов" : "AI Train comparison";
   if (compareTrainsLoadingTitle) compareTrainsLoadingTitle.textContent = copy.compareLoading;
+  if (compareTrainsLoadingHint) compareTrainsLoadingHint.textContent = copy.compareLoadingHint;
   if (compareTrainsCloseBtn) compareTrainsCloseBtn.textContent = copy.compareClose;
   if (compareTrainsStartBtn) compareTrainsStartBtn.textContent = copy.compareTrains;
   if (compareTrainsCancelBar)
@@ -3624,8 +3629,12 @@ function truncateForSpeech(text, max = 1700) {
   return `${t.slice(0, max)}…`;
 }
 
+function getCompareTrainsLayoutEl() {
+  return document.querySelector(".compare-trains-layout");
+}
+
 function syncCompareModalHeights() {
-  const layout = document.querySelector(".compare-trains-layout");
+  const layout = getCompareTrainsLayoutEl();
   const left = document.querySelector(".compare-trains-cards-col");
   if (!layout || !left) return;
   if (compareTrainsModal?.classList.contains("hidden")) {
@@ -3641,8 +3650,8 @@ function syncCompareModalHeights() {
     /* ignore */
   }
   const h = left.getBoundingClientRect().height;
-  const loadingEl = document.getElementById("compare-trains-loading");
-  if (loadingEl && !loadingEl.classList.contains("hidden")) {
+  const overlay = compareTrainsLoadingOverlayEl;
+  if (overlay && !overlay.classList.contains("hidden")) {
     layout.style.removeProperty("--compare-left-h");
     return;
   }
@@ -3683,8 +3692,11 @@ function openCompareModalLoading() {
   document.body.style.overflow = "hidden";
   compareTrainsModal?.classList.remove("hidden");
   compareTrainsModal?.setAttribute("aria-hidden", "false");
-  document.querySelector(".compare-trains-layout")?.style.removeProperty("--compare-left-h");
-  compareTrainsLoadingEl?.classList.remove("hidden");
+  const layout = getCompareTrainsLayoutEl();
+  layout?.style.removeProperty("--compare-left-h");
+  layout?.classList.add("compare-trains-layout--loading");
+  compareTrainsLoadingOverlayEl?.classList.remove("hidden");
+  compareTrainsLoadingOverlayEl?.setAttribute("aria-hidden", "false");
   if (compareTrainsTextEl) compareTrainsTextEl.textContent = "";
   compareCheckoutABtn?.classList.add("hidden");
   compareCheckoutBBtn?.classList.add("hidden");
@@ -3697,8 +3709,10 @@ function closeCompareModal() {
   compareTrainsModal.setAttribute("aria-hidden", "true");
   document.body.style.overflow = "";
   compareModalOpen = false;
-  compareTrainsLoadingEl?.classList.add("hidden");
-  document.querySelector(".compare-trains-layout")?.style.removeProperty("--compare-left-h");
+  compareTrainsLoadingOverlayEl?.classList.add("hidden");
+  compareTrainsLoadingOverlayEl?.setAttribute("aria-hidden", "true");
+  getCompareTrainsLayoutEl()?.classList.remove("compare-trains-layout--loading");
+  getCompareTrainsLayoutEl()?.style.removeProperty("--compare-left-h");
   updateCompareTrainChrome();
 }
 
@@ -3708,7 +3722,9 @@ function fillCompareModal(trainA, trainB, text) {
   if (compareTrainsTextEl) {
     compareTrainsTextEl.textContent = text || "";
   }
-  compareTrainsLoadingEl?.classList.add("hidden");
+  compareTrainsLoadingOverlayEl?.classList.add("hidden");
+  compareTrainsLoadingOverlayEl?.setAttribute("aria-hidden", "true");
+  getCompareTrainsLayoutEl()?.classList.remove("compare-trains-layout--loading");
   const copy = i18n[language];
   if (compareCheckoutABtn) {
     compareCheckoutABtn.textContent = copy.compareCheckoutTrain.replace("{num}", trainA.train_number);
