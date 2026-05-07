@@ -3521,14 +3521,15 @@ async function fetchTrainCarriageDetailsIfNeeded(train, options = {}) {
   }
 }
 
-async function fetchTrainRouteStops(train, signal) {
+async function fetchTrainRouteStops(train, signal, options = {}) {
+  const force = options.force === true;
   if (!train || ticketSearchSource !== "live-cache") return train;
-  if (routeStopsLoadedIds.has(train.id)) return train;
+  if (!force && routeStopsLoadedIds.has(train.id)) return train;
   const seg = train.route_segment?.intermediate_stops;
   const nStops = Array.isArray(train.stops) ? train.stops.length : 0;
   /** Поиск может отдать эвристический сегмент без полного basicRoute — пока мало станций в stops, догружаем. */
   const hasRichStopList = nStops >= 5;
-  if (Array.isArray(seg) && seg.length > 0 && hasRichStopList) {
+  if (!force && Array.isArray(seg) && seg.length > 0 && hasRichStopList) {
     routeStopsLoadedIds.add(train.id);
     return train;
   }
@@ -3568,7 +3569,26 @@ async function fetchTrainRouteStops(train, signal) {
 async function fetchTrainRouteStopsIfNeeded(train, signal) {
   if (!train || ticketSearchSource !== "live-cache") return;
   if (routeStopsLoadedIds.has(train.id)) return;
-  await fetchTrainRouteStops(train, signal);
+  await fetchTrainRouteStops(train, signal, {});
+}
+
+/** Перед экраном выбора мест: повторный basicRoute — карта иногда без промежуточных точек после раннего кэша. */
+async function refreshTrainRouteStopsForSeatPicker(signal) {
+  const train = selectedTrain;
+  if (!train || ticketSearchSource !== "live-cache") return;
+  beginIdlePause();
+  try {
+    await fetchTrainRouteStops(train, signal, { force: true });
+    updateRouteMapForSelectedTrain();
+  } catch (e) {
+    try {
+      console.warn("[seat-picker] refreshTrainRouteStopsForSeatPicker", e);
+    } catch {
+      /* ignore */
+    }
+  } finally {
+    endIdlePause();
+  }
 }
 
 /** Перед сравнением: basicRoute + список вагонов 5764 (как перед выбором мест), параллельно. */
@@ -4574,7 +4594,10 @@ function exitCheckoutWorkspaceMode() {
 async function showSeatPicker() {
   ticketPanel.classList.add("hidden");
   await enterCheckoutWorkspaceMode();
-  if (selectedTrain) renderCheckoutTrainSummary(selectedTrain);
+  if (selectedTrain) {
+    await refreshTrainRouteStopsForSeatPicker();
+    renderCheckoutTrainSummary(selectedTrain);
+  }
   seatPickerPanel.classList.remove("hidden");
   if (!prefersReducedMotion()) {
     seatPickerPanel.classList.add("seat-picker-motion-enter");
