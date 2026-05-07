@@ -5435,23 +5435,25 @@ function renderTicket() {
   const hasAnyPassenger = !!(pf || pp || pd);
   const hasName = !!pf;
   const hasDocOrPhone = !!(pd || pp);
-  const qrGridClass = [
-    "ticket-passenger-qr-grid",
-    hasName ? "ticket-passenger-qr-grid--has-name" : "",
-    hasName && !hasDocOrPhone ? "ticket-passenger-qr-grid--name-only" : "",
-    !hasAnyPassenger ? "ticket-passenger-qr-grid--qr-only" : "",
+  const qrBlockClass = [
+    "ticket-passenger-qr-block",
+    hasName ? "ticket-passenger-qr-block--has-name" : "",
+    hasName && !hasDocOrPhone ? "ticket-passenger-qr-block--name-only" : "",
+    !hasAnyPassenger ? "ticket-passenger-qr-block--qr-only" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
   const passengerQrHtml = hasAnyPassenger
-    ? `<div class="${qrGridClass}">
+    ? `<div class="${qrBlockClass}">
+    <div class="ticket-passenger-fields">
     ${pf ? `<div class="ticket-p-field ticket-p-name"><strong>${escapeHtml(copy.ticketPassenger)}:</strong> ${escapeHtml(pf)}</div>` : ""}
     ${pd ? `<div class="ticket-p-field ticket-p-doc"><strong>${escapeHtml(copy.ticketPassengerDoc)}:</strong> ${escapeHtml(pd)}</div>` : ""}
     ${pp ? `<div class="ticket-p-field ticket-p-phone"><strong>${escapeHtml(copy.ticketPassengerPhone)}:</strong> ${escapeHtml(pp)}</div>` : ""}
+    </div>
     <div id="ticket-qr-wrap" class="ticket-qr-wrap" aria-hidden="true"></div>
   </div>`
-    : `<div class="ticket-passenger-qr-grid ticket-passenger-qr-grid--qr-only">
+    : `<div class="ticket-passenger-qr-block ticket-passenger-qr-block--qr-only">
     <div id="ticket-qr-wrap" class="ticket-qr-wrap" aria-hidden="true"></div>
   </div>`;
   const isRu = language === "ru";
