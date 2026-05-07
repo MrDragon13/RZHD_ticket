@@ -842,6 +842,8 @@ function computeDecorLayers(_mainPathD, rngSeed) {
 
 /** @type {number | null} */
 let routeDecorRaf = null;
+/** Генерация цепочки fade-out / fade-in декора — сброс при новой синхронизации. */
+let routeDecorFadeGen = 0;
 /** @type {null | { samples: Array<Array<{ x: number; y: number }>>; pathsD: string[] }} */
 let routeDecorLayersSnapshot = null;
 /** @type {null | Array<Array<{ x: number; y: number }>>} */
@@ -926,40 +928,6 @@ function samplePathDToPoints(pathD, sampleCount) {
   return pts;
 }
 
-function paintDecorLayersPolylines(pointLayers) {
-  routeDecorLastPainted = cloneDecorLayers(pointLayers);
-  const svgs = [
-    document.querySelector("#map-content svg.route-map"),
-    document.querySelector(".language-route-map"),
-  ].filter(Boolean);
-  const NS = "http://www.w3.org/2000/svg";
-  for (const svg of svgs) {
-    let group = svg.querySelector(".route-decor-group");
-    if (!group) {
-      group = document.createElementNS(NS, "g");
-      group.setAttribute("class", "route-decor-group");
-      group.setAttribute("aria-hidden", "true");
-      const land = svg.querySelector(".map-landmass");
-      if (land && land.parentNode) {
-        land.parentNode.insertBefore(group, land.nextSibling);
-      } else {
-        svg.appendChild(group);
-      }
-    }
-    while (group.firstChild) {
-      group.removeChild(group.firstChild);
-    }
-    for (let i = 0; i < pointLayers.length; i++) {
-      const d = polylineToPathD(pointLayers[i]);
-      if (!d) continue;
-      const path = document.createElementNS(NS, "path");
-      path.setAttribute("class", "route-decor-line");
-      path.setAttribute("d", d);
-      group.appendChild(path);
-    }
-  }
-}
-
 /** Финальная отрисовка: гладкие кубические `d`, без ломаной аппроксимации. */
 function paintDecorBezierPaths(pathDs) {
   const sampled = pathDs
@@ -996,17 +964,38 @@ function paintDecorBezierPaths(pathDs) {
   }
 }
 
+function mapDecorSvgs() {
+  return [
+    document.querySelector("#map-content svg.route-map"),
+    document.querySelector(".language-route-map"),
+  ].filter(Boolean);
+}
+
+function decorPathsExist() {
+  return mapDecorSvgs().some((svg) => svg.querySelector(".route-decor-group .route-decor-line"));
+}
+
+function setRouteDecorGroupsOpacity(opacity) {
+  const op = Math.max(0, Math.min(1, opacity));
+  const s = op >= 0.998 ? "" : String(op);
+  for (const svg of mapDecorSvgs()) {
+    const g = svg.querySelector(".route-decor-group");
+    if (g) g.style.opacity = s;
+  }
+}
+
 /**
- * Декоративные линии: при каждой синхронизации новый случайный набор 2–7 кривых (seed от пары городов + счётчик смен).
- * @param {string} mainPathD — атрибут `d` основной линии (триггер перегенерации; форма декора от него не зависит).
- * @param {{ animate?: boolean; duration?: number; easing?: 'smoothstep' | 'cubicOut'; originRaw?: string; destinationRaw?: string; morphSyncStart?: number }} [options]
+ * Декоративные линии: при смене — плавное затухание, новая генерация, плавное проявление (opacity группы).
+ * @param {{ animate?: boolean; duration?: number; fadeOutMs?: number; fadeInMs?: number; originRaw?: string; destinationRaw?: string; morphSyncStart?: number }} [options]
  */
 function syncDecorativeRouteLines(mainPathD, options = {}) {
   if (!mainPathD || typeof mainPathD !== "string") return;
   const reduceMotion = prefersReducedMotion();
   const animate = options.animate !== false && !reduceMotion;
-  const duration = options.duration ?? ROUTE_DECOR_ANIM_MS;
-  const easing = options.easing === "cubicOut" ? "cubicOut" : "smoothstep";
+  const baseDur = options.duration ?? ROUTE_DECOR_ANIM_MS;
+  const fadeOutMs = options.fadeOutMs ?? Math.max(240, Math.round(baseDur * 0.46));
+  const fadeInMs = options.fadeInMs ?? Math.max(240, Math.round(baseDur * 0.46));
+
   const baseSeed = resolveDecorLayersSeed(mainPathD, options.originRaw, options.destinationRaw);
   routeDecorResyncGen += 1;
   const seed = (baseSeed ^ Math.imul(routeDecorResyncGen, 0x9e3779b9)) >>> 0 || 0x6d2b79f5;
@@ -1021,57 +1010,73 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
     return;
   }
 
-  let from = routeDecorLastPainted || routeDecorLayersSnapshot?.samples;
-  if (from && from.length === next.samples.length) {
-    from = from.map((layer, i) => resamplePolyline(layer, next.samples[i].length));
-  } else {
-    from = null;
-  }
-
-  if (!animate || !from) {
-    if (routeDecorRaf) {
-      cancelAnimationFrame(routeDecorRaf);
-      routeDecorRaf = null;
-    }
-    paintDecorBezierPaths(next.pathsD);
+  const finishSnapshot = () => {
     routeDecorLayersSnapshot = {
       samples: cloneDecorLayers(next.samples),
       pathsD: next.pathsD.slice(),
     };
+  };
+
+  if (!animate) {
+    routeDecorFadeGen += 1;
+    if (routeDecorRaf != null) {
+      cancelAnimationFrame(routeDecorRaf);
+      routeDecorRaf = null;
+    }
+    paintDecorBezierPaths(next.pathsD);
+    setRouteDecorGroupsOpacity(1);
+    finishSnapshot();
     return;
   }
 
-  const start =
+  routeDecorFadeGen += 1;
+  const myGen = routeDecorFadeGen;
+  if (routeDecorRaf != null) {
+    cancelAnimationFrame(routeDecorRaf);
+    routeDecorRaf = null;
+  }
+
+  const fadeOutStart =
     typeof options.morphSyncStart === "number" && Number.isFinite(options.morphSyncStart)
       ? options.morphSyncStart
       : performance.now();
-  const fromSnap = cloneDecorLayers(from);
-  const toSnapSamples = cloneDecorLayers(next.samples);
-  const toPathsD = next.pathsD.slice();
 
-  const tick = (now) => {
-    const t = Math.min(1, (now - start) / duration);
-    const e = easing === "cubicOut" ? 1 - (1 - t) ** 3 : t * t * (3 - 2 * t);
-    const mid = fromSnap.map((layer, li) =>
-      layer.map((p, i) => ({
-        x: p.x + (toSnapSamples[li][i].x - p.x) * e,
-        y: p.y + (toSnapSamples[li][i].y - p.y) * e,
-      })),
-    );
-    paintDecorLayersPolylines(mid);
-    if (t < 1) routeDecorRaf = requestAnimationFrame(tick);
-    else {
-      routeDecorRaf = null;
-      paintDecorBezierPaths(toPathsD);
-      routeDecorLayersSnapshot = {
-        samples: cloneDecorLayers(toSnapSamples),
-        pathsD: toPathsD.slice(),
-      };
-    }
+  const easeOpacity = (u) => u * u * (3 - 2 * u);
+
+  const runFadeIn = (startTs) => {
+    const tickIn = (now) => {
+      if (routeDecorFadeGen !== myGen) return;
+      const u = Math.min(1, (now - startTs) / fadeInMs);
+      setRouteDecorGroupsOpacity(easeOpacity(u));
+      if (u < 1) routeDecorRaf = requestAnimationFrame(tickIn);
+      else {
+        routeDecorRaf = null;
+        setRouteDecorGroupsOpacity(1);
+        finishSnapshot();
+      }
+    };
+    routeDecorRaf = requestAnimationFrame(tickIn);
   };
 
-  if (routeDecorRaf) cancelAnimationFrame(routeDecorRaf);
-  routeDecorRaf = requestAnimationFrame(tick);
+  if (!decorPathsExist()) {
+    paintDecorBezierPaths(next.pathsD);
+    setRouteDecorGroupsOpacity(0);
+    runFadeIn(performance.now());
+    return;
+  }
+
+  const tickOut = (now) => {
+    if (routeDecorFadeGen !== myGen) return;
+    const u = Math.min(1, (now - fadeOutStart) / fadeOutMs);
+    setRouteDecorGroupsOpacity(1 - easeOpacity(u));
+    if (u < 1) routeDecorRaf = requestAnimationFrame(tickOut);
+    else {
+      paintDecorBezierPaths(next.pathsD);
+      setRouteDecorGroupsOpacity(0);
+      runFadeIn(performance.now());
+    }
+  };
+  routeDecorRaf = requestAnimationFrame(tickOut);
 }
 
 function applyRouteGeometry(visual, labelOverride) {
@@ -6091,6 +6096,7 @@ function resetScenario(announce = true) {
   routeDecorResyncGen = 0;
   lastTerminalRouteMapVisual = null;
   lastIntroRouteMapVisual = null;
+  routeDecorFadeGen += 1;
   if (routeDecorRaf != null) {
     cancelAnimationFrame(routeDecorRaf);
     routeDecorRaf = null;
