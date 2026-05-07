@@ -3613,6 +3613,9 @@ function updateCompareTrainChrome() {
   if (compareTrainsCancelBar) {
     compareTrainsCancelBar.classList.toggle("hidden", !showCancelBar);
   }
+  if (checkoutButton) {
+    checkoutButton.classList.toggle("hidden", compareMode === "pickingSecond");
+  }
 }
 
 function truncateForSpeech(text, max = 1700) {
