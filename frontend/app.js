@@ -25,7 +25,7 @@ const pathClientLogs = [];
  * Размер отрисовки QR на демо-билете (px). Исходно 220; при росте полезной нагрузки
  * крупная матрица читается лучше. Верхняя граница по макету — до ~×2 (440); 300 — компромисс.
  */
-const TICKET_QR_RENDER_PX = 300;
+const TICKET_QR_RENDER_PX = 220;
 
 /** Обрезка по лимиту байт UTF-8 (для кириллицы длина строки ≠ размер в байтах). */
 function utf8ByteSlice(str, maxBytes) {
@@ -5163,24 +5163,36 @@ function renderTicket() {
   const pd = demoTicket?.passenger_document || "";
   const passBlock =
     pf || pp || pd
-      ? `<div class="ticket-passenger-block">
-    ${pf ? `<span><strong>${copy.ticketPassenger}:</strong> ${pf}</span>` : ""}
-    ${pd ? `<span><strong>${copy.ticketPassengerDoc}:</strong> ${pd}</span>` : ""}
-    ${pp ? `<span><strong>${copy.ticketPassengerPhone}:</strong> ${pp}</span>` : ""}
+      ? `<div class="ticket-passenger-block ticket-passenger-grid">
+    ${pf ? `<span><strong>${escapeHtml(copy.ticketPassenger)}:</strong> ${escapeHtml(pf)}</span>` : ""}
+    ${pd ? `<span><strong>${escapeHtml(copy.ticketPassengerDoc)}:</strong> ${escapeHtml(pd)}</span>` : ""}
+    ${pp ? `<span><strong>${escapeHtml(copy.ticketPassengerPhone)}:</strong> ${escapeHtml(pp)}</span>` : ""}
   </div>`
       : "";
+  const isRu = language === "ru";
+  const trip = {
+    train: isRu ? "Поезд" : "Train",
+    dep: isRu ? "Отпр." : "Dep.",
+    arr: isRu ? "Приб." : "Arr.",
+    car: isRu ? "Вагон" : "Car",
+    seat: isRu ? "Место" : "Seat",
+    berth: isRu ? "Полка" : "Berth",
+    clazz: isRu ? "Класс" : "Class",
+  };
   document.querySelector("#ticket-body").innerHTML = `
-    <strong>${demoTicket.route}</strong>
-    <span>${language === "ru" ? "Поезд" : "Train"}: ${demoTicket.train_number}</span>
-    <span>${language === "ru" ? "Отправление" : "Departure"}: ${demoTicket.departure}</span>
-    <span>${language === "ru" ? "Прибытие" : "Arrival"}: ${demoTicket.arrival}</span>
-    <span>${language === "ru" ? "Вагон" : "Car"}: ${demoTicket.car}</span>
-    <span>${language === "ru" ? "Место" : "Seat"}: ${demoTicket.seat}</span>
-    <span>${language === "ru" ? "Полка" : "Berth"}: ${demoTicket.berth_type}</span>
-    <span>${travelClassForTicket(demoTicket.travel_class)}</span>
+    <div class="ticket-route">${escapeHtml(demoTicket.route)}</div>
+    <div class="ticket-meta-grid" role="group" aria-label="${isRu ? "Реквизиты поездки" : "Trip details"}">
+      <div class="ticket-kv"><span class="ticket-k">${trip.train}</span><span class="ticket-v">${escapeHtml(demoTicket.train_number)}</span></div>
+      <div class="ticket-kv"><span class="ticket-k">${trip.dep}</span><span class="ticket-v">${escapeHtml(demoTicket.departure)}</span></div>
+      <div class="ticket-kv"><span class="ticket-k">${trip.arr}</span><span class="ticket-v">${escapeHtml(demoTicket.arrival)}</span></div>
+      <div class="ticket-kv"><span class="ticket-k">${trip.car}</span><span class="ticket-v">${escapeHtml(demoTicket.car)}</span></div>
+      <div class="ticket-kv"><span class="ticket-k">${trip.seat}</span><span class="ticket-v">${escapeHtml(demoTicket.seat)}</span></div>
+      <div class="ticket-kv"><span class="ticket-k">${trip.berth}</span><span class="ticket-v">${escapeHtml(demoTicket.berth_type)}</span></div>
+      <div class="ticket-kv ticket-kv--wide"><span class="ticket-k">${trip.clazz}</span><span class="ticket-v">${escapeHtml(travelClassForTicket(demoTicket.travel_class))}</span></div>
+    </div>
     ${passBlock}
     ${featuresBlock}
-    <small>${demoTicket.disclaimer}</small>
+    <small class="ticket-disclaimer">${escapeHtml(demoTicket.disclaimer)}</small>
   `;
   renderTicketQrCanvas(buildDemoTicketQrPayload());
   playTicketConfirmCelebration();

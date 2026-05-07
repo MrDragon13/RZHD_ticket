@@ -22,7 +22,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=202605120" />
+    <link rel="stylesheet" href="./styles.css?v=202605121" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -465,8 +465,10 @@
                 <div class="ticket">
                   <h2 id="ticket-title">ДЕМО-БИЛЕТ</h2>
                   <p id="ticket-thanks" class="ticket-thanks"></p>
-                  <div id="ticket-body" class="ticket-details"></div>
-                  <div id="ticket-qr-wrap" class="ticket-qr-wrap" aria-hidden="true"></div>
+                  <div class="ticket-body-row">
+                    <div id="ticket-body" class="ticket-details"></div>
+                    <div id="ticket-qr-wrap" class="ticket-qr-wrap" aria-hidden="true"></div>
+                  </div>
                   <button id="restart-button" class="ghost-button">Начать заново</button>
                 </div>
               </div>
@@ -654,7 +656,7 @@
 
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
     <script src="./api-client.js?v=202605091"></script>
-    <script src="./app.js?v=202605119"></script>
+    <script src="./app.js?v=202605121"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>
