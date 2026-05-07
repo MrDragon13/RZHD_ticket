@@ -3415,6 +3415,10 @@ html[data-theme="rzd"] .path-log-modal-content {
     inset 0 0 0 1px rgba(0, 255, 156, 0.06);
 }
 
+.compare-trains-sheet.compare-trains-sheet--loading {
+  overflow: hidden;
+}
+
 .compare-trains-header {
   display: flex;
   align-items: flex-start;
@@ -3453,31 +3457,17 @@ html[data-theme="rzd"] .path-log-modal-content {
     overflow: hidden;
   }
 
-  /* Пока «Готовим сравнение…» — не фиксируем высоту по левой колонке (она ещё пустая), иначе обрезание справа. */
+  /* Пока идёт загрузка сравнения — не даём внутреннему контенту дать скролл у всего sheet. */
   .compare-trains-layout.compare-trains-layout--loading .compare-trains-side-col {
     height: auto !important;
     max-height: none !important;
-    overflow: visible;
+    overflow: hidden;
   }
 }
 
 @media (max-width: 900px) {
   .compare-trains-layout {
     grid-template-columns: 1fr;
-  }
-
-  .compare-trains-loading-skeleton {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto;
-    min-height: 0;
-  }
-
-  .compare-trains-loading-skel-text {
-    grid-column: auto;
-  }
-
-  .compare-trains-loading-skel-btn {
-    display: none;
   }
 }
 
@@ -3553,85 +3543,34 @@ html[data-theme="rzd"] .path-log-modal-content {
   z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: clamp(12px, 2vmin, 16px);
-  padding: clamp(10px, 1.8vmin, 14px);
-  border-radius: clamp(14px, 2.4vmin, 18px);
+  justify-content: center;
+  align-items: center;
+  padding: clamp(16px, 3vmin, 28px);
   box-sizing: border-box;
+  overflow: hidden;
+  border-radius: clamp(14px, 2.4vmin, 18px);
   background: linear-gradient(
     165deg,
-    rgba(4, 12, 28, 0.72) 0%,
-    rgba(2, 10, 24, 0.88) 48%,
-    rgba(4, 14, 32, 0.92) 100%
+    rgba(4, 12, 28, 0.82) 0%,
+    rgba(2, 10, 24, 0.92) 48%,
+    rgba(4, 14, 32, 0.96) 100%
   );
   border: 1px solid rgba(0, 229, 255, 0.22);
   box-shadow:
     inset 0 0 0 1px rgba(0, 255, 156, 0.08),
     0 18px 48px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .compare-trains-loading-overlay.hidden {
   display: none;
 }
 
-.compare-trains-loading-skeleton {
-  flex: 1 1 auto;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  grid-template-rows: auto auto 1fr;
-  gap: clamp(10px, 2vmin, 14px);
-  min-height: clamp(160px, 28vmin, 280px);
-}
-
-.compare-trains-loading-skel-row {
-  display: contents;
-}
-
-.compare-trains-loading-skel-card {
-  border-radius: 16px;
-  padding: clamp(10px, 2vmin, 14px);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  justify-content: center;
-}
-
-.compare-trains-loading-skel-btn {
-  border-radius: 14px;
-  min-height: 48px;
-  align-self: stretch;
-  background: linear-gradient(
-    90deg,
-    rgba(0, 229, 255, 0.12),
-    rgba(0, 255, 156, 0.1),
-    rgba(0, 229, 255, 0.12)
-  );
-  background-size: 200% 100%;
-  animation: compare-skel-shimmer 1.4s ease-in-out infinite;
-}
-
-.compare-trains-loading-skel-text {
-  grid-column: 1 / -1;
-  border-radius: 14px;
-  padding: clamp(10px, 2vmin, 14px);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  justify-content: center;
-  min-height: clamp(72px, 14vmin, 120px);
-}
-
-@keyframes compare-skel-shimmer {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+.compare-trains-loading.compare-trains-loading--solo {
+  width: min(100%, 440px);
+  max-width: 100%;
+  flex-shrink: 0;
 }
 
 .compare-trains-loading {
@@ -3639,10 +3578,10 @@ html[data-theme="rzd"] .path-log-modal-content {
   display: flex;
   align-items: flex-start;
   gap: clamp(12px, 2.2vmin, 16px);
-  padding: clamp(12px, 2vmin, 16px) clamp(14px, 2.4vmin, 18px);
-  border-radius: 14px;
+  padding: clamp(14px, 2.4vmin, 18px) clamp(16px, 2.8vmin, 22px);
+  border-radius: 16px;
   border: 1px solid rgba(0, 229, 255, 0.26);
-  background: rgba(2, 10, 24, 0.55);
+  background: rgba(2, 10, 24, 0.58);
   box-shadow: inset 0 0 0 1px rgba(0, 255, 156, 0.07);
   box-sizing: border-box;
 }
@@ -3707,7 +3646,7 @@ html[data-theme="rzd"] .compare-trains-text {
 }
 
 html[data-theme="rzd"] .compare-trains-loading-overlay {
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.96), rgba(244, 246, 250, 0.98));
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.97), rgba(244, 246, 250, 0.99));
   border-color: rgba(21, 101, 192, 0.2);
   box-shadow:
     inset 0 0 0 1px rgba(21, 101, 192, 0.08),
@@ -3715,16 +3654,9 @@ html[data-theme="rzd"] .compare-trains-loading-overlay {
 }
 
 html[data-theme="rzd"] .compare-trains-loading {
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.88);
   border-color: rgba(21, 101, 192, 0.18);
   box-shadow: inset 0 0 0 1px rgba(21, 101, 192, 0.05);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .compare-trains-loading-skel-btn {
-    animation: none;
-    background: rgba(0, 229, 255, 0.1);
-  }
 }
 
 .train-card.train-card--compare-first {

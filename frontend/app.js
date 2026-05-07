@@ -1735,6 +1735,7 @@ const checkoutLoadingEl = document.querySelector("#checkout-loading");
 const compareTrainsStartBtn = document.querySelector("#compare-trains-start");
 const compareTrainsCancelBar = document.querySelector("#compare-trains-cancel-bar");
 const compareTrainsModal = document.querySelector("#compare-trains-modal");
+const compareTrainsSheetEl = document.querySelector("#compare-trains-sheet");
 const compareTrainsBackdrop = document.querySelector("#compare-trains-backdrop");
 const compareTrainsCloseBtn = document.querySelector("#compare-trains-close");
 const compareSlotA = document.querySelector("#compare-slot-a");
@@ -3732,6 +3733,7 @@ function openCompareModalLoading() {
   const layout = getCompareTrainsLayoutEl();
   layout?.style.removeProperty("--compare-left-h");
   layout?.classList.add("compare-trains-layout--loading");
+  compareTrainsSheetEl?.classList.add("compare-trains-sheet--loading");
   compareTrainsLoadingOverlayEl?.classList.remove("hidden");
   compareTrainsLoadingOverlayEl?.setAttribute("aria-hidden", "false");
   if (compareTrainsTextEl) compareTrainsTextEl.textContent = "";
@@ -3749,6 +3751,7 @@ function closeCompareModal() {
   compareTrainsLoadingOverlayEl?.classList.add("hidden");
   compareTrainsLoadingOverlayEl?.setAttribute("aria-hidden", "true");
   getCompareTrainsLayoutEl()?.classList.remove("compare-trains-layout--loading");
+  compareTrainsSheetEl?.classList.remove("compare-trains-sheet--loading");
   getCompareTrainsLayoutEl()?.style.removeProperty("--compare-left-h");
   updateCompareTrainChrome();
 }
@@ -3762,6 +3765,7 @@ function fillCompareModal(trainA, trainB, text) {
   compareTrainsLoadingOverlayEl?.classList.add("hidden");
   compareTrainsLoadingOverlayEl?.setAttribute("aria-hidden", "true");
   getCompareTrainsLayoutEl()?.classList.remove("compare-trains-layout--loading");
+  compareTrainsSheetEl?.classList.remove("compare-trains-sheet--loading");
   const copy = i18n[language];
   if (compareCheckoutABtn) {
     compareCheckoutABtn.textContent = copy.compareCheckoutTrain.replace("{num}", trainA.train_number);

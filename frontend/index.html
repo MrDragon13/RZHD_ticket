@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Путь — умный билетный терминал</title>
-    <link rel="stylesheet" href="./styles.css?v=202605101" />
+    <link rel="stylesheet" href="./styles.css?v=202605102" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -455,7 +455,7 @@
       aria-hidden="true"
     >
       <div id="compare-trains-backdrop" class="support-chat-backdrop"></div>
-      <div class="compare-trains-sheet glass-panel">
+      <div id="compare-trains-sheet" class="compare-trains-sheet glass-panel">
         <header class="compare-trains-header">
           <div>
             <h2 id="compare-trains-heading">AI Сравнение поездов</h2>
@@ -481,31 +481,7 @@
             class="compare-trains-loading-overlay hidden"
             aria-hidden="true"
           >
-            <div class="compare-trains-loading-skeleton" aria-hidden="true">
-              <div class="compare-trains-loading-skel-row">
-                <div class="compare-trains-loading-skel-card train-card-skeleton">
-                  <div class="skeleton-line skeleton-line--wide"></div>
-                  <div class="skeleton-line skeleton-line--mid"></div>
-                  <div class="skeleton-line skeleton-line--narrow"></div>
-                </div>
-                <div class="compare-trains-loading-skel-btn"></div>
-              </div>
-              <div class="compare-trains-loading-skel-row">
-                <div class="compare-trains-loading-skel-card train-card-skeleton">
-                  <div class="skeleton-line skeleton-line--wide"></div>
-                  <div class="skeleton-line skeleton-line--mid"></div>
-                  <div class="skeleton-line skeleton-line--narrow"></div>
-                </div>
-                <div class="compare-trains-loading-skel-btn"></div>
-              </div>
-              <div class="compare-trains-loading-skel-text train-card-skeleton">
-                <div class="skeleton-line skeleton-line--wide"></div>
-                <div class="skeleton-line skeleton-line--mid"></div>
-                <div class="skeleton-line skeleton-line--narrow"></div>
-                <div class="skeleton-line skeleton-line--mid"></div>
-              </div>
-            </div>
-            <div id="compare-trains-loading" class="compare-trains-loading" role="status" aria-live="polite">
+            <div id="compare-trains-loading" class="compare-trains-loading compare-trains-loading--solo" role="status" aria-live="polite">
               <div class="checkout-loading-spinner" aria-hidden="true"></div>
               <div class="compare-trains-loading-copy">
                 <p id="compare-trains-loading-title" class="compare-loading-title"></p>
@@ -590,7 +566,7 @@
 
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
     <script src="./api-client.js?v=202605091"></script>
-    <script src="./app.js?v=202605101"></script>
+    <script src="./app.js?v=202605102"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>
