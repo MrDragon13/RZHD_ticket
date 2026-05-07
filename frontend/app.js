@@ -700,10 +700,107 @@ function syncRouteFlowOverlay(flowEl, pathD) {
   }
 }
 
-/** Нормальные смещения от основной линии: три «региона» + rail-background (порядок как в index.html). */
-const ROUTE_DECOR_OFFSETS = [14, -22, 30, -11];
+/** Число точек на декоративной полилинии (одинаково для всех линий в поколении — для морфинга). */
 const ROUTE_DECOR_SAMPLE_COUNT = 52;
 const ROUTE_DECOR_ANIM_MS = 520;
+
+/** Детерминированный RNG для формы декора в одном «поколении». */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function rand() {
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Одна декоративная линия: не параллель оффсета, а комбинация нормальных и тангенциальных волн вдоль маршрута.
+ */
+function buildUniqueDecorPolyline(pathD, lineIndex, lineCount, rng, sampleCount) {
+  const probe = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  probe.setAttribute("d", pathD);
+  let L;
+  try {
+    L = probe.getTotalLength();
+  } catch {
+    return [];
+  }
+  if (!Number.isFinite(L) || L < 4) return [];
+  const n = Math.max(2, sampleCount);
+
+  const ampN = 10 + rng() * 28;
+  const ampT = 2 + rng() * 18;
+  const kAlong = 3 + rng() * 9;
+  const kAcross = 4 + rng() * 11 + lineIndex * 0.35;
+  const phiA = rng() * Math.PI * 2;
+  const phiB = rng() * Math.PI * 2;
+  const phiC = rng() * Math.PI * 2;
+  const side = rng() > 0.5 ? 1 : -1;
+  const bias =
+    side *
+    (12 +
+      lineIndex * (4 + rng() * 6) +
+      rng() * 18 +
+      ((lineIndex % 3) - 1) * rng() * 10 +
+      ((lineCount - 1 - lineIndex) / Math.max(1, lineCount - 1)) * rng() * 12);
+  const envelope = 0.65 + rng() * 0.45;
+  const mixSin = 0.35 + rng() * 0.45;
+  const mixCos = 0.25 + rng() * 0.45;
+
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const u = i / Math.max(1, n - 1);
+    const t = u * L;
+    const p = probe.getPointAtLength(t);
+    const dt = Math.min(Math.max(L * 0.004, 2), Math.max(L - t, 1e-6));
+    const p2 = probe.getPointAtLength(Math.min(t + dt, L));
+    let dx = p2.x - p.x;
+    let dy = p2.y - p.y;
+    let len = Math.hypot(dx, dy);
+    if (len < 1e-6) {
+      dx = 1;
+      dy = 0;
+      len = 1;
+    }
+    const tx = dx / len;
+    const ty = dy / len;
+    const nx = -ty;
+    const ny = tx;
+
+    const along =
+      ampT *
+      (Math.sin(u * Math.PI * kAlong + phiA + lineIndex * 0.6) +
+        0.55 * Math.cos(u * Math.PI * (kAlong * 1.7) + phiB));
+
+    const waveA = Math.sin(u * Math.PI * kAcross + phiC + lineIndex * 1.1);
+    const waveB = Math.cos(u * Math.PI * (kAcross * 0.83) + phiA * 0.7 + lineIndex);
+    const ripple = Math.sin(u * Math.PI * (kAcross * 2.1 + lineIndex * 0.4) + phiB + lineIndex);
+
+    const across =
+      bias + ampN * envelope * (waveA * mixSin + waveB * mixCos + ripple * 0.35);
+
+    pts.push({
+      x: p.x + nx * across + tx * along,
+      y: p.y + ny * across + ty * along,
+    });
+  }
+  return pts;
+}
+
+function computeDecorLayers(mainPathD) {
+  let seed = (Math.floor(Math.random() * 0xffffffff) ^ (Date.now() & 0xffffffff)) >>> 0;
+  if (!seed) seed = 0x6d2b79f5;
+  const rng = mulberry32(seed);
+  const lineCount = 3 + Math.floor(rng() * 8);
+  const layers = [];
+  for (let li = 0; li < lineCount; li += 1) {
+    const layer = buildUniqueDecorPolyline(mainPathD, li, lineCount, rng, ROUTE_DECOR_SAMPLE_COUNT);
+    if (layer.length >= 2) layers.push(layer);
+  }
+  return layers;
+}
 
 /** @type {number | null} */
 let routeDecorRaf = null;
@@ -758,65 +855,42 @@ function polylineToPathD(points) {
   return d;
 }
 
-function buildOffsetPolylineFromPath(pathD, offsetPx, sampleCount) {
-  const probe = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  probe.setAttribute("d", pathD);
-  let L;
-  try {
-    L = probe.getTotalLength();
-  } catch {
-    return [];
-  }
-  if (!Number.isFinite(L) || L < 4) return [];
-  const n = Math.max(2, sampleCount);
-  const pts = [];
-  for (let i = 0; i < n; i++) {
-    const t = (i / (n - 1)) * L;
-    const p = probe.getPointAtLength(t);
-    const dt = Math.min(Math.max(L * 0.004, 2), Math.max(L - t, 1e-6));
-    const p2 = probe.getPointAtLength(Math.min(t + dt, L));
-    let dx = p2.x - p.x;
-    let dy = p2.y - p.y;
-    let len = Math.hypot(dx, dy);
-    if (len < 1e-6) {
-      dx = 1;
-      dy = 0;
-      len = 1;
-    }
-    const nx = (-dy / len) * offsetPx;
-    const ny = (dx / len) * offsetPx;
-    pts.push({ x: p.x + nx, y: p.y + ny });
-  }
-  return pts;
-}
-
-function computeDecorLayers(mainPathD) {
-  return ROUTE_DECOR_OFFSETS.map((off) =>
-    buildOffsetPolylineFromPath(mainPathD, off, ROUTE_DECOR_SAMPLE_COUNT),
-  );
-}
-
 function paintDecorLayers(layers) {
   routeDecorLastPainted = cloneDecorLayers(layers);
   const svgs = [
     document.querySelector("#map-content svg.route-map"),
     document.querySelector(".language-route-map"),
   ].filter(Boolean);
+  const NS = "http://www.w3.org/2000/svg";
   for (const svg of svgs) {
-    const regions = svg.querySelectorAll(".map-region-line");
-    const rail = svg.querySelector(".rail-background");
-    if (regions.length < 3 || !rail || layers.length < 4) continue;
-    for (let i = 0; i < 3; i++) {
-      const d = polylineToPathD(layers[i]);
-      if (d) regions[i].setAttribute("d", d);
+    let group = svg.querySelector(".route-decor-group");
+    if (!group) {
+      group = document.createElementNS(NS, "g");
+      group.setAttribute("class", "route-decor-group");
+      group.setAttribute("aria-hidden", "true");
+      const land = svg.querySelector(".map-landmass");
+      if (land && land.parentNode) {
+        land.parentNode.insertBefore(group, land.nextSibling);
+      } else {
+        svg.appendChild(group);
+      }
     }
-    const rd = polylineToPathD(layers[3]);
-    if (rd) rail.setAttribute("d", rd);
+    while (group.firstChild) {
+      group.removeChild(group.firstChild);
+    }
+    for (let i = 0; i < layers.length; i++) {
+      const d = polylineToPathD(layers[i]);
+      if (!d) continue;
+      const path = document.createElementNS(NS, "path");
+      path.setAttribute("class", "route-decor-line");
+      path.setAttribute("d", d);
+      group.appendChild(path);
+    }
   }
 }
 
 /**
- * Обновляет статичные декоративные линии под текущую геометрию маршрута (параллели к основной кривой).
+ * Декоративные линии вдоль маршрута: случайное число (3–10), уникальная форма при каждой генерации.
  * @param {string} mainPathD — атрибут `d` основной линии.
  * @param {{ animate?: boolean; duration?: number }} [options]
  */
@@ -827,7 +901,7 @@ function syncDecorativeRouteLines(mainPathD, options = {}) {
   const duration = options.duration ?? ROUTE_DECOR_ANIM_MS;
 
   const next = computeDecorLayers(mainPathD);
-  if (!next.every((layer) => layer.length >= 2)) {
+  if (!next.length || next.length < 3 || !next.every((layer) => layer.length >= 2)) {
     return;
   }
 

@@ -1556,8 +1556,7 @@ html[data-theme="rzd"] .checkout-seat-confirm-wrap {
   fill: url(#routeMapCoordGrid);
 }
 
-.map-region-line,
-.rail-background {
+.route-decor-group .route-decor-line {
   fill: none;
   stroke: rgba(142, 168, 199, 0.18);
   stroke-width: 2;
@@ -4398,6 +4397,10 @@ html[data-theme="rzd"] .route-line-flow:not(.route-line-flow-active) {
     animation: none;
     opacity: 0.75;
   }
+}
+
+html[data-theme="rzd"] .route-decor-group .route-decor-line {
+  stroke: rgba(96, 118, 148, 0.22);
 }
 
 html[data-theme="rzd"] #new-session-button.ghost-button {
