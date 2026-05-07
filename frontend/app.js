@@ -2541,11 +2541,13 @@ async function handleUserText(text) {
 
   if (await tryVoiceCheckoutConfirmation(cleanText)) {
     addMessage("user", cleanText);
+    if (userInput) userInput.value = "";
     return;
   }
 
   addMessage("user", cleanText);
   await runDialog(cleanText);
+  if (userInput) userInput.value = "";
 }
 
 /** Голосовое подтверждение оформления демо-билета для рекомендованного / выбранного поезда. */
@@ -3816,6 +3818,8 @@ function openCompareModalLoading() {
 
 function closeCompareModal() {
   if (!compareTrainsModal) return;
+  stopAssistantSpeech();
+  setOrbMode("idle");
   compareTrainsModal.classList.add("hidden");
   compareTrainsModal.setAttribute("aria-hidden", "true");
   document.body.style.overflow = "";
@@ -4081,13 +4085,19 @@ function carriageCapacityForClass(train, cls) {
   return 54;
 }
 
-/** Генерирует места для одного «этажа» вагона (непрерывная нумерация с seatNum). Возвращает { seats, nextNum }. */
-function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, compartmentIndexOffset) {
+/** Генерирует места для одного «этажа» вагона (непрерывная нумерация с seatNum). Возвращает { seats, nextNum }.
+ * `coupeFourBerthOnly`: в классе купе только полные отсеки по 4 места (нет «полкупе» на 2 или «кусков» на 3).
+ */
+function buildBerthSeatSpan(car, capacity, startSeatNum, deckIndex, compartmentIndexOffset, layoutOpts = {}) {
   const seats = [];
-  if (capacity <= 0) return { seats, nextNum: startSeatNum };
+  let cap = capacity;
+  if (layoutOpts.coupeFourBerthOnly && capacity > 0) {
+    cap = Math.floor(capacity / 4) * 4;
+  }
+  if (cap <= 0) return { seats, nextNum: startSeatNum };
   let seatNum = startSeatNum;
-  const fullCompartments = Math.floor(capacity / 4);
-  const remainder = capacity % 4;
+  const fullCompartments = Math.floor(cap / 4);
+  const remainder = cap % 4;
   for (let comp = 0; comp < fullCompartments; comp += 1) {
     const compIdx = compartmentIndexOffset + comp;
     for (let pairSlot = 0; pairSlot < 2; pairSlot += 1) {
@@ -4440,10 +4450,14 @@ function buildSeatPickerModel(train) {
     }
 
     if (carriageIsDoubleDeckCoupeLayout(train, car)) {
-      const perDeck = Math.floor(capacity / 2);
-      const d1 = buildBerthSeatSpan(car, perDeck, 1, 0, 0);
+      const perDeckRaw = Math.floor(capacity / 2);
+      const perDeck =
+        cls === "coupe"
+          ? Math.floor(perDeckRaw / 4) * 4
+          : perDeckRaw;
+      const d1 = buildBerthSeatSpan(car, perDeck, 1, 0, 0, { coupeFourBerthOnly: cls === "coupe" });
       const off = compartmentCountForCapacity(perDeck);
-      const d2 = buildBerthSeatSpan(car, perDeck, d1.nextNum, 1, off);
+      const d2 = buildBerthSeatSpan(car, perDeck, d1.nextNum, 1, off, { coupeFourBerthOnly: cls === "coupe" });
       seats = attachSeatPrices(train, car, cls, [...d1.seats, ...d2.seats]);
       finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng, train);
       layouts.set(car, seats);
@@ -4457,7 +4471,7 @@ function buildSeatPickerModel(train) {
       return;
     }
 
-    const span = buildBerthSeatSpan(car, capacity, 1, 0, 0);
+    const span = buildBerthSeatSpan(car, capacity, 1, 0, 0, { coupeFourBerthOnly: cls === "coupe" });
     seats = attachSeatPrices(train, car, cls, span.seats);
     finalizeSeatOccupancy(seats, mergedCarriageDetailForLayout(train, car, seats), rng, train);
     layouts.set(car, seats);
