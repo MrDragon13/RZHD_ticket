@@ -957,11 +957,31 @@ class DeepSeekClient:
             lines_ru.append("Выберите баланс времени, цены и оставшихся мест под вашу поездку.")
         return "\n".join(x for x in lines_ru if x)
 
+    def _carriage_digest_for_compare(self, t: TrainOption) -> str:
+        """Краткая сводка вагонов 5764 для сравнения: типы, услуги (вагон-ресторан, Wi‑Fi, животные — если есть в services_short)."""
+
+        details = list(t.carriage_details or [])
+        if not details:
+            return "—"
+        groups = _compact_carriage_groups(details, max_groups=10)
+        if not groups:
+            return "—"
+        out: list[str] = []
+        for g in groups:
+            n = int(g.get("count") or 0)
+            typ = str(g.get("type") or "—").strip()[:40]
+            nums = ", ".join(str(x) for x in (g.get("numbers") or [])[:4])
+            svcs = ", ".join(str(x) for x in (g.get("services") or [])[:10])
+            out.append(f"{n}× {typ} ({nums}): {svcs}"[:240])
+        return " | ".join(out) if out else "—"
+
     def _train_compare_blob(self, label: str, t: TrainOption) -> str:
         stops = _compact_stops_for_llm(list(t.stops or []), limit=12)
         stop_txt = " → ".join(stops) if stops else "—"
         am = ", ".join(_dedupe_preserve(list(t.amenities), limit=8, max_len=48))
         notes = "; ".join(_dedupe_preserve(list(t.carriage_notes), limit=3, max_len=120))
+        features = ", ".join(_dedupe_preserve(list(t.features), limit=8, max_len=48))
+        car_blob = self._carriage_digest_for_compare(t)
         seats = t.available_seats
         return (
             f"{label}:\n"
@@ -973,8 +993,10 @@ class DeepSeekClient:
             f"  berth lower/upper/side {t.seat_details.lower}/{t.seat_details.upper}/"
             f"{t.seat_details.side_lower}+{t.seat_details.side_upper}\n"
             f"  prices platz/coupe/sv={t.prices.platzkart}/{t.prices.coupe}/{t.prices.sv}\n"
-            f"  amenities: {am or '—'}\n"
+            f"  features (search): {features or '—'}\n"
+            f"  amenities (search): {am or '—'}\n"
             f"  notes: {notes or '—'}\n"
+            f"  carriages_5764_grouped: {car_blob}\n"
             f"  stops sample: {stop_txt}\n"
         )
 
@@ -999,6 +1021,8 @@ class DeepSeekClient:
                 "Reply in English only. Use clear sections with headings exactly as:\n"
                 "Time\nPrice\nComfort\nTrade-offs\n"
                 "Under each heading, 2–4 short sentences comparing both trains; be factual, no markdown fences. "
+                "For Comfort, mention onboard services from carriages_5764_grouped (e.g. Wi‑Fi, dining car, animals, AC) when present in the data; "
+                "do not invent amenities not listed. "
                 "Do not invent precise fares if missing — say «unknown from card». "
                 "This is a demo terminal, not a binding quote."
             )
@@ -1009,6 +1033,8 @@ class DeepSeekClient:
                 "Строго используй заголовки разделов в начале строк:\n"
                 "Время\nЦена\nКомфорт\nКомпромиссы\n"
                 "Под каждым заголовком — 2–4 коротких предложения, сравнивающих оба поезда. "
+                "В разделе «Комфорт» опирайся на carriages_5764_grouped (услуги по вагонам), amenities и features из данных — "
+                "кондиционер, вагон-ресторан, животные, Wi‑Fi и т.п., только если они указаны; не выдумывай. "
                 "Без markdown-блоков. Не выдумывай точные тарифы, если в данных прочерк — так и скажи. "
                 "Это учебный терминал, не официальное предложение РЖД."
             )

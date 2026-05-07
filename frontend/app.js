@@ -3395,17 +3395,22 @@ function departureDateRzdFromTrain(train) {
   return `${ymd.slice(6, 8)}.${ymd.slice(4, 6)}.${ymd.slice(0, 4)}`;
 }
 
-/** Слой 5764 (вагоны, полки) — только перед выбором мест, не при поиске. */
-async function fetchTrainCarriageDetailsIfNeeded(train) {
+/** Слой 5764 (вагоны, услуги: кондиционер, биотуалет и т.д.) — при live-cache догружается по запросу. */
+async function fetchTrainCarriageDetailsIfNeeded(train, options = {}) {
+  const { signal } = options;
   if (!train || ticketSearchSource !== "live-cache") return train;
   if (Array.isArray(train.carriage_details) && train.carriage_details.length > 0) return train;
   try {
-    const res = await postJson("/api/train-carriage-details", {
-      language,
-      origin: intent.origin,
-      destination: intent.destination,
-      train,
-    });
+    const res = await postJson(
+      "/api/train-carriage-details",
+      {
+        language,
+        origin: intent.origin,
+        destination: intent.destination,
+        train,
+      },
+      { signal },
+    );
     const u = res.train;
     const idx = trains.findIndex((t) => t.id === u.id);
     if (idx >= 0) trains[idx] = u;
@@ -3467,6 +3472,19 @@ async function fetchTrainRouteStopsIfNeeded(train, signal) {
   if (!train || ticketSearchSource !== "live-cache") return;
   if (routeStopsLoadedIds.has(train.id)) return;
   await fetchTrainRouteStops(train, signal);
+}
+
+/** Перед сравнением: basicRoute + список вагонов 5764 (как перед выбором мест), параллельно. */
+async function prefetchTrainDataForCompare(train, signal) {
+  if (!train) return;
+  await Promise.all([
+    (async () => {
+      await fetchTrainRouteStopsIfNeeded(train, signal);
+    })(),
+    (async () => {
+      await fetchTrainCarriageDetailsIfNeeded(train, { signal });
+    })(),
+  ]);
 }
 
 /**
@@ -3700,7 +3718,7 @@ function startTrainCompare() {
   compareFirstId = selectedTrain.id;
   comparePrefetchAbort?.abort();
   comparePrefetchAbort = new AbortController();
-  void fetchTrainRouteStopsIfNeeded(selectedTrain, comparePrefetchAbort.signal);
+  void prefetchTrainDataForCompare(selectedTrain, comparePrefetchAbort.signal);
   assistantSay(i18n[language].comparePickSecond);
   updateCompareTrainChrome();
   renderTrains();
@@ -3725,6 +3743,7 @@ async function finalizeTrainCompare(secondTrain) {
       cancelTrainCompareFlow({ silent: true });
       return;
     }
+    await Promise.all([prefetchTrainDataForCompare(trainA, sig), prefetchTrainDataForCompare(trainB, sig)]);
     if (sig.aborted) {
       closeCompareModal();
       return;
