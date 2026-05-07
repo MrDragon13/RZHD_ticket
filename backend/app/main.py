@@ -1,3 +1,7 @@
+"""FastAPI-шлюз терминала «Путь»: маршруты, DeepSeek, RZD-адаптер, rate limit.
+
+Бизнес-правила поездов и билетов — в `app/services/`; здесь только wiring, модели и ошибки HTTP.
+"""
 from __future__ import annotations
 
 import logging

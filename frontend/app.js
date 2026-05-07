@@ -1,3 +1,15 @@
+/**
+ * Клиент терминала «Путь»: один файл без сборщика. HTTP только через `./api-client.js`
+ * (fetch + X-Request-Id + пауза idle-таймера на время запроса).
+ *
+ * Поток экранов: язык → имитация входа → `#terminal-screen` (`#main-workspace`). При оформлении:
+ * `#checkout-workspace` (карта `#map-content` переносится в `#checkout-map-host`), выбор мест,
+ * демо-оплата, билет.
+ *
+ * Ключевое состояние: `language`, `uiStage`, `intent`/`trains`/`selectedTrain`, места (`selectedSeatKeys`),
+ * сравнение (`compareMode`). Сброс сценария — `resetScenario`; выход из киоска checkout — `exitCheckoutWorkspaceMode`
+ * (возвращает карту в `#route-panel`).
+ */
 // HTTP: fetchApi, postJson, getJson — в ./api-client.js (грузится в index.html перед этим файлом).
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -63,6 +75,7 @@ function pathLogAppend(level, args) {
   pathLogAppend("INFO", ["Путь: захват консольных сообщений включён"]);
 })();
 
+// --- i18n: один объект на язык; `language` ниже выбирает ветку ru/en ---
 // Все пользовательские надписи вынесены в словарь, чтобы выбранный на первом
 // экране язык проходил сквозь весь интерфейс, голосовые реплики и демо-билет.
 const i18n = {
@@ -1112,6 +1125,7 @@ const amenityLabels = {
   },
 };
 
+// --- Подписи amenities/features поезда и билета (не дублируют i18n UI) ---
 /** Особенности по полю features в demo_trains (если amenities пуст — например live РЖД). */
 const featureLabels = {
   ru: {
@@ -1316,6 +1330,7 @@ function ticketUnifiedFeaturesHtml(train, ticketCarField, ticketRow) {
   return `<div class="ticket-features-block"><p class="ticket-wagon-features-title">${escapeHtml(copy.ticketAllFeatures)}</p><div class="amenity-row ticket-features-unified">${chips}</div></div>`;
 }
 
+// --- Маршрутизация сценария: поиск → список поездов → checkout / сравнение ---
 let language = "ru";
 
 /** Пара городов для экрана и озвучки: RU «А в Б», EN «A to B» (без «стрелки» для TTS). */
@@ -1662,11 +1677,13 @@ function demoCarClassForCarCode(carCode, train) {
   if (hasCoupe) return "coupe";
   return "platzkart";
 }
+// --- Выбор мест в демо-вагоне, стадия UI, очередь озвучки ---
 /** @type {Map<string, Array<{ id: string, displayNum: string, berth_kind: string, occupied: boolean }>>} */
 let demoSeatLayouts = new Map();
 /** @type {Set<string>} */
 let selectedSeatKeys = new Set();
 let dialogMessages = [];
+/** initial | searching | results | checkout | seatPicker | ticket — синхронизировать с чипами и панелями. */
 let uiStage = "initial";
 let speechQueue = [];
 let isSpeaking = false;
@@ -1676,10 +1693,12 @@ let lastDialogUserText = "";
 let lastSuccessfulSearchKey = null;
 let lastSelectedTrainId = null;
 
+// --- Таймаут бездействия сессии (после выбора языка); пауза на время fetch через window.pathTerminalIdleFetchBegin/End ---
 /** Уведомление за GLOBAL_IDLE_WARN_BEFORE_MS до возврата на экран языка */
 const GLOBAL_IDLE_MS = 120_000;
 const GLOBAL_IDLE_WARN_BEFORE_MS = 10_000;
 
+/** Экран языка: ротация маршрутов и POST /api/fun-fact (таймеры ниже — отдельно от idle сессии). */
 /** Должны быть объявлены до первого вызова startLanguageScreenAmbient() (иначе TDZ). */
 let languageAmbientTimer = null;
 let languageAmbientAbort = null;
@@ -1709,6 +1728,7 @@ const sessionPassenger = {
 
 let authPhoneDigits = [];
 
+// --- Узлы DOM: скрипт в конце body, дерево уже распарсено ---
 const screens = {
   language: document.querySelector("#language-screen"),
   auth: document.querySelector("#auth-screen"),
@@ -2342,6 +2362,7 @@ function updateTextInputToggleLabels() {
   textInputToggle.setAttribute("aria-label", textInputPanelOpen ? copy.textInputAriaHide : copy.textInputAriaShow);
 }
 
+// --- Старт приложения: подписи по текущему языку, тема из localStorage (ключ = THEME_STORAGE_KEY, см. index.html), модалки ---
 updateTextInputToggleLabels();
 applySupportChatChrome();
 applyCheckoutLoadingTexts();
@@ -3775,6 +3796,7 @@ function renderCompareMiniCard(train, labelKind) {
   `;
 }
 
+// --- Сравнение поездов: prefetch обоих поездов, затем LLM-текст в `#compare-trains-text` ---
 function openCompareModalLoading() {
   compareModalOpen = true;
   document.body.style.overflow = "hidden";
@@ -4501,6 +4523,7 @@ function setCheckoutSeatConfirmBarVisible(visible) {
   checkoutSeatConfirmWrap?.classList.toggle("hidden", !visible);
 }
 
+// --- Режим checkout-экрана: `#map-content` в `#checkout-map-host`, кнопка подтверждения в `#checkout-seat-confirm-wrap` ---
 async function enterCheckoutWorkspaceMode() {
   if (!checkoutWorkspace || !mainWorkspace || !checkoutMapHost || !mapContent || !routePanel) return;
   if (prefersReducedMotion()) {
@@ -5638,6 +5661,7 @@ function initPathLogModal() {
   });
 }
 
+/** Тема: читает/пишет THEME_STORAGE_KEY; дефолт rzd; inline в index.html дублирует первое применение до paint. */
 function initThemeToggle() {
   const html = document.documentElement;
   let stored = null;
@@ -5705,6 +5729,7 @@ function runLocalDemoFallback() {
   setStage("initial");
 }
 
+/** Полный сброс поездочного сценария: диалог, поезда, карта, места, билет. Язык/тема/пассажир не трогаем. */
 function resetScenario(announce = true) {
   abortDialogRequests();
   cancelTrainCompareFlow({ silent: true, skipRender: true });
