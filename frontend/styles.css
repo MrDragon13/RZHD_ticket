@@ -3429,14 +3429,6 @@ html[data-theme="rzd"] .path-log-modal-content {
   color: var(--text);
 }
 
-.compare-trains-subtitle {
-  margin: 6px 0 0;
-  font-size: clamp(12px, 2vmin, 14px);
-  color: var(--muted);
-  max-width: 56ch;
-  line-height: 1.4;
-}
-
 .compare-trains-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);

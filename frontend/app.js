@@ -156,7 +156,6 @@ const i18n = {
       "Режим сравнения: выберите на списке второй поезд — я покажу разницу по времени, цене и комфорту.",
     compareCancelled: "Сравнение отменено. Можно снова выбрать поезд в списке.",
     compareSameTrain: "Выберите другой поезд — не тот же, что уже отмечен для сравнения.",
-    compareModalSubtitle: "Текст подготовлен для демонстрации — сверяйте тарифы и расписание с официальными источниками РЖД.",
     compareLoading: "Готовим сравнение…",
     compareClose: "Закрыть",
     compareCheckoutTrain: "Оформить поезд {num}",
@@ -309,8 +308,6 @@ const i18n = {
       "Compare mode: tap another train in the list — I will summarize time, price, and comfort.",
     compareCancelled: "Comparison cancelled. You can pick a train from the list again.",
     compareSameTrain: "Pick a different train — not the one already marked for comparison.",
-    compareModalSubtitle:
-      "Demo text — always verify fares and times with official RZD channels before travelling.",
     compareLoading: "Preparing comparison…",
     compareClose: "Close",
     compareCheckoutTrain: "Checkout train {num}",
@@ -1722,7 +1719,6 @@ const compareSlotB = document.querySelector("#compare-slot-b");
 const compareTrainsLoadingEl = document.querySelector("#compare-trains-loading");
 const compareTrainsLoadingTitle = document.querySelector("#compare-trains-loading-title");
 const compareTrainsTextEl = document.querySelector("#compare-trains-text");
-const compareTrainsSubtitleEl = document.querySelector("#compare-trains-subtitle");
 const compareTrainsHeadingEl = document.querySelector("#compare-trains-heading");
 const compareCheckoutABtn = document.querySelector("#compare-checkout-a");
 const compareCheckoutBBtn = document.querySelector("#compare-checkout-b");
@@ -3594,7 +3590,6 @@ function applyCompareChrome() {
   const copy = i18n[language];
   if (compareTrainsHeadingEl)
     compareTrainsHeadingEl.textContent = language === "ru" ? "AI Сравнение поездов" : "AI Train comparison";
-  if (compareTrainsSubtitleEl) compareTrainsSubtitleEl.textContent = copy.compareModalSubtitle;
   if (compareTrainsLoadingTitle) compareTrainsLoadingTitle.textContent = copy.compareLoading;
   if (compareTrainsCloseBtn) compareTrainsCloseBtn.textContent = copy.compareClose;
   if (compareTrainsStartBtn) compareTrainsStartBtn.textContent = copy.compareTrains;
@@ -3807,7 +3802,8 @@ async function completeCompareCheckout(trainId) {
   const tr = trains.find((t) => t.id === trainId);
   if (!tr) return;
   cancelTrainCompareFlow({ silent: true });
-  await selectTrain(tr);
+  await selectTrain(tr, { suppressSelectionSpeech: true });
+  await createTicket();
 }
 
 async function handleTrainCardActivate(train) {
