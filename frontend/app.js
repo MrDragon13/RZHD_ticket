@@ -1093,6 +1093,12 @@ function applyRouteGeometry(visual, labelOverride) {
     originRaw: intent?.origin,
     destinationRaw: intent?.destination,
   };
+  const decorMorphOpts = {
+    animate: true,
+    duration: ROUTE_MAIN_MORPH_MS,
+    easing: "cubicOut",
+    ...decorOdOpts,
+  };
 
   /** Финальное состояние линии: точный `d`, отрисовка dash, поток, точки карты (после морфинга или сразу). */
   const finalizeTerminalRouteLine = () => {
@@ -1135,8 +1141,8 @@ function applyRouteGeometry(visual, labelOverride) {
     updateMapGeometry(visual, labelOverride);
   };
 
-  if (routeReduced || hasClip) {
-    syncDecorativeRouteLines(visual.line, { animate: false, ...decorOdOpts });
+  if (routeReduced) {
+    syncDecorativeRouteLines(visual.line, decorMorphOpts);
     finalizeTerminalRouteLine();
     return;
   }
@@ -1158,7 +1164,7 @@ function applyRouteGeometry(visual, labelOverride) {
   const targetD = visual.line;
 
   if (!prevD.trim() || prevD === targetD) {
-    syncDecorativeRouteLines(visual.line, { animate: false, ...decorOdOpts });
+    syncDecorativeRouteLines(visual.line, decorMorphOpts);
     finalizeTerminalRouteLine();
     return;
   }
@@ -1166,7 +1172,7 @@ function applyRouteGeometry(visual, labelOverride) {
   let fromPts = samplePathDToPoints(prevD, ROUTE_MAIN_MORPH_SAMPLES);
   let toPts = samplePathDToPoints(targetD, ROUTE_MAIN_MORPH_SAMPLES);
   if (!fromPts || !toPts) {
-    syncDecorativeRouteLines(visual.line, { animate: false, ...decorOdOpts });
+    syncDecorativeRouteLines(visual.line, decorMorphOpts);
     finalizeTerminalRouteLine();
     return;
   }
@@ -1174,12 +1180,7 @@ function applyRouteGeometry(visual, labelOverride) {
     fromPts = resamplePolyline(fromPts, toPts.length);
   }
 
-  syncDecorativeRouteLines(visual.line, {
-    animate: true,
-    duration: ROUTE_MAIN_MORPH_MS,
-    easing: "cubicOut",
-    ...decorOdOpts,
-  });
+  syncDecorativeRouteLines(visual.line, decorMorphOpts);
 
   const start = performance.now();
 
@@ -3222,6 +3223,12 @@ function applyIntroRouteGeometry(visual, labelOverride) {
     originRaw: labelOverride?.origin,
     destinationRaw: labelOverride?.destination,
   };
+  const decorIntroMorphOpts = {
+    animate: true,
+    duration: ROUTE_MAIN_MORPH_MS,
+    easing: "cubicOut",
+    ...decorIntroOdOpts,
+  };
 
   introLine.classList.remove("route-line-active");
 
@@ -3254,7 +3261,7 @@ function applyIntroRouteGeometry(visual, labelOverride) {
   };
 
   if (reducedMotion) {
-    syncDecorativeRouteLines(visual.line, { animate: false, ...decorIntroOdOpts });
+    syncDecorativeRouteLines(visual.line, decorIntroMorphOpts);
     finalizeIntroRouteLine();
     return;
   }
@@ -3277,7 +3284,7 @@ function applyIntroRouteGeometry(visual, labelOverride) {
   const targetD = visual.line;
 
   if (!prevD.trim() || prevD === targetD) {
-    syncDecorativeRouteLines(visual.line, { animate: false, ...decorIntroOdOpts });
+    syncDecorativeRouteLines(visual.line, decorIntroMorphOpts);
     finalizeIntroRouteLine();
     return;
   }
@@ -3285,7 +3292,7 @@ function applyIntroRouteGeometry(visual, labelOverride) {
   let fromPts = samplePathDToPoints(prevD, ROUTE_MAIN_MORPH_SAMPLES);
   let toPts = samplePathDToPoints(targetD, ROUTE_MAIN_MORPH_SAMPLES);
   if (!fromPts || !toPts) {
-    syncDecorativeRouteLines(visual.line, { animate: false, ...decorIntroOdOpts });
+    syncDecorativeRouteLines(visual.line, decorIntroMorphOpts);
     finalizeIntroRouteLine();
     return;
   }
@@ -3293,12 +3300,7 @@ function applyIntroRouteGeometry(visual, labelOverride) {
     fromPts = resamplePolyline(fromPts, toPts.length);
   }
 
-  syncDecorativeRouteLines(visual.line, {
-    animate: true,
-    duration: ROUTE_MAIN_MORPH_MS,
-    easing: "cubicOut",
-    ...decorIntroOdOpts,
-  });
+  syncDecorativeRouteLines(visual.line, decorIntroMorphOpts);
 
   const start = performance.now();
 
