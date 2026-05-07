@@ -93,23 +93,20 @@ function formatPathAuditClientBanner() {
 
 async function fetchPathAuditServerSection(labels) {
   const token = typeof window !== "undefined" && window.PATH_AUDIT_TOKEN;
-  if (!token) {
-    return labels.logModalServerNeedToken;
-  }
   const API_BASE_URL = window.PATH_API_BASE_URL || "";
   const url = `${API_BASE_URL}/api/audit-log`;
   const ctl = new AbortController();
   const tid = setTimeout(() => ctl.abort(), 12000);
+  const headers = { Accept: "application/json" };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
   try {
     const res = await fetch(url, {
       method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
       signal: ctl.signal,
     });
-    if (res.status === 503) return labels.logModalAuditDisabledServer;
     if (res.status === 401) return labels.logModalAuditUnauthorized;
     if (!res.ok) return `${labels.logModalAuditHttpError} (HTTP ${res.status})`;
     const data = await res.json();

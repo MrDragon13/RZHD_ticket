@@ -135,12 +135,8 @@ const i18n = {
     logModalClear: "Очистить",
     logModalEmpty: "(Записей пока нет)",
     logModalLoading: "Загрузка серверного журнала…",
-    logModalServerNeedToken:
-      "Серверный журнал недоступен: задайте window.PATH_AUDIT_TOKEN в index.html (тот же секрет, что PATH_AUDIT_TOKEN в окружении backend) и перезагрузите страницу.",
-    logModalAuditDisabledServer:
-      "Серверный журнал выключен: на сервере не задан PATH_AUDIT_TOKEN в .env (см. .env.example).",
     logModalAuditUnauthorized:
-      "Серверный журнал: токен не совпадает с PATH_AUDIT_TOKEN на сервере или устарел после деплоя.",
+      "Серверный журнал: нужен заголовок Authorization с PATH_AUDIT_TOKEN (на сервере включена дополнительная проверка).",
     logModalAuditHttpError: "Ошибка запроса журнала",
     logModalAuditFetchError: "Не удалось загрузить серверный журнал",
     logModalAuditTimeout: "таймаут запроса",
@@ -308,12 +304,8 @@ const i18n = {
     logModalClear: "Clear",
     logModalEmpty: "(No entries yet)",
     logModalLoading: "Loading server log…",
-    logModalServerNeedToken:
-      "Server log unavailable: set window.PATH_AUDIT_TOKEN in index.html (same value as PATH_AUDIT_TOKEN in backend .env) and reload.",
-    logModalAuditDisabledServer:
-      "Server log disabled: PATH_AUDIT_TOKEN is not set on the server (.env — see .env.example).",
     logModalAuditUnauthorized:
-      "Server log: token mismatch — PATH_AUDIT_TOKEN on server does not match this page.",
+      "Server log requires Authorization header matching PATH_AUDIT_TOKEN (extra check enabled on server).",
     logModalAuditHttpError: "Audit log request failed",
     logModalAuditFetchError: "Could not load server audit log",
     logModalAuditTimeout: "request timed out",

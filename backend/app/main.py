@@ -177,10 +177,7 @@ def _audit_token_value() -> str:
     return os.getenv("PATH_AUDIT_TOKEN", "").strip()
 
 
-def _audit_authorized(request: Request) -> bool:
-    token = _audit_token_value()
-    if not token:
-        return False
+def _audit_bearer_matches(request: Request, token: str) -> bool:
     auth = request.headers.get("authorization") or ""
     if auth.lower().startswith("bearer "):
         got = auth[7:].strip()
@@ -195,14 +192,14 @@ def _audit_authorized(request: Request) -> bool:
 
 @app.get("/api/audit-log", response_model=AuditLogResponse)
 async def audit_log(request: Request) -> AuditLogResponse:
-    """Журнал обращений к API с момента последнего запуска процесса (команда logloglog на клиенте)."""
+    """Журнал обращений к API с момента последнего запуска процесса (секретное меню logloglog).
 
-    if not _audit_token_value():
-        raise HTTPException(
-            status_code=503,
-            detail="Audit log disabled: set PATH_AUDIT_TOKEN in backend environment",
-        )
-    if not _audit_authorized(request):
+    Если PATH_AUDIT_TOKEN не задан — выдача без заголовков (доступ только через скрытую команду в UI).
+    Если задан — нужен Bearer или X-Path-Audit-Token с тем же значением.
+    """
+
+    token = _audit_token_value()
+    if token and not _audit_bearer_matches(request, token):
         raise HTTPException(status_code=401, detail="Invalid or missing audit credentials")
     started, lines, cap = snapshot()
     return AuditLogResponse(

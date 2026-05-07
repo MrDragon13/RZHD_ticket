@@ -1,4 +1,4 @@
-"""Контракт GET /api/audit-log и базовая защита токеном."""
+"""Контракт GET /api/audit-log и опциональная защита PATH_AUDIT_TOKEN."""
 
 from __future__ import annotations
 
@@ -9,19 +9,22 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_audit_log_disabled_without_env_token(monkeypatch):
+def test_audit_log_open_without_env_token(monkeypatch):
     monkeypatch.delenv("PATH_AUDIT_TOKEN", raising=False)
-    response = client.get("/api/audit-log", headers={"Authorization": "Bearer x"})
-    assert response.status_code == 503
+    client.get("/api/health")
+    response = client.get("/api/audit-log")
+    assert response.status_code == 200
+    body = response.json()
+    assert "/api/health" in "\n".join(body["lines"])
 
 
-def test_audit_log_requires_credentials(monkeypatch):
+def test_audit_log_requires_credentials_when_token_set(monkeypatch):
     monkeypatch.setenv("PATH_AUDIT_TOKEN", "audit-secret-test")
     response = client.get("/api/audit-log")
     assert response.status_code == 401
 
 
-def test_audit_log_returns_buffer_with_health_line(monkeypatch):
+def test_audit_log_with_bearer_when_token_set(monkeypatch):
     monkeypatch.setenv("PATH_AUDIT_TOKEN", "audit-secret-test")
     client.get("/api/health")
     response = client.get("/api/audit-log", headers={"Authorization": "Bearer audit-secret-test"})
