@@ -3568,9 +3568,27 @@ html[data-theme="rzd"] .path-log-modal-content {
 }
 
 .compare-trains-loading.compare-trains-loading--solo {
-  width: min(100%, 440px);
-  max-width: 100%;
-  flex-shrink: 0;
+  width: 100%;
+  max-width: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: clamp(18px, 3.5vmin, 26px);
+  padding: clamp(22px, 4vmin, 36px) clamp(24px, 6vmin, 48px);
+  box-sizing: border-box;
+}
+
+.compare-trains-loading.compare-trains-loading--solo .compare-trains-loading-copy {
+  flex: 0 1 auto;
+  width: 100%;
+  max-width: min(42em, 100%);
+  align-items: center;
+}
+
+.compare-trains-loading.compare-trains-loading--solo .compare-loading-title,
+.compare-trains-loading.compare-trains-loading--solo .compare-loading-hint {
+  text-align: center;
 }
 
 .compare-trains-loading {
@@ -3591,7 +3609,6 @@ html[data-theme="rzd"] .path-log-modal-content {
   margin: 0;
 }
 
-.compare-trains-loading-copy {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
