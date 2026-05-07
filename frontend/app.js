@@ -4,8 +4,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Ввод в поле текста и «Отправить» открывает журнал с этой точной строкой (без учёта регистра). */
 const PATH_DEBUG_TRIGGER = "logloglog";
-/** Новый ключ: дефолт РЖД для первого визита; старый path-theme-v1 игнорируется (миграция без переноса «неона»). */
-const THEME_STORAGE_KEY = "path-theme-v2-default-rzd";
+/** Смена суффикса — однократный сброс к дефолту РЖД (старые ключи не читаем). Синхрон с inline в index.html. */
+const THEME_STORAGE_KEY = "path-theme-v3-default-rzd";
 const PATH_LOG_CAP = 600;
 const pathClientLogs = [];
 
