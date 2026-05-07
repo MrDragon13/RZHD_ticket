@@ -3753,3 +3753,192 @@ html[data-theme="rzd"] .compare-trains-loading {
     animation: ticket-confirm-pop 0.75s ease-out 1;
   }
 }
+
+/* --- Демо-оплата перед показом билета (имитация эквайринга, без реальных данных). --- */
+.demo-payment-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2135;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+}
+
+.demo-payment-modal.hidden {
+  display: none;
+}
+
+.demo-payment-sheet {
+  position: relative;
+  z-index: 1;
+  width: min(480px, 100%);
+  max-height: min(520px, 90vh);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 2vmin, 16px);
+  padding: clamp(14px, 2.6vmin, 20px);
+  border-radius: clamp(18px, 3vmin, 26px);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  background: linear-gradient(165deg, rgba(10, 22, 44, 0.98), rgba(4, 12, 28, 0.99));
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(0, 255, 156, 0.06);
+}
+
+html[data-theme="rzd"] .demo-payment-sheet {
+  background: linear-gradient(165deg, #ffffff, #f4f6fa);
+  border-color: rgba(21, 101, 192, 0.2);
+  box-shadow: 0 20px 60px rgba(28, 36, 51, 0.2);
+}
+
+.demo-payment-header h2 {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.8vmin, 1.3rem);
+  font-weight: 650;
+  color: var(--text);
+}
+
+.demo-payment-subtitle {
+  margin: 6px 0 0;
+  font-size: clamp(12px, 2vmin, 14px);
+  line-height: 1.45;
+  color: var(--muted);
+  max-width: 40ch;
+}
+
+.demo-payment-amount-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0, 229, 255, 0.06);
+  border: 1px solid rgba(0, 229, 255, 0.16);
+}
+
+html[data-theme="rzd"] .demo-payment-amount-row {
+  background: rgba(21, 101, 192, 0.06);
+  border-color: rgba(21, 101, 192, 0.12);
+}
+
+.demo-payment-amount-row strong {
+  font-size: clamp(1.1rem, 3vmin, 1.35rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.demo-payment-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 480px) {
+  .demo-payment-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.demo-payment-field-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.demo-payment-fake-input {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  background: rgba(2, 10, 24, 0.5);
+  font-size: clamp(14px, 2.2vmin, 16px);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  box-sizing: border-box;
+}
+
+html[data-theme="rzd"] .demo-payment-fake-input {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(28, 36, 51, 0.12);
+}
+
+.demo-payment-card-display {
+  gap: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: 0.04em;
+}
+
+.demo-payment-mask {
+  opacity: 0.75;
+  user-select: none;
+}
+
+.demo-payment-card-digits {
+  min-width: 2.5ch;
+  color: var(--text);
+}
+
+.demo-payment-status {
+  min-height: 2.75em;
+  font-size: clamp(13px, 2.2vmin, 15px);
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.demo-payment-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0, 229, 255, 0.12);
+  overflow: hidden;
+}
+
+.demo-payment-progress-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  transition: width 0.85s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-payment-progress-bar {
+    transition: none;
+  }
+}
+
+.demo-payment-progress-bar.demo-payment-progress-bar--full {
+  width: 100%;
+}
+
+.demo-payment-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+.demo-payment-check-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 22px;
+  font-weight: 700;
+  color: rgba(2, 24, 14, 0.95);
+  background: linear-gradient(145deg, rgba(0, 255, 156, 0.95), rgba(0, 229, 255, 0.85));
+  box-shadow: 0 8px 24px rgba(0, 255, 156, 0.22);
+}
+
+.demo-payment-check.hidden {
+  display: none;
+}

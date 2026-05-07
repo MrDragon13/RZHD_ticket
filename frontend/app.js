@@ -161,6 +161,16 @@ const i18n = {
     compareClose: "Закрыть",
     compareCheckoutTrain: "Оформить поезд {num}",
     compareError: "Не удалось получить сравнение. Попробуйте ещё раз или закройте окно.",
+    paymentDemoTitle: "Оплата (демо)",
+    paymentDemoSubtitle: "Деньги не списываются — имитация эквайринга для киоска.",
+    paymentAmountLabel: "К оплате",
+    paymentCardLabel: "Карта",
+    paymentExpiryLabel: "Срок",
+    paymentConnecting: "Подключение к эквайеру…",
+    paymentAutofill: "Данные карты подставлены автоматически…",
+    paymentProcessing: "Обработка платежа…",
+    paymentSuccess: "Оплата прошла успешно",
+    paymentIssuingTicket: "Формируем демо-билет…",
     noSpeech:
       "В этом браузере нет встроенного распознавания речи. Воспользуйтесь кнопкой «Текст» и полем ввода.",
     speechMicDenied:
@@ -315,6 +325,16 @@ const i18n = {
     compareClose: "Close",
     compareCheckoutTrain: "Checkout train {num}",
     compareError: "Could not load comparison. Try again or close this panel.",
+    paymentDemoTitle: "Payment (demo)",
+    paymentDemoSubtitle: "No real charge — simulated acquiring for the kiosk.",
+    paymentAmountLabel: "Amount due",
+    paymentCardLabel: "Card",
+    paymentExpiryLabel: "Expires",
+    paymentConnecting: "Connecting to payment gateway…",
+    paymentAutofill: "Card details filled in automatically…",
+    paymentProcessing: "Processing payment…",
+    paymentSuccess: "Payment approved",
+    paymentIssuingTicket: "Issuing your demo ticket…",
     noSpeech:
       "This browser has no built-in speech recognition. Use the Text button and type your request.",
     speechMicDenied: "Microphone access is blocked — allow it in the browser settings for this site.",
@@ -1726,6 +1746,7 @@ const compareTrainsTextEl = document.querySelector("#compare-trains-text");
 const compareTrainsHeadingEl = document.querySelector("#compare-trains-heading");
 const compareCheckoutABtn = document.querySelector("#compare-checkout-a");
 const compareCheckoutBBtn = document.querySelector("#compare-checkout-b");
+const demoPaymentModal = document.querySelector("#demo-payment-modal");
 const confirmSeatsButton = document.querySelector("#confirm-seats-button");
 const wagonMetaPanel = document.querySelector("#wagon-meta-panel");
 const orbButton = document.querySelector("#orb-button");
@@ -2123,6 +2144,7 @@ async function completeAuthFlow() {
   applySupportChatChrome();
   applyCheckoutLoadingTexts();
   applyCompareChrome();
+  applyDemoPaymentChrome();
   assistantSay(i18n[language].assistantReady, { addToHistory: true });
   void pingBackendHealth();
   touchGlobalIdle();
@@ -2285,6 +2307,7 @@ updateTextInputToggleLabels();
 applySupportChatChrome();
 applyCheckoutLoadingTexts();
 applyCompareChrome();
+applyDemoPaymentChrome();
 initThemeToggle();
 initSupportChatModal();
 initCompareTrainModal();
@@ -2409,6 +2432,7 @@ async function setLanguage(nextLanguage) {
     applySupportChatChrome();
     applyCheckoutLoadingTexts();
     applyCompareChrome();
+    applyDemoPaymentChrome();
   } finally {
     languageScreenBusy = false;
     document.querySelector(".language-actions")?.classList.remove("language-actions--busy");
@@ -4705,13 +4729,101 @@ function updateSeatPickerChrome() {
   confirmSeatsButton.disabled = n === 0 || issuingTicket;
 }
 
+function applyDemoPaymentChrome() {
+  const copy = i18n[language];
+  const heading = document.getElementById("demo-payment-heading");
+  const sub = document.getElementById("demo-payment-subtitle");
+  const amtLabel = document.getElementById("demo-payment-amount-label");
+  const cardLab = document.getElementById("demo-payment-card-label");
+  const expLab = document.getElementById("demo-payment-expiry-label");
+  if (heading) heading.textContent = copy.paymentDemoTitle;
+  if (sub) sub.textContent = copy.paymentDemoSubtitle;
+  if (amtLabel) amtLabel.textContent = copy.paymentAmountLabel;
+  if (cardLab) cardLab.textContent = copy.paymentCardLabel;
+  if (expLab) expLab.textContent = copy.paymentExpiryLabel;
+}
+
+function openDemoPaymentModal(totalRub) {
+  applyDemoPaymentChrome();
+  const val = document.getElementById("demo-payment-amount-value");
+  if (val) val.textContent = formatPrice(totalRub);
+  const statusEl = document.getElementById("demo-payment-status");
+  if (statusEl) statusEl.textContent = "";
+  const tail = document.getElementById("demo-payment-card-tail");
+  if (tail) {
+    tail.textContent = "";
+    tail.setAttribute("aria-hidden", "true");
+  }
+  const exp = document.getElementById("demo-payment-expiry");
+  if (exp) exp.textContent = "—";
+  const bar = document.getElementById("demo-payment-progress-bar");
+  if (bar) {
+    bar.classList.remove("demo-payment-progress-bar--full");
+  }
+  const chk = document.getElementById("demo-payment-check");
+  if (chk) chk.classList.add("hidden");
+  demoPaymentModal?.classList.remove("hidden");
+  demoPaymentModal?.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function closeDemoPaymentModal() {
+  demoPaymentModal?.classList.add("hidden");
+  demoPaymentModal?.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+async function runDemoPaymentAnimation() {
+  const copy = i18n[language];
+  const f = prefersReducedMotion() ? 0.22 : 1;
+  const statusEl = document.getElementById("demo-payment-status");
+  const tail = document.getElementById("demo-payment-card-tail");
+  const exp = document.getElementById("demo-payment-expiry");
+  const bar = document.getElementById("demo-payment-progress-bar");
+  const chk = document.getElementById("demo-payment-check");
+
+  const setStatus = (t) => {
+    if (statusEl) statusEl.textContent = t;
+  };
+
+  setStatus(copy.paymentConnecting);
+  await sleep(Math.round(380 * f));
+
+  setStatus(copy.paymentAutofill);
+  if (tail) {
+    tail.textContent = "4242";
+    tail.setAttribute("aria-hidden", "false");
+  }
+  await sleep(Math.round(420 * f));
+  if (exp) exp.textContent = "12/30";
+
+  setStatus(copy.paymentProcessing);
+  await sleep(Math.round(280 * f));
+  if (bar) {
+    void bar.offsetWidth;
+    bar.classList.add("demo-payment-progress-bar--full");
+  }
+  await sleep(Math.round(prefersReducedMotion() ? 140 : 920));
+
+  setStatus(copy.paymentSuccess);
+  if (chk) chk.classList.remove("hidden");
+  await sleep(Math.round(520 * f));
+}
+
 async function confirmSeatSelection() {
   const seatsPayload = seatPayloadFromSelection();
   if (!seatsPayload.length || issuingTicket || uiInteractionLocked || !selectedTrain) return;
   setUiInteractionLocked(true);
   issuingTicket = true;
   confirmSeatsButton.disabled = true;
+  beginIdlePause();
   try {
+    const totalRub = selectedSeatsOrderTotalRub();
+    openDemoPaymentModal(totalRub);
+    await runDemoPaymentAnimation();
+    const copy = i18n[language];
+    const statusEl = document.getElementById("demo-payment-status");
+    if (statusEl) statusEl.textContent = copy.paymentIssuingTicket;
     demoTicket = await postJson("/api/checkout/demo", {
       language,
       train: selectedTrain,
@@ -4725,6 +4837,8 @@ async function confirmSeatSelection() {
   } catch {
     assistantSay(i18n[language].checkoutError);
   } finally {
+    closeDemoPaymentModal();
+    endIdlePause();
     issuingTicket = false;
     confirmSeatsButton.disabled = selectedSeatKeys.size === 0;
     updateSeatPickerChrome();
@@ -5417,6 +5531,11 @@ function initPathLogModal() {
     });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
+    const payModal = document.getElementById("demo-payment-modal");
+    if (payModal && !payModal.classList.contains("hidden")) {
+      e.preventDefault();
+      return;
+    }
     const compareModal = document.getElementById("compare-trains-modal");
     if (compareModal && !compareModal.classList.contains("hidden")) {
       cancelTrainCompareFlow({ silent: false });

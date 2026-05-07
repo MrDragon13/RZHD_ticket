@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Путь — умный билетный терминал</title>
-    <link rel="stylesheet" href="./styles.css?v=202605099" />
+    <link rel="stylesheet" href="./styles.css?v=202605101" />
   </head>
   <body>
     <div class="ambient-grid"></div>
@@ -518,6 +518,51 @@
     </div>
 
     <div
+      id="demo-payment-modal"
+      class="demo-payment-modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="demo-payment-heading"
+      aria-hidden="true"
+    >
+      <div class="support-chat-backdrop"></div>
+      <div class="demo-payment-sheet glass-panel">
+        <header class="demo-payment-header">
+          <div>
+            <h2 id="demo-payment-heading">Оплата</h2>
+            <p id="demo-payment-subtitle" class="demo-payment-subtitle"></p>
+          </div>
+        </header>
+        <div class="demo-payment-body">
+          <div class="demo-payment-amount-row">
+            <span id="demo-payment-amount-label"></span>
+            <strong id="demo-payment-amount-value"></strong>
+          </div>
+          <div class="demo-payment-grid">
+            <div class="demo-payment-field">
+              <span id="demo-payment-card-label" class="demo-payment-field-label"></span>
+              <div id="demo-payment-card-display" class="demo-payment-fake-input demo-payment-card-display">
+                <span id="demo-payment-mask-chunk" class="demo-payment-mask" aria-hidden="true">•••• •••• ••••</span>
+                <span id="demo-payment-card-tail" class="demo-payment-card-digits" aria-hidden="true"></span>
+              </div>
+            </div>
+            <div class="demo-payment-field">
+              <span id="demo-payment-expiry-label" class="demo-payment-field-label"></span>
+              <div id="demo-payment-expiry" class="demo-payment-fake-input">—</div>
+            </div>
+          </div>
+          <div id="demo-payment-status" class="demo-payment-status" role="status" aria-live="polite"></div>
+          <div class="demo-payment-progress" aria-hidden="true">
+            <div id="demo-payment-progress-bar" class="demo-payment-progress-bar"></div>
+          </div>
+          <div id="demo-payment-check" class="demo-payment-check hidden" aria-hidden="true">
+            <span class="demo-payment-check-icon" aria-hidden="true">✓</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
       id="path-log-modal"
       class="path-log-modal hidden"
       role="dialog"
@@ -545,7 +590,7 @@
 
     <!-- api-client.js перед app.js: fetchApi / postJson / getJson и заголовок X-Request-Id. -->
     <script src="./api-client.js?v=202605091"></script>
-    <script src="./app.js?v=202605100"></script>
+    <script src="./app.js?v=202605101"></script>
     <script src="./vendor/qrcode.min.js"></script>
   </body>
 </html>
