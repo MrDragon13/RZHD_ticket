@@ -1775,6 +1775,8 @@ const sessionUserLabelEl = document.querySelector("#session-user-label");
 const sessionUserNameEl = document.querySelector("#session-user-name");
 const sessionLogoutButton = document.querySelector("#session-logout-button");
 const sessionIdleWarningEl = document.querySelector("#session-idle-warning");
+const topbarA11yWrap = document.querySelector("#topbar-a11y-wrap");
+const a11yVisionToggle = document.querySelector("#a11y-vision-toggle");
 
 const authScreen = document.querySelector("#auth-screen");
 const authStepPhone = document.querySelector("#auth-step-phone");
@@ -2028,6 +2030,33 @@ function renderSessionUserStrip() {
   }
 }
 
+/**
+ * Кнопка «Слабовидящим» только на экране выбора языка; при возврате на него режим сбрасывается.
+ * Включённый режим действует на весь сценарий до выхода на язык.
+ */
+function resetA11yVisionMode() {
+  document.documentElement.removeAttribute("data-a11y-vision");
+  if (a11yVisionToggle) a11yVisionToggle.setAttribute("aria-pressed", "false");
+}
+
+function syncTopbarA11yVisibility() {
+  const lang = screens.language;
+  const langVisible = Boolean(lang && !lang.classList.contains("hidden"));
+  if (topbarA11yWrap) topbarA11yWrap.classList.toggle("hidden", !langVisible);
+}
+
+function initA11yVisionToggle() {
+  if (a11yVisionToggle) {
+    a11yVisionToggle.addEventListener("click", () => {
+      const on = !document.documentElement.hasAttribute("data-a11y-vision");
+      if (on) document.documentElement.setAttribute("data-a11y-vision", "");
+      else document.documentElement.removeAttribute("data-a11y-vision");
+      a11yVisionToggle.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+  syncTopbarA11yVisibility();
+}
+
 function clearSessionPassenger() {
   sessionPassenger.isAuthenticated = false;
   sessionPassenger.fullName = "";
@@ -2191,6 +2220,7 @@ async function transitionLanguageToAuth() {
   if (prefersReducedMotion()) {
     lang.classList.add("hidden");
     auth.classList.remove("hidden");
+    syncTopbarA11yVisibility();
     return;
   }
   lang.classList.add("screen-motion-leave-out-up");
@@ -2204,6 +2234,7 @@ async function transitionLanguageToAuth() {
       auth.classList.remove("screen-motion-enter-from-below");
     });
   });
+  syncTopbarA11yVisibility();
 }
 
 async function transitionAuthToTerminal() {
@@ -2213,6 +2244,7 @@ async function transitionAuthToTerminal() {
   if (prefersReducedMotion()) {
     auth.classList.add("hidden");
     term.classList.remove("hidden");
+    syncTopbarA11yVisibility();
     return;
   }
   auth.classList.add("screen-motion-leave-out-up");
@@ -2226,6 +2258,7 @@ async function transitionAuthToTerminal() {
       term.classList.remove("screen-motion-enter-from-below");
     });
   });
+  syncTopbarA11yVisibility();
 }
 
 async function transitionAnyToLanguage() {
@@ -2238,6 +2271,8 @@ async function transitionAnyToLanguage() {
     term.classList.add("hidden");
     auth.classList.add("hidden");
     lang.classList.remove("hidden");
+    resetA11yVisionMode();
+    syncTopbarA11yVisibility();
     return;
   }
   leaving.classList.add("screen-motion-leave-out-down");
@@ -2247,6 +2282,8 @@ async function transitionAnyToLanguage() {
   leaving.classList.remove("screen-motion-leave-out-down");
   lang.classList.remove("hidden");
   lang.classList.add("screen-motion-enter-from-above");
+  resetA11yVisionMode();
+  syncTopbarA11yVisibility();
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       lang.classList.remove("screen-motion-enter-from-above");
@@ -2313,6 +2350,7 @@ initThemeToggle();
 initSupportChatModal();
 initCompareTrainModal();
 initPathLogModal();
+initA11yVisionToggle();
 
 window.pathTerminalIdleFetchBegin = beginIdlePause;
 window.pathTerminalIdleFetchEnd = endIdlePause;

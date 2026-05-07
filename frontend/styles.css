@@ -482,6 +482,86 @@ button {
   display: none;
 }
 
+/* Центр topbar: слот для режима «слабовидящим» (только экран языка; колонка 2 — как у session-user-strip) */
+.topbar-a11y-wrap {
+  grid-column: 2;
+  justify-self: center;
+  box-sizing: border-box;
+  min-height: clamp(42px, 8vmin, 48px);
+  display: flex;
+  align-items: center;
+}
+
+.topbar-a11y-wrap.hidden {
+  display: none;
+}
+
+.topbar-a11y-wrap .topbar-a11y-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  min-height: clamp(42px, 8vmin, 48px);
+  padding: clamp(8px, 1.6vmin, 10px) clamp(12px, 2.2vmin, 16px);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: clamp(11px, 2vmin, 13px);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: var(--panel);
+  box-shadow: 0 4px 20px var(--panel-glow);
+  backdrop-filter: blur(10px);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+  cursor: pointer;
+  max-width: min(92vw, 280px);
+  white-space: nowrap;
+}
+
+.topbar-a11y-wrap .topbar-a11y-toggle:hover {
+  border-color: var(--cyan);
+}
+
+.topbar-a11y-wrap .topbar-a11y-toggle:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+.topbar-a11y-wrap .topbar-a11y-toggle[aria-pressed="true"] {
+  border-color: var(--green);
+  box-shadow:
+    0 4px 20px var(--panel-glow),
+    0 0 0 1px rgba(0, 255, 156, 0.35);
+}
+
+/* Демо «слабовидящим»: крупнее интерфейс (rem), меньше визуального шума; не замена полноценной WCAG-верстке */
+html[data-a11y-vision] {
+  font-size: 118%;
+}
+
+html[data-a11y-vision] .ambient-grid {
+  opacity: 0.12;
+}
+
+html[data-a11y-vision] .language-card,
+html[data-a11y-vision] .glass-panel,
+html[data-a11y-vision] .control-panel,
+html[data-a11y-vision] .fact-card {
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+html[data-a11y-vision] .chip,
+html[data-a11y-vision] .ghost-button:not(.ghost-button--badge),
+html[data-a11y-vision] .primary-button,
+html[data-a11y-vision] .theme-toggle,
+html[data-a11y-vision] .text-input-toggle {
+  min-height: max(var(--touch-target-min), 48px);
+}
+
 .session-user-strip strong {
   font-size: clamp(13px, 2.4vmin, 15px);
   font-weight: 800;
