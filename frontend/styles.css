@@ -3428,7 +3428,12 @@ html[data-theme="rzd"] .path-log-modal-content {
   box-shadow: inset 0 0 0 1px rgba(21, 101, 192, 0.06);
 }
 
-/* Сравнение поездов (LLM + fallback) */
+.ai-brand {
+  color: var(--red);
+  font-weight: inherit;
+  white-space: nowrap;
+}
+
 .checkout-actions-row {
   display: flex;
   flex-wrap: wrap;
@@ -3501,15 +3506,22 @@ html[data-theme="rzd"] .path-log-modal-content {
 
 .compare-trains-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: clamp(44px, 8.5vmin, 56px);
 }
 
 .compare-trains-header h2 {
   margin: 0;
-  font-size: clamp(1.05rem, 2.8vmin, 1.35rem);
-  font-weight: 650;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3em 0.45em;
+  font-size: clamp(1.28rem, 3.5vmin, 1.75rem);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   color: var(--text);
 }
 
@@ -3754,6 +3766,10 @@ html[data-theme="rzd"] .compare-trains-text {
   border-color: rgba(28, 36, 51, 0.1);
 }
 
+html[data-theme="rzd"] .compare-trains-header h2 {
+  color: #1a202a;
+}
+
 html[data-theme="rzd"] .compare-trains-loading-overlay {
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.97), rgba(244, 246, 250, 0.99));
   border-color: rgba(21, 101, 192, 0.2);
@@ -3946,7 +3962,7 @@ html[data-theme="rzd"] .demo-payment-fake-input {
   width: 0%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--cyan), var(--green));
-  transition: width 0.85s ease-out;
+  transition: width 2.55s ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {

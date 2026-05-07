@@ -2449,7 +2449,7 @@ async function setLanguage(nextLanguage) {
     userInput.placeholder = copy.textPlaceholder;
     document.querySelector("#intent-title").textContent = copy.understood;
     document.querySelector("#route-title").textContent = copy.route;
-    document.querySelector("#fact-title").textContent = copy.fact;
+    applyAiFactHeading(document.querySelector("#fact-title"), copy.fact);
     document.querySelector("#trains-title").textContent = copy.options;
     document.querySelector("#restart-button").textContent = copy.restart;
     newSessionButton.textContent = copy.newSession;
@@ -3109,7 +3109,7 @@ async function tickLanguageScreenAmbient() {
     const ft = document.querySelector("#language-fact-title");
     const factEl = document.querySelector("#language-route-fact");
     if (heading) heading.textContent = copy.route;
-    if (ft) ft.textContent = copy.fact;
+    if (ft) applyAiFactHeading(ft, copy.fact);
     if (badge) badge.textContent = copy.languageAmbientBadge;
     if (meta) meta.textContent = formatRoutePair(origin, destination);
     applyIntroRouteGeometry(visual, { origin, destination });
@@ -3668,8 +3668,19 @@ function applyCheckoutLoadingTexts() {
 
 function applyCompareChrome() {
   const copy = i18n[language];
-  if (compareTrainsHeadingEl)
-    compareTrainsHeadingEl.textContent = language === "ru" ? "AI Сравнение поездов" : "AI Train comparison";
+  if (compareTrainsHeadingEl) {
+    const rest = language === "ru" ? "Сравнение поездов" : "Train comparison";
+    compareTrainsHeadingEl.innerHTML = "";
+    const ai = document.createElement("span");
+    ai.className = "ai-brand";
+    ai.textContent = "AI";
+    compareTrainsHeadingEl.appendChild(ai);
+    compareTrainsHeadingEl.appendChild(document.createTextNode(" "));
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "compare-trains-heading-rest";
+    labelSpan.textContent = rest;
+    compareTrainsHeadingEl.appendChild(labelSpan);
+  }
   if (compareTrainsLoadingTitle) compareTrainsLoadingTitle.textContent = copy.compareLoading;
   if (compareTrainsLoadingHint) compareTrainsLoadingHint.textContent = copy.compareLoadingHint;
   if (compareTrainsCloseBtn) compareTrainsCloseBtn.textContent = copy.compareClose;
@@ -3797,9 +3808,7 @@ function closeCompareModal() {
 function fillCompareModal(trainA, trainB, text) {
   if (compareSlotA) compareSlotA.innerHTML = renderCompareMiniCard(trainA, "a");
   if (compareSlotB) compareSlotB.innerHTML = renderCompareMiniCard(trainB, "b");
-  if (compareTrainsTextEl) {
-    compareTrainsTextEl.textContent = text || "";
-  }
+  renderCompareTrainsRichText(compareTrainsTextEl, text || "");
   compareTrainsLoadingOverlayEl?.classList.add("hidden");
   compareTrainsLoadingOverlayEl?.setAttribute("aria-hidden", "true");
   getCompareTrainsLayoutEl()?.classList.remove("compare-trains-layout--loading");
@@ -4817,7 +4826,8 @@ function closeDemoPaymentModal() {
 
 async function runDemoPaymentAnimation() {
   const copy = i18n[language];
-  const f = prefersReducedMotion() ? 0.22 : 1;
+  /** Удерживаем экран оплаты заметно дольше (≈×3 к базовым паузам); при reduced-motion короче. */
+  const pace = prefersReducedMotion() ? 0.38 : 3;
   const statusEl = document.getElementById("demo-payment-status");
   const tail = document.getElementById("demo-payment-card-tail");
   const exp = document.getElementById("demo-payment-expiry");
@@ -4829,27 +4839,27 @@ async function runDemoPaymentAnimation() {
   };
 
   setStatus(copy.paymentConnecting);
-  await sleep(Math.round(380 * f));
+  await sleep(Math.round(380 * pace));
 
   setStatus(copy.paymentAutofill);
   if (tail) {
     tail.textContent = "4242";
     tail.setAttribute("aria-hidden", "false");
   }
-  await sleep(Math.round(420 * f));
+  await sleep(Math.round(420 * pace));
   if (exp) exp.textContent = "12/30";
 
   setStatus(copy.paymentProcessing);
-  await sleep(Math.round(280 * f));
+  await sleep(Math.round(280 * pace));
   if (bar) {
     void bar.offsetWidth;
     bar.classList.add("demo-payment-progress-bar--full");
   }
-  await sleep(Math.round(prefersReducedMotion() ? 140 : 920));
+  await sleep(Math.round((prefersReducedMotion() ? 200 : 920) * pace));
 
   setStatus(copy.paymentSuccess);
   if (chk) chk.classList.remove("hidden");
-  await sleep(Math.round(520 * f));
+  await sleep(Math.round(520 * pace));
 }
 
 async function confirmSeatSelection() {
@@ -5284,6 +5294,32 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+/** Заголовки вида «AI Fact»: красные «AI», остальное обычным текстом (copy только из i18n). */
+function applyAiFactHeading(el, labelFromI18n) {
+  if (!el) return;
+  const raw = String(labelFromI18n ?? "").trim();
+  if (/^AI(\s|$)/i.test(raw)) {
+    const rest = raw.slice(2).replace(/^\s+/, "");
+    el.innerHTML = "";
+    const ai = document.createElement("span");
+    ai.className = "ai-brand";
+    ai.textContent = "AI";
+    el.appendChild(ai);
+    if (rest) el.appendChild(document.createTextNode(` ${rest}`));
+  } else {
+    el.textContent = raw;
+  }
+}
+
+/** Текст сравнения из LLM: экранируем, подсвечиваем отдельные «AI», переводы строк в &lt;br&gt;. */
+function renderCompareTrainsRichText(el, raw) {
+  if (!el) return;
+  const t = String(raw ?? "");
+  let html = escapeHtml(t).replaceAll("\n", "<br />");
+  html = html.replace(/\bAI\b/g, '<span class="ai-brand">AI</span>');
+  el.innerHTML = html;
 }
 
 function applySupportChatChrome() {
