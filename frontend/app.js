@@ -78,6 +78,60 @@ function pathLogAppend(level, args) {
   pathLogAppend("INFO", ["Путь: захват консольных сообщений включён"]);
 })();
 
+function formatPathAuditServerBanner(serverStartedAt, lineCount, capacity) {
+  if (language === "ru") {
+    return `——— Сервер API (процесс с ${serverStartedAt}) · строк: ${lineCount} · буфер до ${capacity} ———`;
+  }
+  return `——— Server API (since ${serverStartedAt}) · lines: ${lineCount} · buffer max ${capacity} ———`;
+}
+
+function formatPathAuditClientBanner() {
+  return language === "ru"
+    ? `——— Эта вкладка браузера (перехват консоли) ———`
+    : `——— This browser tab (console capture) ———`;
+}
+
+async function fetchPathAuditServerSection(labels) {
+  const token = typeof window !== "undefined" && window.PATH_AUDIT_TOKEN;
+  if (!token) {
+    return labels.logModalServerNeedToken;
+  }
+  const API_BASE_URL = window.PATH_API_BASE_URL || "";
+  const url = `${API_BASE_URL}/api/audit-log`;
+  const ctl = new AbortController();
+  const tid = setTimeout(() => ctl.abort(), 12000);
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      signal: ctl.signal,
+    });
+    if (res.status === 503) return labels.logModalAuditDisabledServer;
+    if (res.status === 401) return labels.logModalAuditUnauthorized;
+    if (!res.ok) return `${labels.logModalAuditHttpError} (HTTP ${res.status})`;
+    const data = await res.json();
+    const banner = formatPathAuditServerBanner(
+      data.server_started_at,
+      data.line_count,
+      data.buffer_capacity,
+    );
+    const lines =
+      Array.isArray(data.lines) && data.lines.length ? data.lines.join("\n") : labels.logModalEmpty;
+    return `${banner}\n${lines}`;
+  } catch (e) {
+    const msg =
+      e && e.name === "AbortError"
+        ? labels.logModalAuditTimeout
+        : String((e && e.message) || e);
+    return `${labels.logModalAuditFetchError}: ${msg}`;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
 
 // Условные координаты для вау-карты. Геометрия не претендует на точную ГИС,
 // но визуально меняет направление, масштаб и остановки под выбранный маршрут.
@@ -2665,7 +2719,7 @@ async function handleUserText(text) {
   cleanText = cleanText.slice(0, MAX_USER_MESSAGE_CHARS);
   if (cleanText.toLowerCase() === PATH_DEBUG_TRIGGER) {
     if (userInput) userInput.value = "";
-    openPathLogModal();
+    void openPathLogModal();
     return;
   }
   if (uiInteractionLocked) return;
@@ -5880,7 +5934,7 @@ function initSupportChatModal() {
   });
 }
 
-function openPathLogModal() {
+async function openPathLogModal() {
   const modal = document.getElementById("path-log-modal");
   const pre = document.getElementById("path-log-modal-content");
   const title = document.getElementById("path-log-modal-title");
@@ -5890,18 +5944,25 @@ function openPathLogModal() {
   const copyLogBtn = document.getElementById("path-log-copy");
   const clearBtn = document.getElementById("path-log-clear");
   const closeBtn = document.getElementById("path-log-close");
+  const refreshBtn = document.getElementById("path-log-refresh");
   if (copyLogBtn) copyLogBtn.textContent = labels.logModalCopy;
   if (clearBtn) clearBtn.textContent = labels.logModalClear;
   if (closeBtn) closeBtn.textContent = labels.logModalClose;
-  pre.textContent = pathClientLogs.length ? pathClientLogs.join("\n") : labels.logModalEmpty;
+  if (refreshBtn) refreshBtn.textContent = labels.logModalRefresh;
+  pre.textContent = labels.logModalLoading;
   modal.classList.remove("hidden");
   modal.setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
+  const serverSection = await fetchPathAuditServerSection(labels);
+  const clientBanner = formatPathAuditClientBanner();
+  const clientBody = pathClientLogs.length ? pathClientLogs.join("\n") : labels.logModalEmpty;
+  pre.textContent = `${serverSection}\n\n${clientBanner}\n${clientBody}`;
   pre.focus();
 }
 
 async function copyPathLogsToClipboard() {
-  const text = pathClientLogs.length ? pathClientLogs.join("\n") : "";
+  const pre = document.getElementById("path-log-modal-content");
+  const text = (pre && pre.textContent && pre.textContent.trim()) || "";
   const copyBtn = document.getElementById("path-log-copy");
   const labels = i18n[language];
   try {
@@ -5966,13 +6027,15 @@ function initPathLogModal() {
   const closeBtn = document.getElementById("path-log-close");
   const clearBtn = document.getElementById("path-log-clear");
   const copyLogBtn = document.getElementById("path-log-copy");
+  const refreshBtn = document.getElementById("path-log-refresh");
   if (backdrop) backdrop.addEventListener("click", closePathLogModal);
   if (closeBtn) closeBtn.addEventListener("click", closePathLogModal);
   if (copyLogBtn) copyLogBtn.addEventListener("click", () => void copyPathLogsToClipboard());
+  if (refreshBtn) refreshBtn.addEventListener("click", () => void openPathLogModal());
   if (clearBtn)
     clearBtn.addEventListener("click", () => {
       clearPathClientLogs();
-      openPathLogModal();
+      void openPathLogModal();
     });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;

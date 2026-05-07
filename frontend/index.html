@@ -2,13 +2,14 @@
 <html lang="ru" data-theme="rzd">
   <head>
     <meta charset="UTF-8" />
-    <!-- Версия статики и ключ темы — одна пара констант ниже; app.js читает window.PATH_* -->
+    <!-- Версия статики и ключ темы — одна пара констант ниже; основной скрипт читает window.PATH_* -->
     <script>
       (function () {
-        var ASSET_VERSION = "202605146";
+        var ASSET_VERSION = "202605147";
         var THEME_KEY = "path-theme-v3-default-rzd";
         window.PATH_ASSET_VERSION = ASSET_VERSION;
         window.PATH_THEME_STORAGE_KEY = THEME_KEY;
+        window.PATH_AUDIT_TOKEN = "";
         var s = null;
         try {
           s = localStorage.getItem(THEME_KEY);
@@ -639,6 +640,7 @@
           <h2 id="path-log-modal-title">Журнал</h2>
           <div class="path-log-modal-actions">
             <button type="button" id="path-log-copy" class="ghost-button path-log-btn-touch">Копировать</button>
+            <button type="button" id="path-log-refresh" class="ghost-button path-log-btn-touch">Обновить</button>
             <button type="button" id="path-log-clear" class="ghost-button path-log-btn-touch">Очистить</button>
             <button type="button" id="path-log-close" class="primary-button path-log-btn-touch">Закрыть</button>
           </div>

@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 import uuid
@@ -20,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.models import (
+    AuditLogResponse,
     CheckoutVoiceIntentRequest,
     CheckoutVoiceIntentResponse,
     CompareTrainsRequest,
@@ -49,6 +51,7 @@ from app.services.checkout import create_demo_ticket
 from app.services.deepseek_client import DeepSeekClient
 from app.services.recommendations import recommend_trains
 from app.services.rzd_adapter import RzdDataAdapter
+from app.visit_audit import record_http_visit, snapshot
 
 # FastAPI-приложение является центральной точкой backend. Оно держит ключ DeepSeek
 # на сервере, предоставляет frontend простые endpoint'ы и не раскрывает секреты в
@@ -79,6 +82,11 @@ async def request_id_middleware(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Request-Id"] = rid
     logging.info("%s %s -> %s rid=%s", request.method, request.url.path, response.status_code, rid)
+    if request.method != "OPTIONS":
+        try:
+            record_http_visit(request=request, status_code=response.status_code, request_id=rid)
+        except Exception:
+            logging.exception("visit_audit.record_http_visit failed")
     return response
 
 
@@ -163,6 +171,46 @@ def _format_date_for_assistant_speech(raw: str | None, language: str) -> str:
     if d.year != today.year:
         label = f"{label} {d.year}"
     return label
+
+
+def _audit_token_value() -> str:
+    return os.getenv("PATH_AUDIT_TOKEN", "").strip()
+
+
+def _audit_authorized(request: Request) -> bool:
+    token = _audit_token_value()
+    if not token:
+        return False
+    auth = request.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        got = auth[7:].strip()
+        if not got:
+            return False
+        return hmac.compare_digest(got.encode("utf-8"), token.encode("utf-8"))
+    alt = (request.headers.get("x-path-audit-token") or "").strip()
+    if not alt:
+        return False
+    return hmac.compare_digest(alt.encode("utf-8"), token.encode("utf-8"))
+
+
+@app.get("/api/audit-log", response_model=AuditLogResponse)
+async def audit_log(request: Request) -> AuditLogResponse:
+    """Журнал обращений к API с момента последнего запуска процесса (команда logloglog на клиенте)."""
+
+    if not _audit_token_value():
+        raise HTTPException(
+            status_code=503,
+            detail="Audit log disabled: set PATH_AUDIT_TOKEN in backend environment",
+        )
+    if not _audit_authorized(request):
+        raise HTTPException(status_code=401, detail="Invalid or missing audit credentials")
+    started, lines, cap = snapshot()
+    return AuditLogResponse(
+        server_started_at=started,
+        lines=lines,
+        buffer_capacity=cap,
+        line_count=len(lines),
+    )
 
 
 @app.get("/api/health", response_model=HealthResponse)

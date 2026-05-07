@@ -473,3 +473,12 @@ class HealthResponse(BaseModel):
     """Минимальный healthcheck для мониторинга VDS."""
 
     status: Literal["ok"] = "ok"
+
+
+class AuditLogResponse(BaseModel):
+    """Журнал обращений к API с момента последнего запуска процесса backend."""
+
+    server_started_at: str = Field(..., description="UTC ISO8601 момент старта процесса.")
+    lines: list[str] = Field(default_factory=list)
+    buffer_capacity: int = Field(..., description="Максимум строк в кольцевом буфере.")
+    line_count: int = Field(..., description="Текущее число строк в буфере.")
