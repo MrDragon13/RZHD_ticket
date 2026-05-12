@@ -111,7 +111,7 @@ class DeepSeekClient:
         self.explain_timeout = float(os.getenv("DEEPSEEK_EXPLAIN_TIMEOUT_SECONDS", str(max(self.timeout, 120.0))))
         # Для защиты удобно фиксировать демо-дату: тогда фраза "6 мая" всегда
         # превращается в ожидаемый 2026-05-06, а не зависит от даты на VDS.
-        self.current_date = os.getenv("PATH_CURRENT_DATE", date.today().isoformat())
+        self.current_date = date.today().isoformat()
 
     @property
     def enabled(self) -> bool:
