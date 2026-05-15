@@ -109,10 +109,13 @@ class DeepSeekClient:
         self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
         self.timeout = float(os.getenv("DEEPSEEK_TIMEOUT_SECONDS", "90"))
         self.explain_timeout = float(os.getenv("DEEPSEEK_EXPLAIN_TIMEOUT_SECONDS", str(max(self.timeout, 120.0))))
-        # JОпределяем текущую дату
-        self.current_date = date.today().isoformat()
-
+        
     @property
+    def current_date(self) -> str:
+        """Всегда возвращает актуальную дату."""
+        
+        return date.today().isoformat()
+                
     def enabled(self) -> bool:
         """DeepSeek включается только если ключ задан на backend."""
 
